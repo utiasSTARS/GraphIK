@@ -6,7 +6,7 @@ Coming soon!
 # certifiable-calibration
 Certifiably globally optimal extrinsic calibration for sensors providing egomotion estimates. 
 
-<img src="https://raw.githubusercontent.com/utiasSTARS/GraphIK/assets/graph_ik_logo.png" width="250px"/>
+<img src="https://raw.githubusercontent.com/utiasSTARS/GraphIK/master/assets/graph_ik_logo.png" width="250px"/>
 
 
 ## Publications
