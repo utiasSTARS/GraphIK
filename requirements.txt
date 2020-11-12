@@ -1,0 +1,12 @@
+numpy>=1.16
+sympy>=1.5
+scipy>=1.3.0
+matplotlib>=3.1
+cvxpy>=1.1.0a1
+liegroups>=1.0.0
+networkx>=2.2
+autograd
+mosek
+pymanopt>=0.2.5
+progress
+pandas>=0.24.2
