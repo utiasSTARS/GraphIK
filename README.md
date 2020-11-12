@@ -1,12 +1,18 @@
 # graphIK
 A library for solving inverse kinematics with graphical models and distance geometry.
 
-Coming soon!
-
 <img src="https://raw.githubusercontent.com/utiasSTARS/GraphIK/main/assets/graph_ik_logo.png" width="250px"/>
+
+
+## Dependencies
+
+
+## Example Code
+
 
 ## Publications
 
+[Inverse Kinematics for Serial Kinematic Chains via Sum of Squares Optimization](https://arxiv.org/abs/1909.09318)
 ```bibtex
 @inproceedings{maric2020inverse,
   title={Inverse Kinematics for Serial Kinematic Chains via Sum of Squares Optimization},
@@ -17,3 +23,6 @@ Coming soon!
   organization={IEEE}
 }
 ```
+
+
+[Inverse Kinematics as Low-Rank Euclidean Distance Matrix Completion](https://arxiv.org/abs/2011.04850)
