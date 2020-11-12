@@ -14,9 +14,6 @@ Use of GraphIK can be summarized into 4 key steps which we'll walk through below
 ```
 import graphik
 import numpy as np
-import networkx as nx
-from numpy import pi
-from liegroups import SE3
 ```
 
 ### 1. Define a Robot
