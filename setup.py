@@ -19,7 +19,7 @@ setup(
                       'pymanopt >= 0.2.5',
                       'progress',
                       'numba',
+                      'liegroups >= 0.11',
                       'pandas >= 0.24.2'],
-    dependency_links=['git+git://github.com/utiasSTARS/liegroups@master#egg=liegroups'],
     python_requires='>=3.7',
 )
