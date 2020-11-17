@@ -19,7 +19,7 @@ setup(
                       'pymanopt >= 0.2.5',
                       'progress',
                       'numba',
-                      'liegroups >= 0.11',
+                      'liegroups @ git+ssh://git@github.com/utiasSTARS/liegroups@master#egg=liegroups',
                       'pandas >= 0.24.2'],
     python_requires='>=3.7',
 )
