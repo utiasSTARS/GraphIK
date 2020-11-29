@@ -10,7 +10,7 @@ from graphik.utils.utils import (
     flatten,
     list_to_variable_dict,
     transZ,
-    spherical_angle_bounds_to_revolute
+    spherical_angle_bounds_to_revolute,
 )
 from graphik.utils.kinematics_helpers import roty
 from liegroups.numpy import SE3, SO3
@@ -20,83 +20,6 @@ DIST = "weight"
 POS = "pos"
 UPPER = "upper_limit"
 LOWER = "lower_limit"
-
-
-class Revolute2dChain(RobotPlanar):
-    def __init__(self, params, leaves_only_end_effectors=False):
-
-        self.a = params["a"]
-        self.th = params["theta"]
-        self.n = len(self.th)
-        self.ub = (
-            params["joint_limits_upper"]
-            if "joint_limits_upper" in params
-            else list_to_variable_dict(self.n * [pi])
-        )
-        self.lb = (
-            params["joint_limits_lower"]
-            if "joint_limits_lower" in params
-            else list_to_variable_dict(self.n * [-pi])
-        )
-        self.structure = self.chain_graph()
-        self.kinematic_map = nx.shortest_path(self.structure)
-        self.set_limits()
-        # TODO: make this a subclass of Revolute2dTree and just add assertion about max degree of nodes.
-
-        super(Revolute2dChain, self).__init__(
-            leaves_only_end_effectors=leaves_only_end_effectors
-        )
-
-    def chain_graph(self) -> nx.DiGraph:
-        """
-        Directed graph representing the robots chain structure
-        """
-        edg_lst = [
-            (f"p{idx}", f"p{idx+1}", self.a[f"p{idx+1}"]) for idx in range(self.n)
-        ]
-        chain_graph = nx.DiGraph()
-        chain_graph.add_weighted_edges_from(edg_lst)
-        return chain_graph
-
-
-class Revolute2dTree(RobotPlanar):
-    def __init__(self, params, leaves_only_end_effectors=False):
-        """
-        "a" and "theta" are ordered such that their indices - 1 correspond to:
-        1) a is the length of the link preceding the joint
-        2) theta is the joint limit on the joint
-        """
-        self.a = params["a"]
-        self.th = params["theta"]
-        self.n = len(self.th)
-        self.ub = (
-            params["joint_limits_upper"]
-            if "joint_limits_upper" in params
-            else list_to_variable_dict(self.n * [pi])
-        )
-        self.lb = (
-            params["joint_limits_lower"]
-            if "joint_limits_lower" in params
-            else list_to_variable_dict(self.n * [-pi])
-        )
-        self.parents = params["parents"]
-        self.structure = self.tree_graph()
-        self.kinematic_map = nx.shortest_path(self.structure.copy())
-        self.set_limits()
-
-        super(Revolute2dTree, self).__init__(
-            leaves_only_end_effectors=leaves_only_end_effectors
-        )
-
-    def tree_graph(self) -> nx.DiGraph:
-        """
-        Needed for forward kinematics (computing the shortest path).
-        :return: Directed graph representing the robot's tree structure.
-        """
-        tree_graph = nx.DiGraph(self.parents)
-        for parent, child in tree_graph.edges():
-            tree_graph.edges[parent, child]["weight"] = self.a[child]
-        return tree_graph
 
 
 class Spherical3dChain(RobotSpherical):
@@ -115,7 +38,6 @@ class Spherical3dChain(RobotSpherical):
         self.structure = self.chain_graph()
         self.kinematic_map = nx.shortest_path(self.structure.copy())
         self.set_limits()
-
 
     def chain_graph(self) -> nx.DiGraph:
         """
@@ -181,27 +103,31 @@ class Spherical3dChain(RobotSpherical):
         Convert to a revolute chain representation (for local solver).
         :return:
         """
-        T_zero = {'p0': SE3.identity()}
+        T_zero = {"p0": SE3.identity()}
         ang_lims_map = {}
-        old_to_new_names = {'p0': 'p0'}  # Returned for user of the method (to map old joint names to new ones)
+        old_to_new_names = {
+            "p0": "p0"
+        }  # Returned for user of the method (to map old joint names to new ones)
         ub, lb = spherical_angle_bounds_to_revolute(self.ub, self.lb)
         count = 1
-        joint_prev = 'p0'
-        for joint in self.d:  # Assumes the dictionary is in chain order (perhaps enforce?)
-            new_node1 = 'p'+str(count)
+        joint_prev = "p0"
+        for (
+            joint
+        ) in self.d:  # Assumes the dictionary is in chain order (perhaps enforce?)
+            new_node1 = "p" + str(count)
             count += 1
             # ub[new_node1] = self.ub[joint]
             # lb[new_node1] = self.lb[joint]
             ang_lims_map[joint] = new_node1
 
-            new_node2 = 'p'+str(count)
+            new_node2 = "p" + str(count)
             count += 1
             old_to_new_names[joint] = new_node2
 
             Ry = SE3(SO3(roty(np.pi / 2)), np.zeros(3))
             T_zero[new_node1] = T_zero[joint_prev].dot(Ry)
             d = self.d[joint]
-            Ry_back = SE3(SO3(roty(-np.pi/2)), np.zeros(3))
+            Ry_back = SE3(SO3(roty(-np.pi / 2)), np.zeros(3))
             T_zero[new_node2] = T_zero[new_node1].dot(Ry_back).dot(transZ(d))
 
             joint_prev = new_node2
@@ -211,9 +137,7 @@ class Spherical3dChain(RobotSpherical):
         #         ub[key] = np.pi
         #         lb[key] = -np.pi
 
-        params = {"T_zero": T_zero,
-                  "ub": ub,
-                  "lb": lb}
+        params = {"T_zero": T_zero, "ub": ub, "lb": lb}
         return RobotRevolute(params), old_to_new_names, ang_lims_map
 
 
@@ -257,11 +181,13 @@ class Spherical3dTree(RobotSpherical):
         Convert to a revolute tree representation (for local solver).
         :return:
         """
-        T_zero = {'p0': SE3.identity()}
-        stack = ['p0']
-        tree_structure = {'p0': []}
+        T_zero = {"p0": SE3.identity()}
+        stack = ["p0"]
+        tree_structure = {"p0": []}
         ang_lims_map = {}
-        old_to_new_names = {'p0': 'p0'}  # Returned for user of the method (to map old joint names to new ones)
+        old_to_new_names = {
+            "p0": "p0"
+        }  # Returned for user of the method (to map old joint names to new ones)
         ub, lb = spherical_angle_bounds_to_revolute(self.ub, self.lb)
         count = 1
         while len(stack) > 0:
@@ -269,20 +195,20 @@ class Spherical3dTree(RobotSpherical):
             new_joint = old_to_new_names[joint]
             for child in self.parents[joint]:
                 stack += [child]
-                new_child = 'p'+str(count)
+                new_child = "p" + str(count)
                 count += 1
                 # ub[new_child] = self.ub[child]
                 # lb[new_child] = self.lb[child]
                 ang_lims_map[child] = new_child
                 tree_structure[new_joint] += [new_child]
-                new_grand_child = 'p'+str(count)
+                new_grand_child = "p" + str(count)
                 count += 1
                 old_to_new_names[child] = new_grand_child
                 tree_structure[new_child] = [new_grand_child]
                 Ry = SE3(SO3(roty(np.pi / 2)), np.zeros(3))
                 T_zero[new_child] = T_zero[new_joint].dot(Ry)
                 d = self.d[child]
-                Ry_back = SE3(SO3(roty(-np.pi/2)), np.zeros(3))
+                Ry_back = SE3(SO3(roty(-np.pi / 2)), np.zeros(3))
                 T_zero[new_grand_child] = T_zero[new_child].dot(Ry_back).dot(transZ(d))
                 tree_structure[new_grand_child] = []
 
@@ -296,10 +222,7 @@ class Spherical3dTree(RobotSpherical):
         #         ub[key] = np.pi
         #         lb[key] = -np.pi
 
-        params = {"T_zero": T_zero,
-                  "ub": ub,
-                  "lb": lb,
-                  "parents": tree_structure}
+        params = {"T_zero": T_zero, "ub": ub, "lb": lb, "parents": tree_structure}
 
         # print("normal ub: {:}".format(self.ub))
         # print("ub: {:}".format(ub))
@@ -415,5 +338,5 @@ if __name__ == "__main__":
 
     params = {"a": a, "theta": th}
 
-    robot = Revolute2dChain(params)
+    robot = RobotPlanar(params)
     print(robot.structure.edges())

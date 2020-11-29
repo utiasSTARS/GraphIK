@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 import numpy as np
+from graphik.robots.robot_base import RobotPlanar
 from graphik.robots.revolute import (
-    Revolute2dChain,
-    Revolute2dTree,
     Revolute3dChain,
     Revolute3dTree,
 )
@@ -37,7 +36,7 @@ def random_problem_2d_chain():
     }
     # print(params[a])
 
-    robot = Revolute2dChain(params)
+    robot = RobotPlanar(params)
 
     return robot
 
@@ -55,7 +54,7 @@ def random_joint_angles(robot):
     return ja
 
 
-def planar_jacobian(robot: Revolute2dTree, q: list, ee: str):
+def planar_jacobian(robot: RobotPlanar, q: list, ee: str):
     """
     Calculate a geometric Jacobian. See Chapter 3.1 from
     "Robot: Modelling, Planning, and Control" - Sicilliano
@@ -71,9 +70,9 @@ def planar_jacobian(robot: Revolute2dTree, q: list, ee: str):
     else:
         path_names = robot.kinematic_map["p0"][ee]
 
-    if type(robot) == Revolute2dTree:
+    if type(robot) == RobotPlanar:
         edges = list(robot.tree_graph().edges)  # for Revolute2dtree
-    elif type(robot) == Revolute2dChain:
+    elif type(robot) == RobotPlanar:
         edges = list(robot.chain_graph().edges)  # for Revolute2dchain
     elif type(robot) == Revolute3dChain or type(robot) == Revolute3dTree:
         edges = [
@@ -106,7 +105,7 @@ def planar_jacobian(robot: Revolute2dTree, q: list, ee: str):
     return J
 
 
-def stacked_jacobians(robot: Revolute2dTree, q: dict):
+def stacked_jacobians(robot: RobotPlanar, q: dict):
     """
     Creates large jacobian, stacked for each end effector, and it's pseudoinverse.
     """
@@ -274,7 +273,7 @@ def L(Rd: np.array, Re: np.array):
     return ll, llinv
 
 
-def stacked_L(robot: Revolute2dTree, q: list, q_goal: list):
+def stacked_L(robot: RobotPlanar, q: list, q_goal: list):
     """
     Stacks the L matrices for conviencne
     """

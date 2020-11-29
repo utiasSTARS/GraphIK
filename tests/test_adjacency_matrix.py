@@ -5,7 +5,7 @@ from numpy.testing import assert_array_equal
 import unittest
 
 from graphik.graphs.graph_base import SphericalRobotGraph
-from graphik.robots.revolute import Revolute2dChain, Revolute2dTree
+from graphik.robots.robot_base import RobotPlanar
 
 from graphik.utils.utils import (
     list_to_variable_dict,
@@ -38,7 +38,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
             ]
         )
 
-        robot = Revolute2dChain(params)
+        robot = RobotPlanar(params)
         graph = SphericalRobotGraph(robot)
 
         q_goal = graph.robot.random_configuration()
@@ -77,7 +77,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
             ]
         )
 
-        robot = Revolute2dChain(params)
+        robot = RobotPlanar(params)
         graph = SphericalRobotGraph(robot)
 
         q_goal = graph.robot.random_configuration()
@@ -437,7 +437,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
                 ],
             ]
         )
-        robot = Revolute2dTree(params)
+        robot = RobotPlanar(params)
         graph = SphericalRobotGraph(robot)
 
         q_goal = robot.random_configuration()
@@ -798,7 +798,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
                 ],
             ]
         )
-        robot = Revolute2dTree(params)
+        robot = RobotPlanar(params)
         graph = SphericalRobotGraph(robot)
 
         q_goal = robot.random_configuration()
@@ -810,6 +810,5 @@ class TestAdjacencyMatrices(unittest.TestCase):
         G = graph.complete_from_pos(goals)
 
         F = graph.adjacency_matrix(G)
-        print(F)
 
         assert_array_equal(F, F_gt)

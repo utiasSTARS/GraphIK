@@ -260,11 +260,53 @@ class Robot(ABC):
         return pose_dict
 
 
-class RobotPlanar(Robot, ABC):
-    def __init__(self, leaves_only_end_effectors=False):
-        self.leaves_only_end_effectors = leaves_only_end_effectors
+class RobotPlanar(Robot):
+    def __init__(self, params):
         self.dim = 2
+        self.a = params["a"]
+        self.th = params["theta"]
+        self.n = len(self.th)
+        self.ub = (
+            params["joint_limits_upper"]
+            if "joint_limits_upper" in params
+            else list_to_variable_dict(self.n * [pi])
+        )
+        self.lb = (
+            params["joint_limits_lower"]
+            if "joint_limits_lower" in params
+            else list_to_variable_dict(self.n * [-pi])
+        )
+        if "parents" in params:
+            self.parents = params["parents"]
+            self.structure = self.tree_graph()
+        else:
+            self.structure = self.chain_graph()
+
+        self.kinematic_map = nx.shortest_path(self.structure)
+        self.set_limits()
+
         super(RobotPlanar, self).__init__()
+
+    def chain_graph(self) -> nx.DiGraph:
+        """
+        Directed graph representing the robots chain structure
+        """
+        edg_lst = [
+            (f"p{idx}", f"p{idx+1}", self.a[f"p{idx+1}"]) for idx in range(self.n)
+        ]
+        chain_graph = nx.DiGraph()
+        chain_graph.add_weighted_edges_from(edg_lst)
+        return chain_graph
+
+    def tree_graph(self) -> nx.DiGraph:
+        """
+        Needed for forward kinematics (computing the shortest path).
+        :return: Directed graph representing the robot's tree structure.
+        """
+        tree_graph = nx.DiGraph(self.parents)
+        for parent, child in tree_graph.edges():
+            tree_graph.edges[parent, child]["weight"] = self.a[child]
+        return tree_graph
 
     @property
     def end_effectors(self) -> list:
@@ -275,17 +317,14 @@ class RobotPlanar(Robot, ABC):
         """
         if not hasattr(self, "_end_effectors"):
             S = self.structure
-            if self.leaves_only_end_effectors:
-                self._end_effectors = [[x] for x in S if S.out_degree(x) == 0]
-            else:
-                self._end_effectors = [
-                    [x, y]
-                    for x in S
-                    if S.out_degree(x) == 0
-                    for y in S.predecessors(x)
-                    if DIST in S[y][x]
-                    if S[y][x][DIST] < np.inf
-                ]
+            self._end_effectors = [
+                [x, y]
+                for x in S
+                if S.out_degree(x) == 0
+                for y in S.predecessors(x)
+                if DIST in S[y][x]
+                if S[y][x][DIST] < np.inf
+            ]
 
         return self._end_effectors
 

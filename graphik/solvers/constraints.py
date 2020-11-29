@@ -6,7 +6,7 @@ import sympy as sp
 import numpy.linalg as la
 from numpy import pi
 from graphik.utils.utils import norm_sq, apply_angular_offset_2d
-from graphik.robots.revolute import Revolute2dChain, Revolute3dChain
+from graphik.robots.revolute import Revolute3dChain
 
 
 def archimedean_constraint(variables, M_bounds):
@@ -325,7 +325,7 @@ if __name__ == "__main__":
 
     # params = {"a": a, "theta": th}
 
-    # robot = Revolute2dChain(params)
+    # robot = RobotPlanar(params)
     # graph = PlanarRobotGraph(robot)
     # constraints = constraints_from_graph(graph)
 

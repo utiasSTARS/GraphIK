@@ -8,9 +8,9 @@ import sympy as sp
 import unittest
 from graphik.solvers.local_solver import LocalSolver
 from graphik.robots.robot_base import RobotRevolute
-from graphik.robots.revolute import Revolute2dTree, Revolute2dChain
 from graphik.utils.utils import list_to_variable_dict
 from graphik.graphs.graph_base import SphericalRobotGraph
+from graphik.robots.robot_base import RobotPlanar
 
 from liegroups.numpy import SO2, SE2, SO3, SE3
 
@@ -30,7 +30,7 @@ class TestGradient(unittest.TestCase):
         }
         end_effector_assignment = {"p1": SE2(SO2.identity(), np.array([0.0, 0.0]))}
         initial_guess_good = {"p1": 0.4}
-        robot = Revolute2dChain(params)
+        robot = RobotPlanar(params)
         f_cost, f_grad, f_hess = LocalSolver.symbolic_cost_function(
             robot, end_effector_assignment, initial_guess_good, use_trigsimp=True
         )
@@ -58,7 +58,7 @@ class TestGradient(unittest.TestCase):
         end_effector_assignment = {"p2": SE2(SO2.identity(), np.array([0.0, 0.0]))}
         initial_guess_good = {"p1": 0.4, "p2": -2.0}
         initial_guess_bad = {"p1": -0.6, "p2": 1.0}
-        robot = Revolute2dChain(params)
+        robot = RobotPlanar(params)
         f_cost, f_grad, f_hess = LocalSolver.symbolic_cost_function(
             robot, end_effector_assignment, initial_guess_good, use_trigsimp=True
         )
@@ -95,7 +95,7 @@ class TestGradient(unittest.TestCase):
         initial_guess_good = {"p1": 0.4, "p2": -2.0}
         initial_guess_bad = {"p1": -0.6, "p2": 1.0}
 
-        robot = Revolute2dChain(params)
+        robot = RobotPlanar(params)
 
         graph = SphericalRobotGraph(robot)
         solver = LocalSolver()
@@ -134,8 +134,10 @@ class TestGradient(unittest.TestCase):
                 "joint_limits_lower": lower_angular_limits,
             }
 
-            end_effector_assignment = {"p" + str(n): SE2(SO2.identity(), np.random.rand(dim))}
-            robot = Revolute2dChain(params)
+            end_effector_assignment = {
+                "p" + str(n): SE2(SO2.identity(), np.random.rand(dim))
+            }
+            robot = RobotPlanar(params)
 
             solver1 = LocalSolver()
             solver1.set_symbolic_cost_function(

@@ -3,7 +3,7 @@ import numpy as np
 from numpy.testing import assert_array_less
 import networkx as nx
 from graphik.graphs.graph_base import SphericalRobotGraph
-from graphik.robots.revolute import Revolute2dTree
+from graphik.robots.robot_base import RobotPlanar
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.utils import best_fit_transform, list_to_variable_dict
 
@@ -42,7 +42,7 @@ def random_problem_2d_tree():
         "joint_limits_lower": lim_l,
     }
 
-    robot = Revolute2dTree(params)
+    robot = RobotPlanar(params)
     graph = SphericalRobotGraph(robot)
     solver = RiemannianSolver(graph)
     n_tests = 100

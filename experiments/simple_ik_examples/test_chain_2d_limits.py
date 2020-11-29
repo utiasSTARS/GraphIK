@@ -4,7 +4,7 @@ from numpy.testing import assert_array_less
 import networkx as nx
 import time
 from graphik.graphs.graph_base import SphericalRobotGraph
-from graphik.robots.revolute import Revolute2dChain
+from graphik.robots.robot_base import RobotPlanar
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.dgp_utils import sample_matrix, PCA, dist_to_gram, linear_projection
 from graphik.utils.utils import best_fit_transform, list_to_variable_dict
@@ -29,7 +29,7 @@ def random_problem_2d_chain():
         "joint_limits_lower": lower_angular_limits,
     }
 
-    robot = Revolute2dChain(params)
+    robot = RobotPlanar(params)
     graph = SphericalRobotGraph(robot)
     solver = RiemannianSolver(graph)
     n_tests = 100
@@ -56,8 +56,9 @@ def random_problem_2d_chain():
         lb, ub = graph.distance_bounds(G)  # will take goals and jli
         F = graph.adjacency_matrix(G)
 
-
-        sol_info = solver.solve(D_goal, F, bounds=(lb, ub), max_attempts=10, use_limits = True)
+        sol_info = solver.solve(
+            D_goal, F, bounds=(lb, ub), max_attempts=10, use_limits=True
+        )
         # sol_info = solver.solve(D_goal, F, Y_init=X_init, max_attempts=10, use_limits = True)
         Y = sol_info["x"]
         t_sol += [sol_info["time"]]
@@ -94,11 +95,11 @@ def random_problem_2d_chain():
     print("Average pos error {:}".format(np.average(np.array(e_pos))))
     print("Average rot error {:}".format(np.average(np.array(e_rot))))
     print("Number of fails {:}".format(fails))
-        # print(robot.get_pose(q_sol, f"p{n}").trans - T_goal.trans)
-        # e_sol += [np.linalg.norm(robot.get_pose(q_sol, f"p{n}").trans - T_goal.trans)]
-        # q_abs = np.abs(np.array(list(q_sol.values())))
-        # if assert_array_less(q_abs, angular_limits + 0.01 * angular_limits):
-        #     print("LIMIT VIOLATION")
+    # print(robot.get_pose(q_sol, f"p{n}").trans - T_goal.trans)
+    # e_sol += [np.linalg.norm(robot.get_pose(q_sol, f"p{n}").trans - T_goal.trans)]
+    # q_abs = np.abs(np.array(list(q_sol.values())))
+    # if assert_array_less(q_abs, angular_limits + 0.01 * angular_limits):
+    #     print("LIMIT VIOLATION")
 
     # print("Average solution time {:}".format(np.average(np.array(t_sol))))
     # print("Standard deviation of solution time {:}".format(np.std(np.array(t_sol))))
@@ -107,6 +108,6 @@ def random_problem_2d_chain():
     # assert_array_less(e_sol, 1e-3 * np.ones(n_tests))
 
 
-if (__name__ == "__main__"):
+if __name__ == "__main__":
     np.random.seed(22)
     random_problem_2d_chain()

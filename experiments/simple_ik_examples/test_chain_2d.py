@@ -4,7 +4,8 @@ from numpy.testing import assert_array_less
 import networkx as nx
 import time
 from graphik.graphs.graph_base import SphericalRobotGraph
-from graphik.robots.revolute import Revolute2dChain
+
+from graphik.robots.robot_base import RobotPlanar
 
 from graphik.solvers.riemannian_solver import RiemannianSolver
 
@@ -32,11 +33,12 @@ def random_problem_2d_chain():
         "joint_limits_lower": lim_l,
     }
 
-    robot = Revolute2dChain(params)
+    # robot = Revolute2dChain(params)
+    robot = RobotPlanar(params)
     graph = SphericalRobotGraph(robot)
     solver = RiemannianSolver(graph)
-    n_tests = 1000
-    
+    n_tests = 100
+
     q_init = list_to_variable_dict(n * [0])
     G_init = graph.realization(q_init)
     X_init = graph.pos_from_graph(G_init)
@@ -55,7 +57,7 @@ def random_problem_2d_chain():
         F = graph.adjacency_matrix(G)
 
         # sol_info = solver.solve(D_goal, F, use_limits=False, bounds=(lb, ub))
-        sol_info = solver.solve(D_goal, F, use_limits=False, Y_init = X_init)
+        sol_info = solver.solve(D_goal, F, use_limits=False, Y_init=X_init)
         Y = sol_info["x"]
         t_sol += [sol_info["time"]]
 
@@ -94,6 +96,6 @@ def random_problem_2d_chain():
     assert_array_less(e_pos, 1e-4 * np.ones(n_tests))
 
 
-if (__name__ == "__main__"):
+if __name__ == "__main__":
     np.random.seed(21)
     random_problem_2d_chain()

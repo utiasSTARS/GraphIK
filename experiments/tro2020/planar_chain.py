@@ -2,11 +2,14 @@ import numpy as np
 import networkx as nx
 import pickle
 
-from graphik.robots.revolute import Revolute2dChain
 from graphik.graphs.graph_base import SphericalRobotGraph
+from graphik.robots.robot_base import RobotPlanar
 from graphik.utils.utils import list_to_variable_dict, make_save_string
-from graphik.utils.experiments import run_multiple_experiments, process_experiment, \
-                                    scatter_error_between_solvers
+from graphik.utils.experiments import (
+    run_multiple_experiments,
+    process_experiment,
+    scatter_error_between_solvers,
+)
 
 
 if __name__ == "__main__":
@@ -30,18 +33,16 @@ if __name__ == "__main__":
     #     "SLSQP",
     #     "trust-constr"
     # ]
-    local_algorithms_unbounded = [
-        "trust-exact"
-    ]
-    local_algorithms_bounded = [
-        "trust-constr"
-    ]
-    n_goals = 1000  # Number of goals
+    local_algorithms_unbounded = ["trust-exact"]
+    local_algorithms_bounded = ["trust-constr"]
+    n_goals = 10  # Number of goals
     n_init = 1  # Number of initializations to try (should be 1 for zero_init = True and for bound_smoothing = True)
     zero_init = True  # True makes the angular solvers MUCH better w
     use_limits = False  # Whether to use angular limits for all the solvers
     do_jacobian = False  # Jacobian doesn't work well for zero_init (need a more local starting point)
-    fabrik_only = False  # Only run the FABRIK solver (messy utility for re-running after the bug)
+    fabrik_only = (
+        False  # Only run the FABRIK solver (messy utility for re-running after the bug)
+    )
     pose_goals = True
     symbolic = False
     if fabrik_only:
@@ -49,19 +50,28 @@ if __name__ == "__main__":
     if fabrik_only:
         local_algorithms = []
     else:
-        local_algorithms = local_algorithms_bounded if use_limits else local_algorithms_unbounded
+        local_algorithms = (
+            local_algorithms_bounded if use_limits else local_algorithms_unbounded
+        )
     # Solver params
-    verbosity = 2  # Needs to be 2 for Riemannian solver at the moment TODO: make it smarter!!
+    verbosity = (
+        2  # Needs to be 2 for Riemannian solver at the moment TODO: make it smarter!!
+    )
     maxiter = 2000  # Most algs never max it (Riemannian ConjugateGradient often does)
     tol = 1e-9  # This is the key parameter, will be worth playing with (used for gtol except for SLSQP)
-    initial_tr_radius = 1.  # This is a key parameter for trust-constr and trust-exact.
+    initial_tr_radius = 1.0  # This is a key parameter for trust-constr and trust-exact.
     trigsimp = False  # Not worth setting to True for n_init = 1
     if fabrik_only:
         riemannian_algorithms = []
     else:
         # riemannian_algorithms = ["TrustRegions", "ConjugateGradient"]
         riemannian_algorithms = ["TrustRegions"]
-    solver_params = {"solver": "BFGS", "maxiter": maxiter, "tol": tol, "initial_tr_radius": initial_tr_radius}
+    solver_params = {
+        "solver": "BFGS",
+        "maxiter": maxiter,
+        "tol": tol,
+        "initial_tr_radius": initial_tr_radius,
+    }
     bound_smoothing = True  # Riemannian algs will do with and without bound smoothing when this is True
     riemannian_alg1 = riemannian_algorithms[0] if not fabrik_only else "TrustRegions"
     riemann_params = {
@@ -74,10 +84,12 @@ if __name__ == "__main__":
         "tol": tol,
         "maxiter": maxiter,
         "dt": 1e-3,
-        "method": "dls_inverse"
+        "method": "dls_inverse",
     }
     fabrik_tol = 1e-9
-    fabrik_max_iter = maxiter  # FABRIK is faster per iteration, might be worth changing this around
+    fabrik_max_iter = (
+        maxiter  # FABRIK is faster per iteration, might be worth changing this around
+    )
 
     # Save string setup
     save_string_properties = [
@@ -87,11 +99,13 @@ if __name__ == "__main__":
         ("maxiter", maxiter),
         ("n_goals", n_goals),
         ("n_init", n_init),
-        ("zero_init", zero_init)
+        ("zero_init", zero_init),
     ]
 
     if fabrik_only:
-        save_string = "results/FABRIK_only_planar_chain_" + make_save_string(save_string_properties)
+        save_string = "results/FABRIK_only_planar_chain_" + make_save_string(
+            save_string_properties
+        )
     else:
         save_string = "results/planar_chain_" + make_save_string(save_string_properties)
 
@@ -110,17 +124,30 @@ if __name__ == "__main__":
         "a": link_lengths,
         "theta": list_to_variable_dict(len(link_lengths) * [0.0]),
         "joint_limits_upper": lim_u,
-        "joint_limits_lower": lim_l
+        "joint_limits_lower": lim_l,
     }
-    robot = Revolute2dChain(params)
-    # robot.lambdify_get_pose()
+    robot = RobotPlanar(params)
     graph = SphericalRobotGraph(robot)
 
-    results = run_multiple_experiments(graph, n_goals, n_init, zero_init, solver_params,
-                             riemann_params, jacobian_params, use_limits, verbosity,
-                             bound_smoothing, local_algorithms, riemannian_algorithms,
-                             fabrik_max_iter, use_symbolic=symbolic, trigsimp=trigsimp, do_jacobian=do_jacobian,
-                                       pose_goals=True)
+    results = run_multiple_experiments(
+        graph,
+        n_goals,
+        n_init,
+        zero_init,
+        solver_params,
+        riemann_params,
+        jacobian_params,
+        use_limits,
+        verbosity,
+        bound_smoothing,
+        local_algorithms,
+        riemannian_algorithms,
+        fabrik_max_iter,
+        use_symbolic=symbolic,
+        trigsimp=trigsimp,
+        do_jacobian=do_jacobian,
+        pose_goals=True,
+    )
     # results.robot = robot
     # results.seed = seed
     # pickle.dump(results, open(save_string + "full_results.p", "wb"))

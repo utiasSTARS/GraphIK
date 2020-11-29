@@ -4,10 +4,8 @@ import networkx as nx
 from numpy.testing import assert_allclose
 from numpy import pi
 from graphik.graphs.graph_base import Revolute3dRobotGraph, SphericalRobotGraph
-from graphik.robots.robot_base import RobotRevolute
+from graphik.robots.robot_base import RobotRevolute, RobotPlanar
 from graphik.robots.revolute import (
-    Revolute2dChain,
-    Revolute2dTree,
     Spherical3dChain,
     Spherical3dTree,
 )
@@ -239,7 +237,7 @@ class TestDistanceMatrix(unittest.TestCase):
                 "joint_limits_lower": lim_l,
             }
 
-            robot = Revolute2dChain(params)
+            robot = RobotPlanar(params)
             graph = SphericalRobotGraph(robot)
 
             q = robot.random_configuration()
@@ -276,7 +274,7 @@ class TestDistanceMatrix(unittest.TestCase):
                 "joint_limits_lower": lim_l,
             }
 
-            robot = Revolute2dTree(params)
+            robot = RobotPlanar(params)
             graph = SphericalRobotGraph(robot)
 
             q = robot.random_configuration()
