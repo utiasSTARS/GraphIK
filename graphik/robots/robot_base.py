@@ -14,18 +14,15 @@ from graphik.utils.utils import (
     trans_axis,
     rot_axis,
 )
-from graphik.utils.kinematics_helpers import (
-    from_angle,
-    rotx,
-    roty,
-    rotz,
-    dh_to_se3,
-    inverse_dh_frame,
-    extract_relative_angle_Z,
-    rotZ_symb,
-    cross_symb,
+from graphik.utils.kinematics_helpers import rotZ_symb, skew, cross_symb
+from graphik.utils.forward_kinematics import (
+    fk_2d,
+    fk_2d_symb,
+    fk_3d,
+    modified_fk_3d,
+    fk_3d_sph,
+    fk_3d_sph_symb,
 )
-
 
 LOWER = "lower_limit"
 UPPER = "upper_limit"
@@ -33,211 +30,6 @@ BOUNDED = "bounded"
 DIST = "weight"
 POS = "pos"
 ROOT = "p0"
-
-
-def skew(x):
-    """
-    Creates a skew symmetric matrix from vector x
-    """
-    X = np.array([[0, -x[2], x[1]], [x[2], 0, -x[0]], [-x[1], x[0], 0]])
-    return X
-
-
-def angle_to_se2(a: float, theta: float) -> SE2:
-    """Transform a single set of DH parameters into an SE2 matrix
-    :param a: link length
-    :param theta: rotation
-    :returns: SE2 matrix
-    :rtype: lie.SE2Matrix
-    """
-    # R = SO2.from_angle(theta)  # TODO: active or passive (i.e., +/- theta?)
-    R = SO2(from_angle(theta))
-    return SE2(R, R.dot(np.array([a, 0.0])))  # TODO: rotate the translation or not?
-
-
-def fk_2d(a: list, theta: list, q: list) -> SE2:
-    """Get forward kinematics from an array of link lengths and angles
-    :param a: displacement along x (link length)
-    :param theta: rotation offset of each link
-    :param q: active angle variable
-    :returns: SE2 matrix
-    :rtype: lie.SE2Matrix
-    """
-    if len(a) > 1:
-        return angle_to_se2(a[0], theta[0] + q[0]).dot(fk_2d(a[1:], theta[1:], q[1:]))
-    return angle_to_se2(a[0], theta[0] + q[0])
-
-
-def fk_2d_symb(a: list, theta: list, q: list) -> SE2:
-    angle_full = sum(theta) + sum(q)
-    # c_all = sp.cos(angle_full)
-    # s_all = sp.sin(angle_full)
-    R = SO2(from_angle(angle_full))
-    t = np.zeros(2)
-    for idx in range(len(a)):
-        angle_idx = sum(theta[: idx + 1]) + sum(q[: idx + 1])
-        t = t + np.array([sp.cos(angle_idx) * a[idx], sp.sin(angle_idx) * a[idx]])
-    return SE2(R, t)
-
-
-def fk_3d(a: list, alpha: list, d: list, theta: list) -> SE3:
-    """Get forward kinematics from an array of dh parameters
-    :param a: displacement along x
-    :param alpha: rotation about x
-    :param d: translation along new z
-    :param theta: rotation around new z
-    :returns: SE3 matrix
-    :rtype: lie.SE3Matrix
-    """
-    if len(a) > 1:
-        return dh_to_se3(a[0], alpha[0], d[0], theta[0]).dot(
-            fk_3d(a[1:], alpha[1:], d[1:], theta[1:])
-        )
-    return dh_to_se3(a[0], alpha[0], d[0], theta[0])
-
-
-def modified_dh_to_se3(a: float, alpha: float, d: float, theta: float) -> SE3:
-    """Transform a single set of modified DH parameters into an SE3 matrix
-    :param a: displacement along x
-    :param alpha: rotation about x
-    :param d: translation along new z
-    :param theta: rotation around new z
-    :returns: SE3 matrix
-    :rtype: lie.SE3Matrix
-    """
-
-    TransX = SE3(SO3.identity(), np.array([a, 0, 0]))
-    # RX = SO3.rotx(alpha)
-    RX = SO3(rotx(alpha))
-    RotX = SE3(RX, np.zeros(3))
-    TransZ = SE3(SO3.identity(), np.array([0, 0, d]))
-    # RZ = SO3.rotz(theta)
-    RZ = SO3(rotz(theta))
-    RotZ = SE3(RZ, np.zeros(3))
-
-    return TransX.dot(RotX.dot(TransZ.dot(RotZ)))
-
-
-def modified_fk_3d(a: list, alpha: list, d: list, theta: list) -> SE3:
-    """Get forward kinematics from an array of  modified dh parameters
-    :param a: displacement along x
-    :param alpha: rotation about x
-    :param d: translation along new z
-    :param theta: rotation around new z
-    :returns: SE3 matrix
-    :rtype: lie.SE3Matrix
-    """
-    if len(a) > 1:
-        return modified_dh_to_se3(a[0], alpha[0], d[0], theta[0]).dot(
-            modified_fk_3d(a[1:], alpha[1:], d[1:], theta[1:])
-        )
-    return modified_dh_to_se3(a[0], alpha[0], d[0], theta[0])
-
-
-def sph_to_se3(alpha: float, d: float, theta: float) -> SE3:
-    # TODO something is not right here
-    """Transform a single set of DH parameters into an SE3 matrix
-    :param a: displacement along x
-    :param alpha: rotation about x
-    :param d: translation along new z
-    :param theta: rotation around new z
-    :returns: SE3 matrix
-    :rtype: lie.SE3Matrix
-    """
-
-    RX = SO3.rotx(alpha)
-    RotX = SE3(RX, np.zeros(3))
-    TransZ = SE3(SO3.identity(), np.array([0, 0, d]))
-    RZ = SO3.rotz(theta)
-    RotZ = SE3(RZ, np.zeros(3))
-    return RotZ.dot(RotX.dot(TransZ))
-
-
-def sph_to_se3_symb(alpha: float, d: float, theta: float) -> SE3:
-    # TODO something is not right here
-    """Transform a single set of DH parameters into an SE3 matrix
-    :param a: displacement along x
-    :param alpha: rotation about x
-    :param d: translation along new z
-    :param theta: rotation around new z
-    :returns: SE3 matrix
-    :rtype: lie.SE3Matrix
-    """
-
-    RX = SO3(rotx(alpha))
-    RotX = SE3(RX, np.zeros(3))
-    TransZ = SE3(SO3.identity(), np.array([0, 0, d]))
-    RZ = SO3(rotz(theta))
-    RotZ = SE3(RZ, np.zeros(3))
-    return RotZ.dot(RotX.dot(TransZ))
-
-
-def fk_3d_sph(a: list, alpha: list, d: list, theta: list) -> SE3:
-    """Get forward kinematics from an array of dh parameters
-    :param a: displacement along x
-    :param alpha: rotation about x
-    :param d: translation along new z
-    :param theta: rotation around new z
-    :returns: SE3 matrix
-    :rtype: lie.SE3Matrix
-    """
-    if len(d) > 1:
-        return sph_to_se3(alpha[0], d[0], theta[0]).dot(
-            fk_3d_sph(a[1:], alpha[1:], d[1:], theta[1:])
-        )
-    return sph_to_se3(alpha[0], d[0], theta[0])
-
-
-def fk_3d_sph_symb(a: list, alpha: list, d: list, theta: list) -> SE3:
-    """Get forward kinematics from an array of dh parameters using sympy's trigonometric function.
-    Used for setting up the symbolic cost function in graphik.solvers.local_solver.LocalSolver
-
-    :param a: displacement along x
-    :param alpha: rotation about x
-    :param d: translation along new z
-    :param theta: rotation around new z
-    :returns: SE3 matrix
-    :rtype: lie.SE3Matrix
-    """
-    if len(d) > 1:
-        return sph_to_se3_symb(alpha[0], d[0], theta[0]).dot(
-            fk_3d_sph_symb(a[1:], alpha[1:], d[1:], theta[1:])
-        )
-    return sph_to_se3_symb(alpha[0], d[0], theta[0])
-
-
-def fk_tree_3d(a: list, alpha: list, d: list, theta: list, path_indices: list) -> SE3:
-    """Get forward kinematics from an array of link lengths and angles
-    :param a: displacement along x (link length)
-    :param theta: rotation offset of each link
-    :param q: active angle variable
-    :param path_indices: path through the tree to traverse
-    :returns: SE2 matrix
-    :rtype: lie.SE2Matrix
-    """
-    idx = path_indices[0]
-    if len(path_indices) > 1:
-        return dh_to_se3(a[idx], alpha[idx], d[idx], theta[idx]).dot(
-            fk_tree_3d(a[1:], alpha[1:], d[1:], theta[1:], path_indices[1:])
-        )
-    return dh_to_se3(a[idx], alpha[idx], d[idx], theta[idx])
-
-
-def fk_tree_2d(a: list, theta: list, q: list, path_indices: list) -> SE2:
-    """Get forward kinematics from an array of link lengths and angles
-    :param a: displacement along x (link length)
-    :param theta: rotation offset of each link
-    :param q: active angle variable
-    :param path_indices: path through the tree to traverse
-    :returns: SE2 matrix
-    :rtype: lie.SE2Matrix
-    """
-    idx = path_indices[0]
-    if len(path_indices) > 1:
-        return angle_to_se2(a[idx], theta[idx] + q[idx]).dot(
-            fk_tree_2d(a, theta, q, path_indices[1:])
-        )
-    return angle_to_se2(a[idx], theta[idx] + q[idx])
 
 
 class Robot(ABC):
@@ -833,7 +625,6 @@ class RobotRevolute(Robot):
         for node in kinematic_map["p0"][query_node][1:]:
             pred = [u for u in parents.predecessors(node)]
             T_rel = T_ref[pred[0]].inv().dot(T_ref[node])
-            # print(T_rel)
             if symb:
                 T = (T.dot(rotZ_symb(joint_angles[node]))).dot(T_rel)
             else:
