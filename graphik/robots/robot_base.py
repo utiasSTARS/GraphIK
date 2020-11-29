@@ -43,7 +43,18 @@ class Robot(ABC):
 
     @abstractmethod
     def get_pose(self, node_inputs: dict, query_node: str):
-        """Given a list q of N joint variables, calculate the Nth joint's pose.
+        """Given a list of N joint variables, calculate the Nth joint's pose.
+
+        :param node_inputs: joint variables node names as keys mapping to values
+        :param query_node: node ID of node whose pose we want
+        :returns: SE2 or SE3 pose
+        :rtype: lie.SE3Matrix
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_pose_symb(self, node_inputs: dict, query_node: str):
+        """Given a list of N SYMBOLIC joint variables, calculate the Nth joint's pose.
 
         :param node_inputs: joint variables node names as keys mapping to values
         :param query_node: node ID of node whose pose we want
@@ -216,13 +227,13 @@ class Robot(ABC):
                 sym_vars_list.append(sym_vars[var][1])
         for idx, var in enumerate(variable_angles):
             if self.dim == 2 or self.spherical:
-                full_pose_expression[:, :, idx] = self.get_pose(
-                    sym_vars, var, symb=True
+                full_pose_expression[:, :, idx] = self.get_pose_symb(
+                    sym_vars, var
                 ).as_matrix()
 
             else:
-                full_pose_expression[:, :, idx] = self.get_pose(
-                    sym_vars, var, symb=True
+                full_pose_expression[:, :, idx] = self.get_pose_symb(
+                    sym_vars, var
                 ).as_matrix()
         # if not self.spherical:
         #     x = sp.symarray("x", (self.n,))
@@ -278,7 +289,7 @@ class RobotPlanar(Robot, ABC):
 
         return self._end_effectors
 
-    def get_pose(self, node_inputs: dict, query_node: str, symb: bool = False):
+    def get_pose(self, node_inputs: dict, query_node: str):
         """
         Returns an SE2 element corresponding to the location
         of the query_node in the configuration determined by
@@ -291,10 +302,7 @@ class RobotPlanar(Robot, ABC):
         q = np.array([node_inputs[node] for node in path_nodes])
         a = np.array([self.a[node] for node in path_nodes])
         th = np.array([self.th[node] for node in path_nodes])
-        if symb:
-            return fk_2d_symb(a, th, q)
-        else:
-            return fk_2d(a, th, q)
+        return fk_2d(a, th, q)
 
     def joint_variables(self, G: nx.Graph) -> dict:
         """
@@ -434,6 +442,21 @@ class RobotPlanar(Robot, ABC):
 
         return H + H.T - np.diag(np.diag(H))
 
+    def get_pose_symb(self, node_inputs: dict, query_node: str):
+        """
+        Returns an SE2 element corresponding to the location
+        of the query_node in the configuration determined by
+        node_inputs.
+        """
+        if query_node == "p0":
+            return SE2.identity()
+
+        path_nodes = self.kinematic_map["p0"][query_node][1:]
+        q = np.array([node_inputs[node] for node in path_nodes])
+        a = np.array([self.a[node] for node in path_nodes])
+        th = np.array([self.th[node] for node in path_nodes])
+        return fk_2d_symb(a, th, q)
+
 
 class RobotSpherical(Robot, ABC):
     def __init__(self, leaves_only_end_effectors=False):
@@ -464,7 +487,7 @@ class RobotSpherical(Robot, ABC):
 
         return self._end_effectors
 
-    def get_pose(self, joint_values: dict, query_node: str, symb=False) -> SE3:
+    def get_pose(self, joint_values: dict, query_node: str) -> SE3:
         """
         Returns an SE3 element corresponding to the location
         of the query_node in the configuration determined by
@@ -478,10 +501,7 @@ class RobotSpherical(Robot, ABC):
         a = np.array([self.a[node] for node in path_nodes])
         d = np.array([self.d[node] for node in path_nodes])
 
-        if symb:
-            return fk_3d_sph_symb(a, alpha, d, q)
-        else:
-            return fk_3d_sph(a, alpha, d, q)
+        return fk_3d_sph(a, alpha, d, q)
 
     def joint_variables(self, G: nx.Graph, T_final: dict = None) -> np.ndarray:
         """
@@ -505,8 +525,6 @@ class RobotSpherical(Robot, ABC):
                 theta_idx = np.math.atan2(sol[1], sol[0]) + pi / 2
                 Rz = SO3.rotz(theta_idx)
 
-                # x = (R[u].dot(Rz)).as_matrix()[:, 0]
-                # alpha_idx = abs(wraptopi(np.math.acos(sol[2])))
                 alpha_idx = abs(np.math.acos(min(sol[2], 1)))
                 Rx = SO3.rotx(alpha_idx)
 
@@ -559,6 +577,22 @@ class RobotSpherical(Robot, ABC):
                 ]
         return q
 
+    def get_pose_symb(self, joint_values: dict, query_node: str) -> SE3:
+        """
+        Returns an SE3 element corresponding to the location
+        of the query_node in the configuration determined by
+        node_inputs.
+        """
+        if query_node == "p0":
+            return SE3.identity()
+        path_nodes = self.kinematic_map["p0"][query_node][1:]
+        q = np.array([joint_values[node][0] for node in path_nodes])
+        alpha = np.array([joint_values[node][1] for node in path_nodes])
+        a = np.array([self.a[node] for node in path_nodes])
+        d = np.array([self.d[node] for node in path_nodes])
+
+        return fk_3d_sph_symb(a, alpha, d, q)
+
 
 class RobotRevolute(Robot):
     def __init__(self, params):
@@ -568,7 +602,7 @@ class RobotRevolute(Robot):
         if "T_base" in params:
             self.T_base = params["T_base"]
         else:
-            self.T_base = SE3.from_matrix(np.identity(4))
+            self.T_base = SE3.identity()
 
         # Use frame poses at zero conf if provided, if not use DH
         if "T_zero" in params:
@@ -612,25 +646,6 @@ class RobotRevolute(Robot):
         self.set_limits()
         super(RobotRevolute, self).__init__()
 
-    def get_pose(self, joint_angles: dict, query_node: str, symb: bool = False) -> SE3:
-        """
-        Returns an SE3 element corresponding to the location
-        of the query_node in the configuration determined by
-        node_inputs.
-        """
-        kinematic_map = self.kinematic_map
-        parents = self.parents
-        T_ref = self.T_zero
-        T = T_ref["p0"]
-        for node in kinematic_map["p0"][query_node][1:]:
-            pred = [u for u in parents.predecessors(node)]
-            T_rel = T_ref[pred[0]].inv().dot(T_ref[node])
-            if symb:
-                T = (T.dot(rotZ_symb(joint_angles[node]))).dot(T_rel)
-            else:
-                T = T.dot(rot_axis(joint_angles[node], "z")).dot(T_rel)
-        return T
-
     @property
     def end_effectors(self) -> list:
         """
@@ -643,8 +658,7 @@ class RobotRevolute(Robot):
     @property
     def T_zero(self) -> dict:
         if not hasattr(self, "_T_zero"):
-            T = {}
-            T["p0"] = self.T_base
+            T = {"p0": self.T_base}
             kinematic_map = self.kinematic_map
             for ee in self.end_effectors:
                 for node in kinematic_map["p0"][ee[0]][1:]:
@@ -676,30 +690,27 @@ class RobotRevolute(Robot):
     def parents(self, parents: nx.DiGraph):
         self._parents = parents
 
-    def get_all_poses(self, joint_angles: dict) -> dict:
+    def get_pose(self, joint_angles: dict, query_node: str) -> SE3:
+        """
+        Returns an SE3 element corresponding to the location
+        of the query_node in the configuration determined by
+        node_inputs.
+        """
         kinematic_map = self.kinematic_map
         parents = self.parents
         T_ref = self.T_zero
-        T = {}
-        T["p0"] = T_ref["p0"]
-        for ee in self.end_effectors:
-            for node in kinematic_map["p0"][ee[0]][1:]:
-                pred = [u for u in parents.predecessors(node)]
-                T_rel = T_ref[pred[0]].inv().dot(T_ref[node])
-                T[node] = T[pred[0]].dot(rot_axis(joint_angles[node], "z")).dot(T_rel)
+        T = T_ref["p0"]
+        for node in kinematic_map["p0"][query_node][1:]:
+            pred = [u for u in parents.predecessors(node)]
+            T_rel = T_ref[pred[0]].inv().dot(T_ref[node])
+            T = T.dot(rot_axis(joint_angles[node], "z")).dot(T_rel)
         return T
 
-    def get_all_poses_symb(self, joint_angles: dict) -> dict:
-        kinematic_map = self.kinematic_map
-        parents = self.parents
-        T_ref = self.T_zero
-        T = {}
-        T["p0"] = T_ref["p0"]
+    def get_all_poses(self, joint_angles: dict) -> dict:
+        T = {"p0": self.T_zero["p0"]}
         for ee in self.end_effectors:
-            for node in kinematic_map["p0"][ee[0]][1:]:
-                pred = [u for u in parents.predecessors(node)]
-                T_rel = T_ref[pred[0]].inv().dot(T_ref[node])
-                T[node] = T[pred[0]].dot(rotZ_symb(joint_angles[node])).dot(T_rel)
+            for node in self.kinematic_map["p0"][ee[0]][1:]:
+                T[node] = self.get_pose(joint_angles, node)
         return T
 
     def structure_graph(self) -> nx.DiGraph:
@@ -745,202 +756,6 @@ class RobotRevolute(Robot):
             del S.nodes[u][POS]
         return S
 
-    def jacobian(self, joint_angles: dict, query_frame: str = "") -> np.ndarray:
-        """
-        Calculate the full robot Jacobian for all end-effectors.
-        TODO: make frame selectable
-        """
-
-        kinematic_map = self.kinematic_map["p0"]  # get map to all nodes from root
-        end_effector_nodes = []
-        for ee in self.end_effectors:  # get p nodes in end-effectors
-            if ee[0][0] == "p":
-                end_effector_nodes += [ee[0]]
-            else:
-                end_effector_nodes += [ee[1]]
-
-        Ts = self.get_all_poses(joint_angles)  # all frame poses
-
-        J = np.zeros([0, self.n])
-        for ee in end_effector_nodes:  # iterate through end-effector nodes
-            ee_path = kinematic_map[ee][1:]  # no last node, only phys. joint locations
-
-            T_0_ee = Ts[ee].as_matrix()  # ee frame
-            p_ee = T_0_ee[0:3, -1]  # ee position
-
-            Jp = np.zeros([3, self.n])  # translation jac
-            Jo = np.zeros([3, self.n])  # rotation jac (angle-axis)
-            for joint in ee_path:  # algorithm fills Jac per column
-                T_0_i = Ts[list(self.parents.predecessors(joint))[0]].as_matrix()
-                z_hat_i = T_0_i[:3, 2]
-                p_i = T_0_i[:3, -1]
-                j_idx = int(joint[1:]) - 1
-                Jp[:, j_idx] = cross(z_hat_i, p_ee - p_i)
-                Jo[:, j_idx] = z_hat_i
-
-            J_ee = np.vstack([Jp, Jo])
-            J = np.vstack([J, J_ee])  # stack big jac for multiple ee
-
-        return J
-
-    def jacobian_linear_symb(
-        self, joint_angles: dict, pose_term=False, ee_keys=None
-    ) -> dict:
-        """
-        Calculate the robot's linear velocity Jacobian for all end-effectors.
-        """
-        kinematic_map = self.kinematic_map["p0"]  # get map to all nodes from root
-
-        if ee_keys is None:
-            end_effector_nodes = []
-            for ee in self.end_effectors:  # get p nodes in end-effectors
-                if ee[0][0] == "p":
-                    end_effector_nodes += [ee[0]]
-                else:
-                    end_effector_nodes += [ee[1]]
-        else:
-            end_effector_nodes = ee_keys
-        Ts = self.get_all_poses_symb(joint_angles)  # all frame poses
-        J = {}  # np.zeros([0, len(node_names) - 1])
-        for ee in end_effector_nodes:  # iterate through end-effector nodes
-            ee_path = kinematic_map[ee][
-                1:
-            ]  # [:-1]  # no last node, only phys. joint locations
-
-            T_0_ee = Ts[ee].as_matrix()  # ee frame
-            if pose_term:
-                dZ = np.array([0.0, 0.0, 1.0])
-                p_ee = T_0_ee[0:3, 0:3] @ dZ + T_0_ee[0:3, -1]
-            else:
-                p_ee = T_0_ee[0:3, -1]  # ee position
-
-            Jp = np.zeros([3, self.n], dtype=object)  # translation jac
-            for joint in ee_path:  # algorithm fills Jac per column
-                T_0_i = Ts[list(self.parents.predecessors(joint))[0]].as_matrix()
-                z_hat_i = T_0_i[:3, 2]
-                if pose_term:
-                    p_i = T_0_i[0:3, 0:3] @ dZ + T_0_i[0:3, -1]
-                else:
-                    p_i = T_0_i[:3, -1]
-                j_idx = int(joint[1:]) - 1  # node_names.index(joint) - 1
-                Jp[:, j_idx] = cross_symb(z_hat_i, p_ee - p_i)
-            J[ee] = Jp
-        return J
-
-    def hessian(self, joint_angles: dict, query_frame: str = "", J=None) -> np.ndarray:
-        """
-        Calculates the Hessian at query_frame geometrically.
-        TODO: assumes the end effectors are numerically sorted
-        """
-        if J is None:
-            J = self.jacobian(joint_angles)
-
-        end_effector_nodes = []
-        kinematic_map = self.kinematic_map["p0"]  # get map to all nodes from root
-        for ee in self.end_effectors:  # get p nodes in end-effectors
-            if ee[0][0] == "p":
-                end_effector_nodes += [ee[0]]
-            if ee[1][0] == "p":
-                end_effector_nodes += [ee[1]]
-
-        end_effector_nodes.sort(key=lambda val: int(val[1:]))
-
-        num_ee = len(end_effector_nodes)
-        N = J.shape[1]
-        M = 6  # 3 translation + 3 rotation axes
-
-        H = np.zeros([num_ee, M, N, N])  # fun fact: this is called a quartix
-
-        for ee_ind, ee in enumerate(end_effector_nodes):
-            ee_path = kinematic_map[ee][1:]
-            visited = []
-            for joint in ee_path:
-                visited += [joint]
-                jdx = int(joint[1:]) - 1
-                for joint_base in visited:
-                    idx = int(joint_base[1:]) - 1
-                    h = (
-                        cross(
-                            J[ee_ind * 6 + 3 : ee_ind * 6 + 6, idx],
-                            J[ee_ind * 6 + 0 : ee_ind * 6 + 3, jdx],
-                        ),
-                        cross(
-                            J[ee_ind * 6 + 3 : ee_ind * 6 + 6, idx],
-                            J[ee_ind * 6 + 3 : ee_ind * 6 + 6, jdx],
-                        ),
-                    )
-                    ee_i = end_effector_nodes.index(ee)
-                    H[ee_i, :, idx, jdx] = np.concatenate(h, axis=0).T
-                    H[ee_i, :, jdx, idx] = H[ee_i, :, idx, jdx]
-
-        # for ee_ind, ee in enumerate(end_effector_nodes):
-        #     for idx in range(N):
-        #         successors = set(self.parents.successors(f"p{idx + 1}"))
-        #         for jdx in range(idx, N):
-        #             if idx == jdx or f"p{jdx + 1}" in successors:
-        #                 h = (
-        #                     cross(J[ee_ind*6 + 3:ee_ind*6 + 6, jdx], J[ee_ind*6 + 0:ee_ind*6 + 3, idx]),
-        #                     cross(J[ee_ind*6 + 3:ee_ind*6 + 6, jdx], J[ee_ind*6 + 3:ee_ind*6 + 6, idx]),
-        #                 )
-        #                 ee_i = end_effector_nodes.index(ee)
-        #                 H[ee_i, :, idx, jdx] = np.concatenate(h, axis=0).T
-        #                 H[ee_i, :, jdx, idx] = H[ee_i, :, idx, jdx]
-
-        return H
-
-    def hessian_linear_symb(
-        self,
-        joint_angles: dict,
-        J=None,
-        query_frame: str = "",
-        pose_term=False,
-        ee_keys=None,
-    ) -> np.ndarray:
-        """
-        Calculates the Hessian at query_frame geometrically.
-        """
-        # dZ = np.array([0., 0., 1.])  # For the pose_term = True case
-        if J is None:
-            J = self.jacobian_linear_symb(joint_angles, pose_term=pose_term)
-        kinematic_map = self.kinematic_map["p0"]  # get map to all nodes from root
-
-        if ee_keys is None:
-            end_effector_nodes = []
-            for ee in self.end_effectors:  # get p nodes in end-effectors
-                if ee[0][0] == "p":
-                    end_effector_nodes += [ee[0]]
-                if ee[1][0] == "p":
-                    end_effector_nodes += [ee[1]]
-        else:
-            end_effector_nodes = ee_keys
-
-        N = len(joint_angles)
-        M = 3  # 3 translation
-        H = {}
-        Ts = self.get_all_poses_symb(joint_angles)
-        for ee in end_effector_nodes:
-            J_ee = J[ee]
-            H_ee = np.zeros((M, N, N), dtype=object)
-            ee_path = kinematic_map[ee][1:]
-
-            visited = []
-
-            for joint in ee_path:
-                visited += [joint]
-                jdx = int(joint[1:]) - 1
-                for joint_base in visited:
-                    idx = int(joint_base[1:]) - 1
-                    T_0_base = Ts[
-                        list(self.parents.predecessors(joint_base))[0]
-                    ].as_matrix()
-                    z_hat_base = T_0_base[:3, 2]
-                    h = cross_symb(z_hat_base, J_ee[0:3, jdx])
-                    H_ee[:, idx, jdx] = h
-                    H_ee[:, jdx, idx] = H_ee[:, idx, jdx]
-
-            H[ee] = H_ee
-        return H
-
     def euclidean_cost_hessian(self, J: dict, K: dict, r: dict):
         """
         Based on 'Solving Inverse Kinematics Using Exact Hessian Matrices', Erleben, 2019
@@ -965,7 +780,7 @@ class RobotRevolute(Robot):
             H  # TODO: the Hessian as written is for a coefficient of 1/2 for each term
         )
 
-    def max_min_distance(self, T0: SE3, T1: SE3, T2: SE3):
+    def max_min_distance(self, T0: SE3, T1: SE3, T2: SE3) -> (float, float, str):
         """
         Given three frames, find the maximum and minimum distances between the
         frames T0 and T2. It is assumed that the two frames are connected by an
@@ -1133,7 +948,6 @@ class RobotRevolute(Robot):
                 if all(diff < tol):
                     theta[node] = 0
                 else:
-                    # coeffs = np.array([2*c2 + 4*c3 - 4*c4, 6*c1 + 6*c5, 24*c2 + 12*c3 - 12*c4, -16*c1 + 16*c5])
                     sols = np.roots(
                         diff
                     )  # solutions to the Whaba problem for fixed axis
@@ -1178,3 +992,129 @@ class RobotRevolute(Robot):
             if key != "p0":
                 q[key] = self.lb[key] + (self.ub[key] - self.lb[key]) * np.random.rand()
         return q
+
+    def get_pose_symb(self, joint_angles: dict, query_node: str) -> SE3:
+        """
+        Returns an SE3 element corresponding to the location
+        of the query_node in the configuration determined by
+        node_inputs.
+        """
+        kinematic_map = self.kinematic_map
+        parents = self.parents
+        T_ref = self.T_zero
+        T = T_ref["p0"]
+        for node in kinematic_map["p0"][query_node][1:]:
+            pred = [u for u in parents.predecessors(node)]
+            T_rel = T_ref[pred[0]].inv().dot(T_ref[node])
+            T = (T.dot(rotZ_symb(joint_angles[node]))).dot(T_rel)
+        return T
+
+    def get_all_poses_symb(self, joint_angles: dict) -> dict:
+        kinematic_map = self.kinematic_map
+        parents = self.parents
+        T_ref = self.T_zero
+        T = {}
+        T["p0"] = T_ref["p0"]
+        for ee in self.end_effectors:
+            for node in kinematic_map["p0"][ee[0]][1:]:
+                pred = [u for u in parents.predecessors(node)]
+                T_rel = T_ref[pred[0]].inv().dot(T_ref[node])
+                T[node] = T[pred[0]].dot(rotZ_symb(joint_angles[node])).dot(T_rel)
+        return T
+
+    def jacobian_linear_symb(
+        self, joint_angles: dict, pose_term=False, ee_keys=None
+    ) -> dict:
+        """
+        Calculate the robot's linear velocity Jacobian for all end-effectors.
+        """
+        kinematic_map = self.kinematic_map["p0"]  # get map to all nodes from root
+
+        if ee_keys is None:
+            end_effector_nodes = []
+            for ee in self.end_effectors:  # get p nodes in end-effectors
+                if ee[0][0] == "p":
+                    end_effector_nodes += [ee[0]]
+                else:
+                    end_effector_nodes += [ee[1]]
+        else:
+            end_effector_nodes = ee_keys
+        Ts = self.get_all_poses_symb(joint_angles)  # all frame poses
+        J = {}  # np.zeros([0, len(node_names) - 1])
+        for ee in end_effector_nodes:  # iterate through end-effector nodes
+            ee_path = kinematic_map[ee][
+                1:
+            ]  # [:-1]  # no last node, only phys. joint locations
+
+            T_0_ee = Ts[ee].as_matrix()  # ee frame
+            if pose_term:
+                dZ = np.array([0.0, 0.0, 1.0])
+                p_ee = T_0_ee[0:3, 0:3] @ dZ + T_0_ee[0:3, -1]
+            else:
+                p_ee = T_0_ee[0:3, -1]  # ee position
+
+            Jp = np.zeros([3, self.n], dtype=object)  # translation jac
+            for joint in ee_path:  # algorithm fills Jac per column
+                T_0_i = Ts[list(self.parents.predecessors(joint))[0]].as_matrix()
+                z_hat_i = T_0_i[:3, 2]
+                if pose_term:
+                    p_i = T_0_i[0:3, 0:3] @ dZ + T_0_i[0:3, -1]
+                else:
+                    p_i = T_0_i[:3, -1]
+                j_idx = int(joint[1:]) - 1  # node_names.index(joint) - 1
+                Jp[:, j_idx] = cross_symb(z_hat_i, p_ee - p_i)
+            J[ee] = Jp
+        return J
+
+    def hessian_linear_symb(
+        self,
+        joint_angles: dict,
+        J=None,
+        query_frame: str = "",
+        pose_term=False,
+        ee_keys=None,
+    ) -> np.ndarray:
+        """
+        Calculates the Hessian at query_frame geometrically.
+        """
+        # dZ = np.array([0., 0., 1.])  # For the pose_term = True case
+        if J is None:
+            J = self.jacobian_linear_symb(joint_angles, pose_term=pose_term)
+        kinematic_map = self.kinematic_map["p0"]  # get map to all nodes from root
+
+        if ee_keys is None:
+            end_effector_nodes = []
+            for ee in self.end_effectors:  # get p nodes in end-effectors
+                if ee[0][0] == "p":
+                    end_effector_nodes += [ee[0]]
+                if ee[1][0] == "p":
+                    end_effector_nodes += [ee[1]]
+        else:
+            end_effector_nodes = ee_keys
+
+        N = len(joint_angles)
+        M = 3  # 3 translation
+        H = {}
+        Ts = self.get_all_poses_symb(joint_angles)
+        for ee in end_effector_nodes:
+            J_ee = J[ee]
+            H_ee = np.zeros((M, N, N), dtype=object)
+            ee_path = kinematic_map[ee][1:]
+
+            visited = []
+
+            for joint in ee_path:
+                visited += [joint]
+                jdx = int(joint[1:]) - 1
+                for joint_base in visited:
+                    idx = int(joint_base[1:]) - 1
+                    T_0_base = Ts[
+                        list(self.parents.predecessors(joint_base))[0]
+                    ].as_matrix()
+                    z_hat_base = T_0_base[:3, 2]
+                    h = cross_symb(z_hat_base, J_ee[0:3, jdx])
+                    H_ee[:, idx, jdx] = h
+                    H_ee[:, jdx, idx] = H_ee[:, idx, jdx]
+
+            H[ee] = H_ee
+        return H

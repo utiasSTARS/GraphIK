@@ -66,7 +66,7 @@ class LocalSolver(GraphProblemSolver):
 
             if pose_cost:
                 T_query = end_effector_assignment[query_node]
-                T_ee = robot.get_pose(sym_vars, query_node, symb=True)
+                T_ee = robot.get_pose_symb(sym_vars, query_node)
                 cost_sym += norm_sq(
                     T_ee.rot.as_matrix() @ dZ
                     + T_ee.trans
@@ -76,7 +76,7 @@ class LocalSolver(GraphProblemSolver):
                 cost_sym += norm_sq(T_ee.trans - T_query.trans)
             else:
                 cost_sym += norm_sq(
-                    robot.get_pose(sym_vars, query_node, symb=True).trans
+                    robot.get_pose_symb(sym_vars, query_node).trans
                     - end_effector_assignment[query_node].trans
                 )
 
