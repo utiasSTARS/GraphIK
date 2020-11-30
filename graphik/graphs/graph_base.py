@@ -1,9 +1,9 @@
-from abc import ABC
-from liegroups.numpy import SE3
-
 import networkx as nx
 import numpy as np
 import numpy.linalg as la
+
+from abc import ABC
+from liegroups.numpy import SE3
 from numpy.linalg import norm
 from graphik.robots.robot_base import Robot, RobotRevolute
 from graphik.utils.utils import (

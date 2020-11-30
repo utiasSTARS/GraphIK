@@ -4,7 +4,7 @@ import networkx as nx
 
 from liegroups.numpy import SO3, SE3
 
-from graphik.robots.revolute import Revolute3dChain, Revolute3dTree, Spherical3dTree
+from graphik.robots.robot_base import RobotRevolute, RobotSpherical
 from graphik.utils.utils import list_to_variable_dict
 from graphik.solvers.local_solver import LocalSolver
 
@@ -30,9 +30,9 @@ class TestRandom(unittest.TestCase):
                 "joint_limits_lower": lim_l,
                 "joint_limits_upper": lim_u,
             }
-            robot = Revolute3dChain(params)
-            ee_goals = {'p' + str(n): SE3(SO3.identity(), np.random.rand(3))}
-            variable_angles = ['p' + str(idx) for idx in range(1, n + 1)]
+            robot = RobotRevolute(params)
+            ee_goals = {"p" + str(n): SE3(SO3.identity(), np.random.rand(3))}
+            variable_angles = ["p" + str(idx) for idx in range(1, n + 1)]
 
             solver_symb = LocalSolver()
             solver_symb.set_symbolic_cost_function(robot, ee_goals, variable_angles)
@@ -69,11 +69,11 @@ class TestRandom(unittest.TestCase):
                 "theta": th,
                 "joint_limits_lower": lim_l,
                 "joint_limits_upper": lim_u,
-                "parents": parents
+                "parents": parents,
             }
-            robot = Revolute3dTree(params)
+            robot = RobotRevolute(params)
 
-            ee_goals = {'p' + str(n): SE3(SO3.identity(), np.random.rand(3))}
+            ee_goals = {"p" + str(n): SE3(SO3.identity(), np.random.rand(3))}
             # ee_goals = {'p' + str(n): np.random.rand(3)}
             # variable_angles = ['p' + str(idx) for idx in range(1, n + 1)]
             variable_angles = list(robot.a.keys())
@@ -122,7 +122,7 @@ class TestRandom(unittest.TestCase):
         #         "joint_limits_upper": lim_u,
         #         "parents": parents
         #     }
-        #     robot_spherical = Spherical3dTree(params)
+        #     robot_spherical = RobotSpherical(params)
         #
         #     robot, names_map, angles_map = robot_spherical.to_revolute()
         #

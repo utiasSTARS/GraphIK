@@ -5,7 +5,7 @@ from numpy.testing import assert_array_less
 import networkx as nx
 import time
 from graphik.graphs.graph_base import SphericalRobotGraph
-from graphik.robots.revolute import Spherical3dChain
+from graphik.robots.robot_base import RobotSpherical
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.dgp_utils import sample_matrix, PCA, dist_to_gram
 from graphik.utils.utils import best_fit_transform, list_to_variable_dict
@@ -35,14 +35,14 @@ def random_problem_3d_chain():
         "joint_limits_upper": ub,
     }
 
-    robot = Spherical3dChain(params)
+    robot = RobotSpherical(params)
     graph = SphericalRobotGraph(robot)
     solver = RiemannianSolver(graph)
     n_tests = 100
 
     q_init = graph.robot.random_configuration()
     for key in q_init.keys():
-        q_init[key] = [0,0]
+        q_init[key] = [0, 0]
     G_init = graph.realization(q_init)
     X_init = graph.pos_from_graph(G_init)
     for idx in range(n_tests):
@@ -63,7 +63,7 @@ def random_problem_3d_chain():
         F = graph.adjacency_matrix(G)
 
         # sol_info = solver.solve(D_goal, F, bounds=(lb, ub), use_limits = True)
-        sol_info = solver.solve(D_goal, F, Y_init = X_init, use_limits = True)
+        sol_info = solver.solve(D_goal, F, Y_init=X_init, use_limits=True)
         Y = sol_info["x"]
         t_sol += [sol_info["time"]]
 
@@ -77,7 +77,9 @@ def random_problem_3d_chain():
         T_riemannian.rot
         # err_riemannian = (T_goal.dot(T_riemannian.inv())).log()
         err_riemannian_pos = np.linalg.norm(T_goal.trans - T_riemannian.trans)
-        err_riemannian_rot = np.linalg.norm(np.log(T_riemannian.as_matrix()[:3,2]@T_goal.as_matrix()[:3,2]))
+        err_riemannian_rot = np.linalg.norm(
+            np.log(T_riemannian.as_matrix()[:3, 2] @ T_goal.as_matrix()[:3, 2])
+        )
 
         e_rot += [err_riemannian_rot]
         e_pos += [err_riemannian_pos]
@@ -90,7 +92,7 @@ def random_problem_3d_chain():
                 q_abs += [q_sol[key][1]]
             # broken_limits = {}
             for key in q_sol:
-                if abs(q_sol[key][1]) > (graph.robot.ub[key]*1.01):
+                if abs(q_sol[key][1]) > (graph.robot.ub[key] * 1.01):
                     fails += 1
                     break
         print(f"{idx}", end="\r")
@@ -104,7 +106,6 @@ def random_problem_3d_chain():
     print("Number of fails {:}".format(fails))
 
 
-
-if (__name__ == "__main__"):
+if __name__ == "__main__":
     np.random.seed(21)
     random_problem_3d_chain()

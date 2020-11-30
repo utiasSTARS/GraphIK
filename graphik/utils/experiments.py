@@ -1,4 +1,3 @@
-from graphik.robots.robot_base import RobotRevolute
 import numpy as np
 import itertools
 import time
@@ -18,11 +17,7 @@ from graphik.solvers.solver_fabrik import solver_fabrik
 from graphik.solvers.geometric_jacobian import jacobian_ik
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.graphs.graph_base import Graph
-from graphik.robots.robot_base import RobotRevolute
-from graphik.robots.revolute import (
-    Spherical3dChain,
-    Spherical3dTree,
-)
+from graphik.robots.robot_base import RobotRevolute, RobotSpherical, RobotPlanar
 from graphik.utils.utils import (
     list_to_variable_dict,
     list_to_variable_dict_spherical,
@@ -167,7 +162,7 @@ def run_full_experiment(
 
     # is_revolute3d = type(graph.robot) in (Revolute3dChain, Revolute3dTree)
     is_revolute3d = type(graph.robot) is RobotRevolute
-    is_spherical = type(graph.robot) in (Spherical3dChain, Spherical3dTree)
+    is_spherical = type(graph.robot) is RobotSpherical
     is_planar = not (is_revolute3d or is_spherical)
 
     # Set end effector goals from q_goal
@@ -1018,7 +1013,7 @@ def run_full_fabrik_sweep_experiment(
 
     # retrieving parents indices in the format of solver_fabrik
     if (type(robot).__name__ == "RobotPlanar") or (
-        type(robot).__name__ == "Spherical3dTree"
+        type(robot).__name__ == "RobotSpherical"
     ):
         parents_index = [-1] * len(robot.parents)
         for key in list(robot.parents.keys()):

@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 import numpy as np
 from graphik.robots.robot_base import RobotPlanar
-from graphik.robots.revolute import (
-    Revolute3dChain,
-    Revolute3dTree,
-)
 import matplotlib.pyplot as plt
 from graphik.utils.utils import list_to_variable_dict, variable_dict_to_list
 from graphik.utils.robot_visualization import plot_planar_manipulator

@@ -6,11 +6,8 @@ import numpy as np
 import time
 import unittest
 import networkx as nx
-from graphik.robots.revolute import (
-    Spherical3dChain,
-    Spherical3dTree,
-)
 from graphik.solvers.local_solver import LocalSolver
+from graphik.robots.robot_base import RobotSpherical
 from graphik.graphs.graph_base import SphericalRobotGraph, Revolute3dRobotGraph
 from graphik.utils.utils import list_to_variable_dict, list_to_variable_dict_spherical
 
@@ -39,7 +36,7 @@ class TestForwardKinematics(unittest.TestCase):
             "joint_limits_upper": lim_u,
             "joint_limits_lower": lim_l,
         }
-        robot = Spherical3dChain(params)
+        robot = RobotSpherical(params)
         robot.lambdify_get_pose()
 
         # Revolute robot
@@ -95,7 +92,7 @@ class TestForwardKinematics(unittest.TestCase):
             "joint_limits_upper": lim_u,
             "joint_limits_lower": lim_l,
         }
-        robot = Spherical3dChain(params)
+        robot = RobotSpherical(params)
 
         for _ in range(n_runs):
             input_list = list(np.random.rand(2 * n))
@@ -123,12 +120,24 @@ class TestForwardKinematics(unittest.TestCase):
 
                 # Test angular limits
                 try:
-                    self.assertAlmostEqual(robot.lb[key], robot_revolute.lb[names_map[key]])
-                    self.assertAlmostEqual(robot.ub[key], robot_revolute.ub[names_map[key]])
+                    self.assertAlmostEqual(
+                        robot.lb[key], robot_revolute.lb[names_map[key]]
+                    )
+                    self.assertAlmostEqual(
+                        robot.ub[key], robot_revolute.ub[names_map[key]]
+                    )
                 except AssertionError:
-                    print("Lower bound revolute: {:}".format(robot_revolute.lb[names_map[key]]))
+                    print(
+                        "Lower bound revolute: {:}".format(
+                            robot_revolute.lb[names_map[key]]
+                        )
+                    )
                     print("Lower bound standard: {:}".format(robot.lb[key]))
-                    print("Upper bound revolute: {:}".format(robot_revolute.ub[names_map[key]]))
+                    print(
+                        "Upper bound revolute: {:}".format(
+                            robot_revolute.ub[names_map[key]]
+                        )
+                    )
                     print("Upper bound standard: {:}".format(robot.ub[key]))
 
     def test_random_tree(self):
@@ -157,7 +166,7 @@ class TestForwardKinematics(unittest.TestCase):
             "joint_limits_lower": lim_l,
             "parents": parents,
         }
-        robot = Spherical3dTree(params)
+        robot = RobotSpherical(params)
         robot.lambdify_get_pose()
 
         for _ in range(n_runs):
@@ -188,12 +197,24 @@ class TestForwardKinematics(unittest.TestCase):
 
                 # Test angular limits
                 try:
-                    self.assertAlmostEqual(robot.lb[key], robot_revolute.lb[names_map[key]])
-                    self.assertAlmostEqual(robot.ub[key], robot_revolute.ub[names_map[key]])
+                    self.assertAlmostEqual(
+                        robot.lb[key], robot_revolute.lb[names_map[key]]
+                    )
+                    self.assertAlmostEqual(
+                        robot.ub[key], robot_revolute.ub[names_map[key]]
+                    )
                 except AssertionError:
-                    print("Lower bound revolute: {:}".format(robot_revolute.lb[names_map[key]]))
+                    print(
+                        "Lower bound revolute: {:}".format(
+                            robot_revolute.lb[names_map[key]]
+                        )
+                    )
                     print("Lower bound standard: {:}".format(robot.lb[key]))
-                    print("Upper bound revolute: {:}".format(robot_revolute.ub[names_map[key]]))
+                    print(
+                        "Upper bound revolute: {:}".format(
+                            robot_revolute.ub[names_map[key]]
+                        )
+                    )
                     print("Upper bound standard: {:}".format(robot.ub[key]))
 
 

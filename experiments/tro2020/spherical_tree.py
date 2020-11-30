@@ -2,7 +2,7 @@ import numpy as np
 import networkx as nx
 import pickle
 
-from graphik.robots.revolute import Spherical3dTree
+from graphik.robots.robot_base import RobotSpherical
 from graphik.graphs.graph_base import SphericalRobotGraph, Revolute3dRobotGraph
 from graphik.utils.utils import list_to_variable_dict, make_save_string
 from graphik.utils.experiments import run_multiple_experiments, process_experiment
@@ -27,36 +27,43 @@ if __name__ == "__main__":
     #     "SLSQP",
     #     "trust-constr"
     # ]
-    local_algorithms_unbounded = [
-        "trust-exact"
-    ]
-    local_algorithms_bounded = [
-        "trust-constr"
-    ]
+    local_algorithms_unbounded = ["trust-exact"]
+    local_algorithms_bounded = ["trust-constr"]
     n_goals = 1000  # Number of goals
     n_init = 1  # Number of initializations to try (should be 1 for zero_init = True and for bound_smoothing = True)
     zero_init = True  # True makes the angular solvers MUCH better w
     use_limits = True  # Whether to use angular limits for all the solvers
     do_jacobian = False  # Jacobian doesn't work well for zero_init (need a more local starting point)
-    fabrik_only = False  # Only run the FABRIK solver (messy utility for re-running after the bug)
+    fabrik_only = (
+        False  # Only run the FABRIK solver (messy utility for re-running after the bug)
+    )
     if fabrik_only:
         do_jacobian = False
     if fabrik_only:
         local_algorithms = []
     else:
-        local_algorithms = local_algorithms_bounded if use_limits else local_algorithms_unbounded
+        local_algorithms = (
+            local_algorithms_bounded if use_limits else local_algorithms_unbounded
+        )
     # Solver params
-    verbosity = 2  # Needs to be 2 for Riemannian solver at the moment TODO: make it smarter!!
+    verbosity = (
+        2  # Needs to be 2 for Riemannian solver at the moment TODO: make it smarter!!
+    )
     maxiter = 2000  # Most algs never max it (Riemannian ConjugateGradient often does)
     tol = 1e-9  # This is the key parameter, will be worth playing with (used for gtol except for SLSQP)
-    initial_tr_radius = 1.  # This is a key parameter for trust-constr and trust-exact.
+    initial_tr_radius = 1.0  # This is a key parameter for trust-constr and trust-exact.
     trigsimp = False  # Not worth setting to True for n_init = 1
     if fabrik_only:
         riemannian_algorithms = []
     else:
         # riemannian_algorithms = ["TrustRegions", "ConjugateGradient"]
         riemannian_algorithms = ["TrustRegions"]
-    solver_params = {"solver": "BFGS", "maxiter": maxiter, "tol": tol, "initial_tr_radius": initial_tr_radius}
+    solver_params = {
+        "solver": "BFGS",
+        "maxiter": maxiter,
+        "tol": tol,
+        "initial_tr_radius": initial_tr_radius,
+    }
     bound_smoothing = True  # Riemannian algs will do with and without bound smoothing when this is True
     riemannian_alg1 = riemannian_algorithms[0] if not fabrik_only else "TrustRegions"
     riemann_params = {
@@ -69,10 +76,12 @@ if __name__ == "__main__":
         "tol": tol,
         "maxiter": maxiter,
         "dt": 1e-3,
-        "method": "dls_inverse"
+        "method": "dls_inverse",
     }
     fabrik_tol = 1e-9
-    fabrik_max_iter = maxiter  # FABRIK is faster per iteration, might be worth changing this around
+    fabrik_max_iter = (
+        maxiter  # FABRIK is faster per iteration, might be worth changing this around
+    )
 
     # Form the robot and graph object (any robot you want here)
     height = 4
@@ -87,7 +96,7 @@ if __name__ == "__main__":
     a = list_to_variable_dict(np.zeros(n))
     alpha = list_to_variable_dict(np.zeros(n))
     if use_limits:
-        lim = np.minimum(np.random.rand(n)*np.pi + 0.2, np.pi)
+        lim = np.minimum(np.random.rand(n) * np.pi + 0.2, np.pi)
     else:
         lim = np.pi * np.ones(n)
     lim_u = list_to_variable_dict(lim)
@@ -110,16 +119,20 @@ if __name__ == "__main__":
         ("maxiter", maxiter),
         ("n_goals", n_goals),
         ("n_init", n_init),
-        ("zero_init", zero_init)
+        ("zero_init", zero_init),
     ]
 
     if fabrik_only:
-        save_string = "results/FABRIK_only_spherical_tree_" + make_save_string(save_string_properties)
+        save_string = "results/FABRIK_only_spherical_tree_" + make_save_string(
+            save_string_properties
+        )
     else:
-        save_string = "results/spherical_tree_" + make_save_string(save_string_properties)
+        save_string = "results/spherical_tree_" + make_save_string(
+            save_string_properties
+        )
 
     # Robot params
-    robot = Spherical3dTree(params)
+    robot = RobotSpherical(params)
     # robot.lambdify_get_pose()
     graph = SphericalRobotGraph(robot)
 
@@ -129,11 +142,26 @@ if __name__ == "__main__":
         robot_revolute.lambdify_get_pose()
     graph_local = Revolute3dRobotGraph(robot_revolute)
 
-    results = run_multiple_experiments(graph, n_goals, n_init, zero_init, solver_params,
-                                       riemann_params, jacobian_params, use_limits, verbosity,
-                                       bound_smoothing, local_algorithms, riemannian_algorithms,
-                                       fabrik_max_iter, trigsimp=trigsimp, do_jacobian=do_jacobian,
-                                       local_graph=graph_local, local_graph_map=name_map, pose_goals=True)
+    results = run_multiple_experiments(
+        graph,
+        n_goals,
+        n_init,
+        zero_init,
+        solver_params,
+        riemann_params,
+        jacobian_params,
+        use_limits,
+        verbosity,
+        bound_smoothing,
+        local_algorithms,
+        riemannian_algorithms,
+        fabrik_max_iter,
+        trigsimp=trigsimp,
+        do_jacobian=do_jacobian,
+        local_graph=graph_local,
+        local_graph_map=name_map,
+        pose_goals=True,
+    )
     # results.robot = robot
     # results.seed = seed
     # pickle.dump(results, open(save_string + "full_results.p", "wb"))

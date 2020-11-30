@@ -13,8 +13,10 @@ from graphik.utils.utils import (
     list_to_variable_dict,
     trans_axis,
     rot_axis,
+    spherical_angle_bounds_to_revolute,
+    transZ,
 )
-from graphik.utils.kinematics_helpers import rotZ_symb, skew, cross_symb
+from graphik.utils.kinematics_helpers import rotZ_symb, skew, cross_symb, roty
 from graphik.utils.forward_kinematics import (
     fk_2d,
     fk_2d_symb,
@@ -497,11 +499,58 @@ class RobotPlanar(Robot):
         return fk_2d_symb(a, th, q)
 
 
-class RobotSpherical(Robot, ABC):
-    def __init__(self, leaves_only_end_effectors=False):
+class RobotSpherical(Robot):
+    def __init__(self, params):
+
+        if "T_base" in params:
+            self.T_base = params["T_base"]
+        else:
+            self.T_base = SE3.identity()
+
+        self.a = params["a"]
+        self.al = params["alpha"]
+        self.d = params["d"]
+        self.th = params["theta"]
+        self.ub = params["joint_limits_upper"]
+        self.lb = params["joint_limits_lower"]
+        self.n = len(self.th)  # number of links
         self.dim = 3
+
+        if "parents" in params:
+            self.parents = params["parents"]
+            self.structure = self.tree_graph()
+        else:
+            self.structure = self.chain_graph()
+            self.parents = nx.to_dict_of_dicts(self.structure)
+
+        self.kinematic_map = nx.shortest_path(self.structure.copy())
+        self.set_limits()
         super(RobotSpherical, self).__init__()
-        self.leaves_only_end_effectors = leaves_only_end_effectors
+
+    @property
+    def spherical(self) -> bool:
+        return True
+
+    def chain_graph(self) -> nx.DiGraph:
+        """
+        Directed graph representing the robots chain structure
+        """
+        edg_lst = [
+            (f"p{idx}", f"p{idx+1}", self.d[f"p{idx+1}"]) for idx in range(self.n)
+        ]
+        chain_graph = nx.DiGraph()
+        chain_graph.add_weighted_edges_from(edg_lst)
+        return chain_graph
+
+    def tree_graph(self) -> nx.DiGraph:
+        """
+        Needed for forward kinematics (computing the shortest path).
+        :return: Directed graph representing the robot's tree structure.
+        """
+        tree_graph = nx.DiGraph(self.parents)
+        for parent, child in tree_graph.edges():
+            tree_graph.edges[parent, child]["weight"] = self.d[child]
+        return tree_graph
 
     @property
     def end_effectors(self) -> list:
@@ -512,17 +561,14 @@ class RobotSpherical(Robot, ABC):
         """
         if not hasattr(self, "_end_effectors"):
             S = self.structure
-            if self.leaves_only_end_effectors:
-                self._end_effectors = [[x] for x in S if S.out_degree(x) == 0]
-            else:
-                self._end_effectors = [
-                    [x, y]
-                    for x in S
-                    if S.out_degree(x) == 0
-                    for y in S.predecessors(x)
-                    if DIST in S[y][x]
-                    if S[y][x][DIST] < np.inf
-                ]
+            self._end_effectors = [
+                [x, y]
+                for x in S
+                if S.out_degree(x) == 0
+                for y in S.predecessors(x)
+                if DIST in S[y][x]
+                if S[y][x][DIST] < np.inf
+            ]
 
         return self._end_effectors
 
@@ -631,6 +677,151 @@ class RobotSpherical(Robot, ABC):
         d = np.array([self.d[node] for node in path_nodes])
 
         return fk_3d_sph_symb(a, alpha, d, q)
+
+    def jacobian_linear(self, joint_angles: dict, query_frame: str = "") -> np.ndarray:
+        """
+        Calculate the linear velocity robot Jacobian for all end-effectors.
+        TODO: make frame selectable
+        """
+
+        kinematic_map = self.kinematic_map["p0"]  # get map to all nodes from root
+        end_effector_nodes = []
+        for ee in self.end_effectors:  # get p nodes in end-effectors
+            if ee[0][0] == "p":
+                end_effector_nodes += [ee[0]]
+            if ee[1][0] == "p":
+                end_effector_nodes += [ee[1]]
+
+        node_names = [
+            name for name in self.structure if name[0] == "p"
+        ]  # list of p node ids
+
+        Ts = self.get_full_pose_fast_lambdify(joint_angles)  # all frame poses
+        Ts["p0"] = np.eye(4)
+
+        J = np.zeros([0, len(node_names) - 1])
+        for ee in end_effector_nodes:  # iterate through end-effector nodes
+            ee_path = kinematic_map[ee][:-1]  # no last node, only phys. joint locations
+
+            T_0_ee = Ts[ee]  # ee frame
+            p_ee = T_0_ee[0:3, -1]  # ee position
+
+            Jp_t = np.zeros([3, len(node_names) - 1])  # translation jac for theta
+            Jp_al = np.zeros([3, len(node_names) - 1])  # translation jac alpha
+            for joint in ee_path:  # algorithm fills Jac per column
+                T_0_i = Ts[joint]
+                z_hat_i = T_0_i[:3, 2]
+                x_hat_i = T_0_i[:3, 0]
+                p_i = T_0_i[:3, -1]
+                j_idx = node_names.index(joint)
+                Jp_t[:, j_idx] = np.cross(z_hat_i, p_ee - p_i)
+                Jp_al[:, j_idx] = np.cross(x_hat_i, p_ee - p_i)
+
+            J_ee = np.vstack([Jp_t, Jp_al])
+            J = np.vstack([J, J_ee])  # stack big jac for multiple ee
+
+        return J
+
+    def to_revolute(self):
+        if len(self.end_effectors) > 1:
+            return self.to_revolute_tree()
+        else:
+            return self.to_revolute_chain()
+
+    def to_revolute_tree(self):
+        """
+        Convert to a revolute tree representation (for local solver).
+        :return:
+        """
+        T_zero = {"p0": SE3.identity()}
+        stack = ["p0"]
+        tree_structure = {"p0": []}
+        ang_lims_map = {}
+        old_to_new_names = {
+            "p0": "p0"
+        }  # Returned for user of the method (to map old joint names to new ones)
+        ub, lb = spherical_angle_bounds_to_revolute(self.ub, self.lb)
+        count = 1
+        while len(stack) > 0:
+            joint = stack.pop(0)
+            new_joint = old_to_new_names[joint]
+            for child in self.parents[joint]:
+                stack += [child]
+                new_child = "p" + str(count)
+                count += 1
+                # ub[new_child] = self.ub[child]
+                # lb[new_child] = self.lb[child]
+                ang_lims_map[child] = new_child
+                tree_structure[new_joint] += [new_child]
+                new_grand_child = "p" + str(count)
+                count += 1
+                old_to_new_names[child] = new_grand_child
+                tree_structure[new_child] = [new_grand_child]
+                Ry = SE3(SO3(roty(np.pi / 2)), np.zeros(3))
+                T_zero[new_child] = T_zero[new_joint].dot(Ry)
+                d = self.d[child]
+                Ry_back = SE3(SO3(roty(-np.pi / 2)), np.zeros(3))
+                T_zero[new_grand_child] = T_zero[new_child].dot(Ry_back).dot(transZ(d))
+                tree_structure[new_grand_child] = []
+
+        # for key in old_to_new_names:
+        #     if key in self.ub.keys():
+        #         ub[old_to_new_names[key]] = self.ub[key]
+        #         lb[old_to_new_names[key]] = self.lb[key]
+
+        # for key in T_zero:
+        #     if key not in ub.keys() and key is not 'p0':
+        #         ub[key] = np.pi
+        #         lb[key] = -np.pi
+
+        params = {"T_zero": T_zero, "ub": ub, "lb": lb, "parents": tree_structure}
+
+        # print("normal ub: {:}".format(self.ub))
+        # print("ub: {:}".format(ub))
+        # print("lb: {:}".format(lb))
+        return RobotRevolute(params), old_to_new_names, ang_lims_map
+
+    def to_revolute_chain(self):
+        """
+        Convert to a revolute chain representation (for local solver).
+        :return:
+        """
+        T_zero = {"p0": SE3.identity()}
+        ang_lims_map = {}
+        old_to_new_names = {
+            "p0": "p0"
+        }  # Returned for user of the method (to map old joint names to new ones)
+        ub, lb = spherical_angle_bounds_to_revolute(self.ub, self.lb)
+        count = 1
+        joint_prev = "p0"
+        for (
+            joint
+        ) in self.d:  # Assumes the dictionary is in chain order (perhaps enforce?)
+            new_node1 = "p" + str(count)
+            count += 1
+            # ub[new_node1] = self.ub[joint]
+            # lb[new_node1] = self.lb[joint]
+            ang_lims_map[joint] = new_node1
+
+            new_node2 = "p" + str(count)
+            count += 1
+            old_to_new_names[joint] = new_node2
+
+            Ry = SE3(SO3(roty(np.pi / 2)), np.zeros(3))
+            T_zero[new_node1] = T_zero[joint_prev].dot(Ry)
+            d = self.d[joint]
+            Ry_back = SE3(SO3(roty(-np.pi / 2)), np.zeros(3))
+            T_zero[new_node2] = T_zero[new_node1].dot(Ry_back).dot(transZ(d))
+
+            joint_prev = new_node2
+
+        # for key in T_zero:
+        #     if key not in ub.keys() and key is not 'p0':
+        #         ub[key] = np.pi
+        #         lb[key] = -np.pi
+
+        params = {"T_zero": T_zero, "ub": ub, "lb": lb}
+        return RobotRevolute(params), old_to_new_names, ang_lims_map
 
 
 class RobotRevolute(Robot):

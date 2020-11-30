@@ -4,7 +4,6 @@ from matplotlib import pyplot as plt
 # from matplotlib.cbook import get_sample_data
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from matplotlib import rc, cm
-from graphik.robots.revolute import Revolute3dChain
 from graphik.robots.robot_base import RobotRevolute
 import matplotlib as mpl
 from mpl_toolkits.mplot3d import Axes3D

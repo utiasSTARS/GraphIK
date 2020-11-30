@@ -2,11 +2,8 @@ import numpy as np
 import time
 import unittest
 import networkx as nx
-from graphik.robots.revolute import (
-    Spherical3dChain,
-    Spherical3dTree,
-)
 
+from graphik.robots.robot_base import RobotSpherical
 from graphik.utils.utils import list_to_variable_dict, list_to_variable_dict_spherical
 
 
@@ -32,7 +29,7 @@ class TestLambdifiedForwardKinematics(unittest.TestCase):
             "joint_limits_upper": lim_u,
             "joint_limits_lower": lim_l,
         }
-        robot = Spherical3dChain(params)
+        robot = RobotSpherical(params)
         robot.lambdify_get_pose()
         t_fast_total = 0.0
         t_total = 0.0
@@ -86,7 +83,7 @@ class TestLambdifiedForwardKinematics(unittest.TestCase):
             "joint_limits_lower": lim_l,
             "parents": parents,
         }
-        robot = Spherical3dTree(params)
+        robot = RobotSpherical(params)
         robot.lambdify_get_pose()
         t_fast_total = 0.0
         t_total = 0.0

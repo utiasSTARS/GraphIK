@@ -1,12 +1,14 @@
 import unittest
 import numpy as np
 import sympy as sp
+
+from graphik.robots.robot_base import RobotSpherical
 from graphik.solvers.local_solver import LocalSolver
-from graphik.robots.revolute import Spherical3dChain, Revolute3dChain
 from graphik.graphs.graph_base import SphericalRobotGraph
 from graphik.utils.utils import list_to_variable_dict, list_to_variable_dict_spherical
 
 from liegroups.numpy import SO3, SE3
+
 
 class TestParameterization(unittest.TestCase):
     def test_1dof_simple(self):
@@ -24,7 +26,7 @@ class TestParameterization(unittest.TestCase):
             "joint_limits_upper": list_to_variable_dict(ub),
             "joint_limits_lower": list_to_variable_dict(lb),
         }
-        robot = Spherical3dChain(params)
+        robot = RobotSpherical(params)
         # robot_rev = Revolute3dChain(params)
         solver_params = {"solver": "L-BFGS-B", "maxiter": 100, "tol": 1e-6}
         solver = LocalSolver(solver_params)
@@ -64,7 +66,7 @@ class TestParameterization(unittest.TestCase):
                 "joint_limits_upper": list_to_variable_dict(ub),
                 "joint_limits_lower": list_to_variable_dict(lb),
             }
-            robot = Spherical3dChain(params)
+            robot = RobotSpherical(params)
             # solver_params = {"solver": "L-BFGS-B", "maxiter": 100, "tol": 1e-9}
             solver_params = {"solver": "trust-constr", "maxiter": 100, "tol": 1e-9}
             solver = LocalSolver(solver_params)

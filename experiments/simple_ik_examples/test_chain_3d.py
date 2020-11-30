@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 import numpy as np
 from numpy.testing import assert_array_less
-import networkx as nx
-import time
 from graphik.graphs.graph_base import SphericalRobotGraph
-from graphik.robots.revolute import Spherical3dChain
+from graphik.robots.robot_base import RobotSpherical
 
 from graphik.solvers.riemannian_solver import RiemannianSolver
-from graphik.utils.dgp_utils import sample_matrix, PCA, dist_to_gram
 from graphik.utils.utils import best_fit_transform, list_to_variable_dict
 
 
@@ -33,14 +30,14 @@ def random_problem_3d_chain():
         "joint_limits_lower": lim_l,
         "joint_limits_upper": lim_u,
     }
-    robot = Spherical3dChain(params)  # instantiate robot
+    robot = RobotSpherical(params)  # instantiate robot
     graph = SphericalRobotGraph(robot)  # instantiate graph
     solver = RiemannianSolver(graph)
     n_tests = 1000
 
     q_init = graph.robot.random_configuration()
     for key in q_init.keys():
-        q_init[key] = [0,0]
+        q_init[key] = [0, 0]
     G_init = graph.realization(q_init)
     X_init = graph.pos_from_graph(G_init)
     for idx in range(n_tests):
@@ -58,7 +55,9 @@ def random_problem_3d_chain():
         F = graph.adjacency_matrix(G)
 
         # sol_info = solver.solve(D_goal, F, use_limits=False, bounds=(lb, ub))
-        sol_info = solver.solve(D_goal, F, Y_init=X_init, max_attempts=10, use_limits = False)
+        sol_info = solver.solve(
+            D_goal, F, Y_init=X_init, max_attempts=10, use_limits=False
+        )
         Y = sol_info["x"]
         t_sol += [sol_info["time"]]
         R, t = best_fit_transform(Y[[0, 1, 2, 3], :], X_goal[[0, 1, 2, 3], :])
@@ -72,7 +71,9 @@ def random_problem_3d_chain():
         T_riemannian.rot
         # err_riemannian = (T_goal.dot(T_riemannian.inv())).log()
         err_riemannian_pos = np.linalg.norm(T_goal.trans - T_riemannian.trans)
-        err_riemannian_rot = np.linalg.norm(T_riemannian.as_matrix()[:3,2] - T_goal.as_matrix()[:3,2])
+        err_riemannian_rot = np.linalg.norm(
+            T_riemannian.as_matrix()[:3, 2] - T_goal.as_matrix()[:3, 2]
+        )
         # print(T_riemannian.as_matrix())
         # print(T_goal.as_matrix())
         # print(err_riemannian)
@@ -96,6 +97,6 @@ def random_problem_3d_chain():
     # assert_array_less(e_sol, 1e-3 * np.ones(n_tests))
 
 
-if (__name__ == "__main__"):
+if __name__ == "__main__":
     np.random.seed(21)
     random_problem_3d_chain()
