@@ -6,6 +6,7 @@ from graphik.robots.robot_base import RobotSpherical
 
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.utils import best_fit_transform, list_to_variable_dict
+from graphik.utils.dgp import adjacency_matrix_from_graph, pos_from_graph
 
 
 def random_problem_3d_chain():
@@ -39,20 +40,20 @@ def random_problem_3d_chain():
     for key in q_init.keys():
         q_init[key] = [0, 0]
     G_init = graph.realization(q_init)
-    X_init = graph.pos_from_graph(G_init)
+    X_init = pos_from_graph(G_init)
     for idx in range(n_tests):
 
         q_goal = graph.robot.random_configuration()
 
         G_goal = graph.realization(q_goal)
-        X_goal = graph.pos_from_graph(G_goal)
-        D_goal = graph.distance_matrix(q_goal)
+        X_goal = pos_from_graph(G_goal)
+        D_goal = graph.distance_matrix_from_joints(q_goal)
         T_goal = robot.get_pose(q_goal, f"p{n}")
 
         goals = {f"p{n-1}": X_goal[-2, :], f"p{n}": X_goal[-1, :]}
         G = graph.complete_from_pos(goals)
         # lb, ub = graph.distance_bounds(G)  # will take goals and jli
-        F = graph.adjacency_matrix(G)
+        F = adjacency_matrix_from_graph(G)
 
         # sol_info = solver.solve(D_goal, F, use_limits=False, bounds=(lb, ub))
         sol_info = solver.solve(

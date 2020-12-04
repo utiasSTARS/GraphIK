@@ -20,7 +20,7 @@ from graphik.utils.geometry import (
     trans_axis,
     rot_axis,
 )
-from graphik.utils.forward_kinematics import (
+from graphik.utils.kinematics import (
     fk_2d,
     fk_3d,
     modified_fk_3d,

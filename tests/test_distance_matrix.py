@@ -5,7 +5,7 @@ from numpy.testing import assert_allclose
 from numpy import pi
 from graphik.graphs.graph_base import Revolute3dRobotGraph, SphericalRobotGraph
 from graphik.robots.robot_base import RobotRevolute, RobotSpherical, RobotPlanar
-from graphik.utils.dgp_utils import dist_to_gram, MDS
+from graphik.utils.dgp import dist_to_gram, MDS, pos_from_graph
 from graphik.utils.utils import (
     best_fit_transform,
     list_to_variable_dict,
@@ -42,7 +42,7 @@ class TestDistanceMatrix(unittest.TestCase):
         for _ in range(100):
 
             q = robot.random_configuration()
-            D = graph.distance_matrix(q)
+            D = graph.distance_matrix_from_joints(q)
 
             # Reconstruct points
             J = np.identity(graph.n_nodes) - (1 / (graph.n_nodes)) * np.ones(D.shape)
@@ -59,7 +59,7 @@ class TestDistanceMatrix(unittest.TestCase):
                 @ vh
             ).T
 
-            Y = graph.pos_from_graph(graph.realization(q))
+            Y = pos_from_graph(graph.realization(q))
             R, t = best_fit_transform(X[[0, 1, 2, 3, -1], :], Y[[0, 1, 2, 3, -1], :])
             P_e = (R @ X.T + t.reshape(3, 1)).T
             self.assertIsNone(assert_allclose(P_e, Y, rtol=1e-5, atol=100))
@@ -93,7 +93,7 @@ class TestDistanceMatrix(unittest.TestCase):
 
             q = robot.random_configuration()
             T = robot.get_pose(list_to_variable_dict(q), "p" + str(n))
-            D = graph.distance_matrix(q)
+            D = graph.distance_matrix_from_joints(q)
 
             # Reconstruct points
             J = np.identity(graph.n_nodes) - (1 / (graph.n_nodes)) * np.ones(D.shape)
@@ -110,7 +110,7 @@ class TestDistanceMatrix(unittest.TestCase):
                 @ vh
             ).T
 
-            Y = graph.pos_from_graph(graph.realization(q))
+            Y = pos_from_graph(graph.realization(q))
             R, t = best_fit_transform(X[[0, 1, 2, 3, -1], :], Y[[0, 1, 2, 3, -1], :])
             P_e = (R @ X.T + t.reshape(3, 1)).T
             self.assertIsNone(assert_allclose(P_e, Y, rtol=1e-5, atol=100))
@@ -140,7 +140,7 @@ class TestDistanceMatrix(unittest.TestCase):
 
             q = robot.random_configuration()
             T = robot.get_pose(q, f"p{n}")
-            D = graph.distance_matrix(q)
+            D = graph.distance_matrix_from_joints(q)
 
             # Reconstruct points
             J = np.identity(graph.n_nodes) - (1 / (graph.n_nodes)) * np.ones(D.shape)
@@ -157,7 +157,7 @@ class TestDistanceMatrix(unittest.TestCase):
                 @ vh
             ).T
 
-            Y = graph.pos_from_graph(graph.realization(q))
+            Y = pos_from_graph(graph.realization(q))
             R, t = best_fit_transform(X[[0, 1, 2, 3, -1], :], Y[[0, 1, 2, 3, -1], :])
             P_e = (R @ X.T + t.reshape(3, 1)).T
             self.assertIsNone(assert_allclose(P_e, Y, rtol=1e-5, atol=100))
@@ -195,7 +195,7 @@ class TestDistanceMatrix(unittest.TestCase):
 
             q = robot.random_configuration()
             T = robot.get_pose(q, f"p{n}")
-            D = graph.distance_matrix(q)
+            D = graph.distance_matrix_from_joints(q)
 
             # Reconstruct points
             J = np.identity(graph.n_nodes) - (1 / (graph.n_nodes)) * np.ones(D.shape)
@@ -212,7 +212,7 @@ class TestDistanceMatrix(unittest.TestCase):
                 @ vh
             ).T
 
-            Y = graph.pos_from_graph(graph.realization(q))
+            Y = pos_from_graph(graph.realization(q))
             R, t = best_fit_transform(X[[0, 1, 2, 3, -1], :], Y[[0, 1, 2, 3, -1], :])
             P_e = (R @ X.T + t.reshape(3, 1)).T
             self.assertIsNone(assert_allclose(P_e, Y, rtol=1e-5, atol=100))
@@ -237,13 +237,13 @@ class TestDistanceMatrix(unittest.TestCase):
             graph = SphericalRobotGraph(robot)
 
             q = robot.random_configuration()
-            D = graph.distance_matrix(q)
+            D = graph.distance_matrix_from_joints(q)
             # Reconstruct points
             G = dist_to_gram(D)
             X = MDS(G)
             # X = PCA(G, 2)
 
-            Y = graph.pos_from_graph(graph.realization(q))
+            Y = pos_from_graph(graph.realization(q))
             R, t = best_fit_transform(X[[0, 1, 2, -1], :], Y[[0, 1, 2, -1], :])
             P_e = (R @ X.T + t.reshape(2, 1)).T
 
@@ -274,13 +274,13 @@ class TestDistanceMatrix(unittest.TestCase):
             graph = SphericalRobotGraph(robot)
 
             q = robot.random_configuration()
-            D = graph.distance_matrix(q)
+            D = graph.distance_matrix_from_joints(q)
 
             # Reconstruct points
             G = dist_to_gram(D)
             X = MDS(G)
 
-            Y = graph.pos_from_graph(graph.realization(q))
+            Y = pos_from_graph(graph.realization(q))
             R, t = best_fit_transform(X[[0, 1, 2, -1], :], Y[[0, 1, 2, -1], :])
             P_e = (R @ X.T + t.reshape(2, 1)).T
 

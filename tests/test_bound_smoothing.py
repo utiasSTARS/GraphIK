@@ -6,6 +6,7 @@ import unittest
 import networkx as nx
 from graphik.graphs.graph_base import Revolute3dRobotGraph, SphericalRobotGraph
 from graphik.robots.robot_base import RobotRevolute, RobotSpherical, RobotPlanar
+from graphik.utils.dgp import pos_from_graph
 from graphik.utils.utils import list_to_variable_dict
 from graphik.utils.geometry import trans_axis
 
@@ -34,8 +35,8 @@ class TestBoundSmoothing(unittest.TestCase):
 
             q_goal = graph.robot.random_configuration()
             G_goal = graph.realization(q_goal)
-            X_goal = graph.pos_from_graph(G_goal)
-            D_goal = graph.distance_matrix(q_goal)
+            X_goal = pos_from_graph(G_goal)
+            D_goal = graph.distance_matrix_from_joints(q_goal)
 
             goals = {f"p{n-1}": X_goal[-2, :], f"p{n}": X_goal[-1, :]}
             G = graph.complete_from_pos(goals)
@@ -73,7 +74,7 @@ class TestBoundSmoothing(unittest.TestCase):
 
             q_goal = graph.robot.random_configuration()
             G_goal = graph.realization(q_goal)
-            D_goal = graph.distance_matrix(q_goal)
+            D_goal = graph.distance_matrix_from_joints(q_goal)
 
             goals = {}
             for idx, ee_pair in enumerate(robot.end_effectors):
@@ -113,8 +114,8 @@ class TestBoundSmoothing(unittest.TestCase):
 
             q_goal = graph.robot.random_configuration()
             G_goal = graph.realization(q_goal)
-            X_goal = graph.pos_from_graph(G_goal)
-            D_goal = graph.distance_matrix(q_goal)
+            X_goal = pos_from_graph(G_goal)
+            D_goal = graph.distance_matrix_from_joints(q_goal)
 
             goals = {f"p{n-1}": X_goal[-2, :], f"p{n}": X_goal[-1, :]}
             G = graph.complete_from_pos(goals)
@@ -157,7 +158,7 @@ class TestBoundSmoothing(unittest.TestCase):
 
             q_goal = graph.robot.random_configuration()
             G_goal = graph.realization(q_goal)
-            D_goal = graph.distance_matrix(q_goal)
+            D_goal = graph.distance_matrix_from_joints(q_goal)
 
             goals = {}
             for idx, ee_pair in enumerate(robot.end_effectors):
@@ -192,7 +193,7 @@ class TestBoundSmoothing(unittest.TestCase):
 
         for _ in range(100):
             q_goal = graph.robot.random_configuration()
-            D_goal = graph.distance_matrix(q_goal)
+            D_goal = graph.distance_matrix_from_joints(q_goal)
             T_goal = robot.get_pose(list_to_variable_dict(q_goal), "p" + str(n))
 
             G = graph.complete_from_pos(

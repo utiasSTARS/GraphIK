@@ -18,6 +18,7 @@ from graphik.solvers.geometric_jacobian import jacobian_ik
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.graphs.graph_base import Graph
 from graphik.robots.robot_base import RobotRevolute, RobotSpherical, RobotPlanar
+from graphik.utils.dgp import adjacency_matrix_from_graph, pos_from_graph
 from graphik.utils.geometry import trans_axis
 from graphik.utils.utils import (
     list_to_variable_dict,
@@ -269,8 +270,8 @@ def run_full_experiment(
     # Set up Riemannian solver sweep inputs
     if len(riemannian_algorithms) != 0:
         G_goal = graph.realization(q_goal)
-        X_goal = graph.pos_from_graph(G_goal)
-        D_goal = graph.distance_matrix(q_goal)
+        X_goal = pos_from_graph(G_goal)
+        D_goal = graph.distance_matrix_from_joints(q_goal)
         if pose_goals:
             T_goal = ee_goals
         else:
@@ -440,11 +441,11 @@ def run_riemannian_revolute_experiment(
     G = graph.complete_from_pos(goals)
 
     # Adjacency matrix
-    omega = graph.adjacency_matrix(G)
+    omega = adjacency_matrix_from_graph(G)
 
     init_angles = list_to_variable_dict(Y_init)
     G_init = graph.realization(init_angles)
-    Y_init = graph.pos_from_graph(G_init)
+    Y_init = pos_from_graph(G_init)
 
     # Set bounds if using bound smoothing
     bounds = None
@@ -503,7 +504,7 @@ def run_riemannian_revolute_experiment(
     #     print("--------------------------")
 
     # Calculate final error
-    D_sol = graph.distance_matrix(q_sol)
+    D_sol = graph.distance_matrix_from_joints(q_sol)
     e_D = omega * (np.sqrt(D_sol) - np.sqrt(D_goal))
     max_dist_error = abs(max(e_D.min(), e_D.max(), key=abs))
     err_pos = 0.0
@@ -707,11 +708,11 @@ def run_riemannian_planar_experiment(
     G = graph.complete_from_pose_goal(ee_goals)
 
     # Adjacency matrix
-    omega = graph.adjacency_matrix(G)
+    omega = adjacency_matrix_from_graph(G)
 
     q_init = list_to_variable_dict(q_init)
     G_init = graph.realization(q_init)
-    Y_init = graph.pos_from_graph(G_init)
+    Y_init = pos_from_graph(G_init)
 
     # Set bounds if using bound smoothing
     bounds = None
@@ -759,7 +760,7 @@ def run_riemannian_planar_experiment(
                 limits_violated = True
 
     # Calculate final error
-    D_sol = graph.distance_matrix(q_sol)
+    D_sol = graph.distance_matrix_from_joints(q_sol)
     e_D = omega * (np.sqrt(D_sol) - np.sqrt(D_goal))
     max_dist_error = abs(max(e_D.min(), e_D.max(), key=abs))
     err_pos = 0
@@ -833,11 +834,11 @@ def run_riemannian_spherical_experiment(
     G = graph.complete_from_pose_goal(ee_goals)
 
     # Adjacency matrix
-    omega = graph.adjacency_matrix(G)
+    omega = adjacency_matrix_from_graph(G)
 
     q_init = list_to_variable_dict_spherical(q_init, in_pairs=True)
     G_init = graph.realization(q_init)
-    Y_init = graph.pos_from_graph(G_init)
+    Y_init = pos_from_graph(G_init)
 
     # Set bounds if using bound smoothing
     bounds = None
@@ -884,7 +885,7 @@ def run_riemannian_spherical_experiment(
                 limits_violated = True
 
     # Calculate final error
-    D_sol = graph.distance_matrix(q_sol)
+    D_sol = graph.distance_matrix_from_joints(q_sol)
     e_D = omega * (np.sqrt(D_sol) - np.sqrt(D_goal))
     max_dist_error = abs(max(e_D.min(), e_D.max(), key=abs))
     err_pos = 0

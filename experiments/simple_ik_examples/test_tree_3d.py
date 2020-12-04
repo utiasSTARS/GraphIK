@@ -6,6 +6,7 @@ from graphik.graphs.graph_base import SphericalRobotGraph
 from graphik.robots.robot_base import RobotSpherical
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.utils import best_fit_transform, list_to_variable_dict
+from graphik.utils.dgp import adjacency_matrix_from_graph, pos_from_graph
 
 
 def random_problem_3d_tree():
@@ -42,8 +43,8 @@ def random_problem_3d_tree():
 
         q_goal = graph.robot.random_configuration()
         G_goal = graph.realization(q_goal)
-        X_goal = graph.pos_from_graph(G_goal)
-        D_goal = graph.distance_matrix(q_goal)
+        X_goal = pos_from_graph(G_goal)
+        D_goal = graph.distance_matrix_from_joints(q_goal)
 
         goals = {}
         for idx, ee_pair in enumerate(robot.end_effectors):
@@ -52,7 +53,7 @@ def random_problem_3d_tree():
 
         G = graph.complete_from_pos(goals)
         lb, ub = graph.distance_bounds(G)
-        F = graph.adjacency_matrix(G)
+        F = adjacency_matrix_from_graph(G)
 
         sol_info = solver.solve(D_goal, F, use_limits=False, bounds=(lb, ub))
         Y = sol_info["x"]
@@ -65,7 +66,7 @@ def random_problem_3d_tree():
 
         q_sol = robot.joint_variables(G_e)
         G_sol = graph.realization(q_sol)
-        D_sol = graph.distance_matrix(q_sol)
+        D_sol = graph.distance_matrix_from_joints(q_sol)
 
         e = 0
         for key, value in goals.items():

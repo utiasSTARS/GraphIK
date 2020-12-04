@@ -9,6 +9,7 @@ from numpy.linalg import norm
 from liegroups import SE3
 from graphik.graphs.graph_base import Graph, Revolute3dRobotGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
+from graphik.utils.dgp import adjacency_matrix_from_graph, pos_from_graph
 from graphik.utils.geometry import trans_axis
 from graphik.utils.utils import (
     best_fit_transform,
@@ -22,12 +23,12 @@ def solve_random_problem(graph: Graph, solver: RiemannianSolver):
     axis_len = graph.robot.axis_length
     q_goal = graph.robot.random_configuration()
     G_goal = graph.realization(q_goal)
-    X_goal = graph.pos_from_graph(G_goal)
-    D_goal = graph.distance_matrix(q_goal)
+    X_goal = pos_from_graph(G_goal)
+    D_goal = graph.distance_matrix_from_joints(q_goal)
     T_goal = robot.get_pose(list_to_variable_dict(q_goal), f"p{n}")
     q_rand = list_to_variable_dict(graph.robot.n * [0])
     G_rand = graph.realization(q_rand)
-    X_rand = graph.pos_from_graph(G_rand)
+    X_rand = pos_from_graph(G_rand)
     X_init = X_rand
 
     goals = {
@@ -36,9 +37,9 @@ def solve_random_problem(graph: Graph, solver: RiemannianSolver):
     }
     G = graph.complete_from_pos(goals)
     lb, ub = graph.distance_bounds(G)
-    # print(graph.adjacency_matrix(G))
+    # print(ajdacency_matrix_from_graph(G))
 
-    omega = graph.adjacency_matrix(G)
+    omega = adjacency_matrix_from_graph(G)
 
     # sol_info = solver.solve(D_goal, omega, use_limits=False, Y_init=X_init)
     sol_info = solver.solve(D_goal, omega, use_limits=False, bounds=(lb, ub))
@@ -172,7 +173,7 @@ if __name__ == "__main__":
     graph = Revolute3dRobotGraph(robot)
     # graph.distance_bounds_from_sampling()
     solver = RiemannianSolver(graph)
-    num_tests = 2
+    num_tests = 20
     e_pos = []
     e_rot = []
     t = []

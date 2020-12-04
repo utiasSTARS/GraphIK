@@ -10,14 +10,15 @@ from graphik.graphs.graph_base import Graph, Revolute3dRobotGraph
 from graphik.robots.revolute import Revolute3dTree
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.geometry import trans_axis
+from graphik.utils.dgp import pos_from_graph, adjacency_matrix_from_graph
 from graphik.utils.utils import best_fit_transform, list_to_variable_dict, dZ
 
 
 def solve_random_problem(graph: Graph, solver: RiemannianSolver):
     q_goal = graph.robot.random_configuration()
     G_goal = graph.realization(q_goal)
-    X_goal = graph.pos_from_graph(G_goal)
-    D_goal = graph.distance_matrix(q_goal)
+    X_goal = pos_from_graph(G_goal)
+    D_goal = graph.distance_matrix_from_joints(q_goal)
 
     goals = {}
     T_goal = {}
@@ -28,12 +29,12 @@ def solve_random_problem(graph: Graph, solver: RiemannianSolver):
 
     q_rand = list_to_variable_dict(graph.robot.n * [0])
     G_rand = graph.realization(q_rand)
-    X_rand = graph.pos_from_graph(G_rand)
+    X_rand = pos_from_graph(G_rand)
     X_init = X_rand
 
     G = graph.complete_from_pos(goals)
     lb, ub = graph.distance_bounds(G)
-    F = graph.adjacency_matrix(G)
+    F = adjacency_matrix_from_graph(G)
 
     # sol_info = solver.solve(D_goal, F, use_limits=False, Y_init=X_init)
     sol_info = solver.solve(D_goal, F, use_limits=False, bounds=(lb, ub))

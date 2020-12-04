@@ -5,7 +5,7 @@ from numba import njit
 import numpy as np
 from pymanopt import tools
 from graphik.utils.manifolds.fixed_rank_psd_sym import PSDFixedRank
-from graphik.utils.dgp_utils import (
+from graphik.utils.dgp import (
     MDS,
     linear_projection,
     dist_to_gram,
@@ -437,7 +437,6 @@ class RiemannianSolver:
         else:
             Y_sol = self.solver.solve(problem, x=Y_init)
             return Y_sol
-
 
     def solve_experiment_wrapper(
         self,

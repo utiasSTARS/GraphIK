@@ -7,6 +7,7 @@ from liegroups.numpy import SE3
 from numpy.linalg import norm
 from graphik.robots.robot_base import Robot, RobotRevolute
 from graphik.utils.geometry import trans_axis, rot_axis
+from graphik.utils.dgp import pos_from_graph
 from graphik.utils.utils import (
     list_to_variable_dict,
 )
@@ -21,7 +22,7 @@ ROOT = "p0"
 UNDEFINED = None
 
 
-# TODO add global constants for names of attributes
+# TODO rename to RobotGraph
 class Graph(ABC):
     """
     Abstract base class for graph structures equipped with optimization and EDM completion features.
@@ -36,7 +37,7 @@ class Graph(ABC):
     def robot(self) -> Robot:
         """
         Robot object that this graph represents.
-        :returns: Object of the abstract class Robot
+        :returns: Robot object
         """
         return self._robot
 
@@ -82,27 +83,21 @@ class Graph(ABC):
         """
         return list(self.directed.nodes())
 
-    def realization(self, x: np.array) -> nx.DiGraph:
+    def realization(self, joint_angles: np.ndarray) -> nx.DiGraph:
         """
-        Given a set of decision variables x, return a graph realization in R^dim.
+        Given a set of joint angles, return a graph realization in R^dim.
         :param x: Decision variables (revolute joints, prismatic joints)
         :returns: Graph with node locations stored in the [POS]
         atribute and edge weights corresponding to distances between the nodes.
         """
-        # NOTE do we need to work with directed graphs?
         raise NotImplementedError
 
-    def distance_matrix(self, x: np.array) -> np.ndarray:
+    def distance_matrix(self) -> np.ndarray:
         """
-        Given a set of decision variables x, return a matrix whose element
-        [idx,jdx] corresponds to the squared distance between nodes idx and jdx.
-        :param x: Decision variables (revolute joints, prismatic joints)
-        :returns: Matrix of squared distances
+        Returns a partial distance matrix of known distances in the problem graph.
+        :returns: Distance matrix
         """
-        D = nx.to_numpy_array(self.realization(x)) ** 2
-        return D + D.T
-
-    def distance_matrix_from_graph(self, G: nx.DiGraph) -> np.ndarray:
+        G = self.directed
         selected_edges = [(u, v) for u, v, d in G.edges(data=True) if DIST in d]
         return (
             nx.to_numpy_array(
@@ -111,32 +106,38 @@ class Graph(ABC):
             ** 2
         )
 
-    def adjacency_matrix(self, G: nx.DiGraph = None) -> np.ndarray:
+    def distance_matrix_from_joints(self, joint_angles: np.ndarray) -> np.ndarray:
+        """
+        Given a set of joint angles, return a matrix whose element
+        [idx,jdx] corresponds to the squared distance between nodes idx and jdx.
+        :param x: Decision variables (revolute joints, prismatic joints)
+        :returns: Matrix of squared distances
+        """
+        D = nx.to_numpy_array(self.realization(joint_angles)) ** 2
+        return D + D.T
+
+    def adjacency_matrix(self) -> np.ndarray:
         """
         Returns the adjacency matrix representing the edges that are known,
         given the kinematic and base structure, as well as the end-effector targets.
         :returns: Adjacency matrix
         """
-        if G is None:
-            G = self.directed
-
+        G = self.directed
         selected_edges = [(u, v) for u, v, d in G.edges(data=True) if DIST in d]
         return nx.to_numpy_array(
             nx.to_undirected(G.edge_subgraph(selected_edges)), weight=""
         )
 
-    def pos_from_graph(self, G: nx.DiGraph) -> np.ndarray:
+    def known_positions(self) -> np.ndarray:
         """
-        Returns an n x m matrix of node positions from a given graph,
+        Returns an n x m matrix of a priori defined node positions in this graph,
         where n is the number of nodes and m is the point dimension.
+        If a node position is unknown, the point will be returned as None.
         :param G: graph where all nodes have a populated POS field
         :returns: n x m matrix of node positions
         """
-
-        X = np.zeros([len(G), self.dim])  # matrix of vertex positions
-        for idx, name in enumerate(G):
-            X[idx, :] = G.nodes[name][POS]
-        return X
+        # TODO implement this
+        raise NotImplementedError
 
     def graph_from_pos(self, P: dict) -> nx.DiGraph:
         """
@@ -518,7 +519,7 @@ class Revolute3dRobotGraph(Graph):
         ]
         # s = flatten([[0], self.robot.s])  # b/c we're starting from root
         X = np.zeros([n_nodes, dim])
-        X[: dim + 1, :] = self.pos_from_graph(base)
+        X[: dim + 1, :] = pos_from_graph(base)
         for idx in range(len(x)):  # get node locations
             if type(x) is not dict:
                 T = self.robot.get_pose(list_to_variable_dict(x), "p" + str(idx + 1))
@@ -533,12 +534,12 @@ class Revolute3dRobotGraph(Graph):
         G = self.directed
         ids = self.node_ids
         q_rand = robot.random_configuration()
-        D_min = self.distance_matrix(q_rand)
-        D_max = self.distance_matrix(q_rand)
+        D_min = self.distance_matrix_from_joints(q_rand)
+        D_max = self.distance_matrix_from_joints(q_rand)
 
         for _ in range(2000):
             q_rand = robot.random_configuration()
-            D_rand = self.distance_matrix(q_rand)
+            D_rand = self.distance_matrix_from_joints(q_rand)
             D_max[D_rand > D_max] = D_rand[D_rand > D_max]
             D_min[D_rand < D_min] = D_rand[D_rand < D_min]
 

@@ -6,7 +6,11 @@ import time
 from graphik.graphs.graph_base import SphericalRobotGraph
 from graphik.robots.robot_base import RobotPlanar
 from graphik.solvers.riemannian_solver import RiemannianSolver
-from graphik.utils.dgp_utils import sample_matrix, PCA, dist_to_gram, linear_projection
+from graphik.utils.dgp import (
+    dist_to_gram,
+    linear_projection,
+    adjacency_matrix_from_graph,
+)
 from graphik.utils.utils import best_fit_transform, list_to_variable_dict
 
 
@@ -36,13 +40,13 @@ def random_problem_2d_chain():
 
     q_init = list_to_variable_dict(n * [0])
     G_init = graph.realization(q_init)
-    X_init = graph.pos_from_graph(G_init)
+    X_init = pos_from_graph(G_init)
     for idx in range(n_tests):
 
         q_goal = graph.robot.random_configuration()
         G_goal = graph.realization(q_goal)
-        X_goal = graph.pos_from_graph(G_goal)
-        D_goal = graph.distance_matrix(q_goal)
+        X_goal = pos_from_graph(G_goal)
+        D_goal = graph.distance_matrix_from_joints(q_goal)
         T_goal = robot.get_pose(q_goal, f"p{n}")
 
         # goals = {f"p{n}": X_goal[-1, :]}
@@ -54,7 +58,7 @@ def random_problem_2d_chain():
 
         G = graph.complete_from_pos(goals)
         lb, ub = graph.distance_bounds(G)  # will take goals and jli
-        F = graph.adjacency_matrix(G)
+        F = adjacency_matrix_from_graph(G)
 
         sol_info = solver.solve(
             D_goal, F, bounds=(lb, ub), max_attempts=10, use_limits=True

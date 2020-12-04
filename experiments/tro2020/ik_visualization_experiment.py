@@ -14,16 +14,15 @@ from graphik.robots.robot_base import RobotRevolute
 from graphik.solvers.riemannian_solver import RiemannianSolver
 
 from numpy.testing import assert_array_less
+from graphik.utils.dgp import adjacency_matrix_from_graph, pos_from_graph
 from graphik.utils.utils import (
     best_fit_transform,
     list_to_variable_dict,
-    trans_axis,
     dZ,
-    trans_axis,
     safe_arccos,
 )
 
-from graphik.utils.dgp_utils import sample_matrix, PCA, dist_to_gram
+from graphik.utils.dgp import dist_to_gram, distance_matrix_from_graph
 
 VERT_SAMPLE = 2
 HOR_SAMPLE = 10
@@ -57,15 +56,15 @@ def ik_workspace_sample_riemannian(graph: Graph, solver: RiemannianSolver):
     for goal in goals:
         fail = False
         G = graph.complete_from_pos({f"p{n}": goal})
-        D_goal = graph.distance_matrix_from_graph(G)
+        D_goal = distance_matrix_from_graph(G)
 
         q_rand = list_to_variable_dict(graph.robot.n * [0])
         G_rand = graph.realization(q_rand)
-        X_rand = graph.pos_from_graph(G_rand)
+        X_rand = pos_from_graph(G_rand)
         X_init = X_rand
 
         lb, ub = graph.distance_bounds(G)
-        F = graph.adjacency_matrix(G)
+        F = adjacency_matrix_from_graph(G)
         # print(D_goal - lb ** 2)
 
         # sol_info = solver.solve(D_goal, F, use_limits=True, bounds=(lb, ub))

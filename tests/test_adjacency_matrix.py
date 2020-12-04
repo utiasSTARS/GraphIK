@@ -7,9 +7,8 @@ import unittest
 from graphik.graphs.graph_base import SphericalRobotGraph
 from graphik.robots.robot_base import RobotPlanar
 
-from graphik.utils.utils import (
-    list_to_variable_dict,
-)
+from graphik.utils.dgp import adjacency_matrix_from_graph
+from graphik.utils.utils import list_to_variable_dict
 
 
 class TestAdjacencyMatrices(unittest.TestCase):
@@ -48,7 +47,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
         }
         G = graph.complete_from_pos(goals)
 
-        F = graph.adjacency_matrix(G)
+        F = adjacency_matrix_from_graph(G)
 
         assert_array_equal(F, F_gt)
 
@@ -87,7 +86,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
         }
         G = graph.complete_from_pos(goals)
 
-        F = graph.adjacency_matrix(G)
+        F = adjacency_matrix_from_graph(G)
 
         assert_array_equal(F, F_gt)
 
@@ -448,7 +447,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
 
         G = graph.complete_from_pos(goals)
 
-        F = graph.adjacency_matrix(G)
+        F = adjacency_matrix_from_graph(G)
 
         assert_array_equal(F, F_gt)
 
@@ -809,6 +808,6 @@ class TestAdjacencyMatrices(unittest.TestCase):
 
         G = graph.complete_from_pos(goals)
 
-        F = graph.adjacency_matrix(G)
+        F = adjacency_matrix_from_graph(G)
 
         assert_array_equal(F, F_gt)

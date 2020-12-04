@@ -44,17 +44,18 @@ solver = RiemannianSolver(graph)
 For simplicity, we can use a random configuration to get a goal pose that we know is reachable. From this configuration, we can define the objects needed by `RiemannianSolver`.
 ```
 from graphik.utils.utils import list_to_variable_dict, trans_axis
+from graphik.utils.dgp import pos_from_graph, adjacency_matrix_from_graph
 q_goal = robot.random_configuration()
 G_goal = graph.realization(q_goal)
-X_goal = graph.pos_from_graph(G_goal)
-D_goal = graph.distance_matrix(q_goal)
+X_goal = pos_from_graph(G_goal)
+D_goal = graph.distance_matrix_from_joints(q_goal)
 T_goal = robot.get_pose(list_to_variable_dict(q_goal), f"p{n}")
 goals = {
     f"p{n}": T_goal.trans,
     f"q{n}": T_goal.dot(trans_axis(axis_len, "z")).trans,
 }
 G = graph.complete_from_pos(goals)
-omega = graph.adjacency_matrix(G)
+omega = adjacency_matrix_from_graph(G)
 ```
 
 This allows us to run our solver and extract our solution points and the runtime:
