@@ -11,7 +11,13 @@ from graphik.solvers.riemannian_solver import RiemannianSolver
 
 # from graphik.solvers.riemannian_eq_constr import RiemannianSolver
 
-from graphik.utils.dgp import dist_to_gram, adjacency_matrix_from_graph, pos_from_graph
+from graphik.utils.dgp import (
+    dist_to_gram,
+    adjacency_matrix_from_graph,
+    pos_from_graph,
+    graph_from_pos,
+    bound_smoothing,
+)
 from graphik.utils.utils import best_fit_transform, list_to_variable_dict
 
 
@@ -53,7 +59,7 @@ def random_problem_2d_chain():
         goals = {f"p{n-1}": X_goal[-2, :], f"p{n}": X_goal[-1, :]}
         # goals = {f"p{n}": X_goal[-1, :]}
         G = graph.complete_from_pos(goals)
-        # lb, ub = graph.distance_bounds(G)  # will take goals and jli
+        # lb, ub = bound_smoothing(G)  # will take goals and jli
         F = adjacency_matrix_from_graph(G)
 
         # sol_info = solver.solve(D_goal, F, use_limits=False, bounds=(lb, ub))
@@ -63,7 +69,7 @@ def random_problem_2d_chain():
 
         R, t = best_fit_transform(Y[[0, 1, 2], :], X_goal[[0, 1, 2], :])
         P_e = (R @ Y.T + t.reshape(2, 1)).T
-        G_e = graph.graph_from_pos(P_e)
+        G_e = graph_from_pos(P_e)
 
         q_sol = robot.joint_variables(G_e)
         # G_sol = graph.realization(q_sol)

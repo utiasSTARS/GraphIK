@@ -2,12 +2,12 @@ import networkx as nx
 import numpy as np
 import numpy.linalg as la
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from liegroups.numpy import SE3
 from numpy.linalg import norm
 from graphik.robots.robot_base import Robot, RobotRevolute
 from graphik.utils.geometry import trans_axis, rot_axis
-from graphik.utils.dgp import pos_from_graph
+from graphik.utils.dgp import pos_from_graph, graph_from_pos, graph_complete_edges
 from graphik.utils.utils import (
     list_to_variable_dict,
 )
@@ -83,6 +83,7 @@ class Graph(ABC):
         """
         return list(self.directed.nodes())
 
+    @abstractmethod
     def realization(self, joint_angles: np.ndarray) -> nx.DiGraph:
         """
         Given a set of joint angles, return a graph realization in R^dim.
@@ -97,6 +98,7 @@ class Graph(ABC):
         Returns a partial distance matrix of known distances in the problem graph.
         :returns: Distance matrix
         """
+        # TODO check handling of unknown distances
         G = self.directed
         selected_edges = [(u, v) for u, v, d in G.edges(data=True) if DIST in d]
         return (
@@ -139,122 +141,23 @@ class Graph(ABC):
         # TODO implement this
         raise NotImplementedError
 
-    def graph_from_pos(self, P: dict) -> nx.DiGraph:
-        """
-        NOTE: should be external method really
-        Generates an nx.DiGraph object of the subclass type given
-        an n x m matrix where n is the number of nodes and m is the dimension.
-        Connects all graph nodes.
-        :param P: n x m matrix of node positions
-        :returns: graph where all nodes have a populated POS field + edges
-        """
-
-        G = nx.empty_graph(self.node_ids, create_using=nx.DiGraph)
-        for idx, name in enumerate(self.node_ids):
-            G.nodes[name][POS] = P[idx, :]
-        return self.complete_edges(G)
-
-    def complete_from_pos(self, P: dict, from_empty=False) -> nx.DiGraph:
+    def complete_from_pos(self, P: dict) -> nx.DiGraph:
         """
         Given a dictionary of node name and position key-value pairs,
         generate a copy of the problem graph and fill the POS attributes of
         nodes corresponding to keys with assigned values.
-        Then, populate all edges between nodes with assinged POS attributes.
+        Then, populate all edges between nodes with assinged POS attributes,
+        and return the new graph.
         :param P: a dictionary of node name position pairs
         :returns: graph with connected nodes with POS attribute
         """
-        if not from_empty:
-            G = self.directed.copy()
-        else:
-            G = nx.empty_graph(self.node_ids, create_using=nx.DiGraph)
+        G = self.directed.copy()  # copy of the original object
 
         for name, pos in P.items():
             if name in G.nodes():
                 G.nodes[name][POS] = pos
 
-        return self.complete_edges(G)
-
-    @staticmethod
-    def complete_edges(G: nx.DiGraph) -> nx.DiGraph:
-        """
-        Given a graph with all defined node positions, calculate all unknown edges.
-        :param G: Graph with some unknown edges
-        :returns: Graph with all known edges
-        """
-
-        for idx, u in enumerate(G.nodes()):
-            for jdx, v in enumerate(G.nodes()):
-                # if both nodes have known positions
-                if (POS in G.nodes[u]) and (POS in G.nodes[v]) and jdx > idx:
-                    # if a distance edge exists already in the other direction
-                    if G.has_edge(v, u):
-                        if DIST in G[v][u]:
-                            continue
-                    d = norm(G.nodes[u][POS] - G.nodes[v][POS])
-                    G.add_edges_from(
-                        [
-                            (u, v, {DIST: d}),
-                            (u, v, {LOWER: d}),
-                            (u, v, {UPPER: d}),
-                        ]
-                    )
-
-        return G
-
-    def distance_bounds(self, G: nx.DiGraph) -> tuple:
-        """
-        Given a graph with some edges containing upper and lower bounds on distance,
-        calculates approximation on lower and upper bounds on all distance matrix elements.
-        Distances known exactly correspond to equal lower and upper limits.
-
-        "Distance Geometry Theory, Algorithms and Chemical Applications", Havel, 2002.
-        """
-
-        # Generate bipartite graph from two copies of G
-        H = nx.DiGraph()
-
-        for u, v, d in G.edges(data=True):
-            H.add_edge(u, f"{u}s", weight=0)
-            H.add_edge(v, f"{v}s", weight=0)
-            H.add_edge(u, f"{v}s", weight=-G[u][v][LOWER])
-            H.add_edge(v, f"{u}s", weight=-G[u][v][LOWER])
-            H.add_edge(u, v, weight=G[u][v][UPPER])
-            H.add_edge(v, u, weight=G[u][v][UPPER])
-            H.add_edge(f"{u}s", f"{v}s", weight=G[u][v][UPPER])
-            H.add_edge(f"{v}s", f"{u}s", weight=G[u][v][UPPER])
-
-        # Find all shortest paths in bipirtatie graph
-        bounds = dict(nx.all_pairs_bellman_ford_path_length(H, weight=DIST))
-
-        N = len(G)
-        lower_bounds = np.zeros([N, N])
-        upper_bounds = np.zeros([N, N])
-
-        ids = self.node_ids
-        for u in G:
-            for v in G:
-                if bounds[u][v + "s"] < 0:
-                    lower_bounds[ids.index(u), ids.index(v)] = -bounds[u][v + "s"]
-                else:
-                    lower_bounds[ids.index(u), ids.index(v)] = 0
-                    # lower_bounds[ids.index(u), ids.index(v)] = bounds[u][f"{v}s"]
-                upper_bounds[ids.index(u), ids.index(v)] = bounds[u][v]
-
-        return lower_bounds, upper_bounds
-
-    def distance_bound_matrix(self):
-        """
-        Generates a matrix of symmetric lower distance bounds induced by
-        joint variables.
-        """
-        X = np.zeros([self.n_nodes, self.n_nodes])  # empty distance matrix
-        G = self.directed
-        for val in self.robot.limit_edges:
-            udx = self.node_ids.index(val[0])
-            vdx = self.node_ids.index(val[1])
-            X[udx, vdx] = G[val[0]][val[1]][LOWER] ** 2
-            X[vdx, udx] = X[udx, vdx]
-        return X
+        return graph_complete_edges(G)
 
     def distance_bound_matrices(self):
         """
@@ -403,7 +306,7 @@ class SphericalRobotGraph(Graph):
         for name in self.base:
             P[name] = self.base.nodes[name][POS]
 
-        return self.complete_from_pos(P, from_empty=True)
+        return self.complete_from_pos(P)
 
     def complete_from_pose_goal(self, pose_goals):
         pos = {}
@@ -527,7 +430,7 @@ class Revolute3dRobotGraph(Graph):
                 T = self.robot.get_pose(x, "p" + str(idx + 1))
             X[ids.index(f"p{idx+1}"), :] = T.trans
             X[ids.index(f"q{idx+1}"), :] = T.dot(trans_axis(axis_length, "z")).trans
-        return self.graph_from_pos(X)
+        return graph_from_pos(X, self.node_ids)
 
     def distance_bounds_from_sampling(self):
         robot = self.robot

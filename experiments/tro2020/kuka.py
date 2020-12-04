@@ -131,4 +131,4 @@ if __name__ == "__main__":
     # results.robot = robot
     # results.seed = seed
     # pickle.dump(results, open(save_string + "full_results.p", "wb"))
-    # process_experiment(results)
+    process_experiment(results)

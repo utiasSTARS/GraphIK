@@ -129,7 +129,8 @@ def angular_constraints(
             x2 = G.nodes[node]["pos"]
         else:
             x2 = G.nodes[node]["sym"]
-        parent = robot_graph.parent_node_id(node)
+        # parent = robot_graph.parent_node_id(node)
+        parent = tuple(robot.structure.predecessors(node))[0]
         if parent in end_effector_assignments:
             x1 = end_effector_assignments[parent]
         elif parent in robot_graph.base.nodes:
@@ -143,7 +144,8 @@ def angular_constraints(
             x0[0] = 1.0  # np.array([1., 0., 0.])
             x0 = G.nodes[parent]["pos"] - x0
         else:
-            grandparent = robot_graph.parent_node_id(parent)
+            # grandparent = robot_graph.parent_node_id(parent)
+            grandparent = tuple(robot.structure.predecessors(parent))[0]
             if grandparent in end_effector_assignments:
                 x0 = end_effector_assignments[grandparent]
             elif grandparent in robot_graph.base.nodes:

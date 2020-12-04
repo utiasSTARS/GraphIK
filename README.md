@@ -60,7 +60,7 @@ omega = adjacency_matrix_from_graph(G)
 
 This allows us to run our solver and extract our solution points and the runtime:
 ```
-lb, ub = graph.distance_bounds(G)
+lb, ub = bound_smoothing(G)
 sol_info = solver.solve(D_goal, omega, use_limits=False, bounds=(lb, ub))
 Y = sol_info["x"]
 t_sol = sol_info["time"]

@@ -10,6 +10,9 @@ from graphik.utils.dgp import (
     dist_to_gram,
     linear_projection,
     adjacency_matrix_from_graph,
+    pos_from_graph,
+    bound_smoothing,
+    graph_from_pos,
 )
 from graphik.utils.utils import best_fit_transform, list_to_variable_dict
 
@@ -57,7 +60,7 @@ def random_problem_2d_chain():
             align_ind.append(graph.node_ids.index(name))
 
         G = graph.complete_from_pos(goals)
-        lb, ub = graph.distance_bounds(G)  # will take goals and jli
+        lb, ub = bound_smoothing(G)  # will take goals and jli
         F = adjacency_matrix_from_graph(G)
 
         sol_info = solver.solve(
@@ -70,7 +73,7 @@ def random_problem_2d_chain():
         R, t = best_fit_transform(Y[align_ind, :], X_goal[align_ind, :])
         P_e = (R @ Y.T + t.reshape(2, 1)).T
         # X_e = P_e @ P_e.T
-        G_e = graph.graph_from_pos(P_e)
+        G_e = graph_from_pos(P_e, graph.node_ids)
 
         q_sol = robot.joint_variables(G_e)
 

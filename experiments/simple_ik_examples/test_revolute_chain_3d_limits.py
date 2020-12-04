@@ -8,7 +8,12 @@ from numpy.linalg import norm
 
 from graphik.graphs.graph_base import Graph, Revolute3dRobotGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
-from graphik.utils.dgp import adjacency_matrix_from_graph, pos_from_graph
+from graphik.utils.dgp import (
+    adjacency_matrix_from_graph,
+    pos_from_graph,
+    graph_from_pos,
+    bound_smoothing,
+)
 from graphik.utils.geometry import trans_axis
 from graphik.utils.utils import (
     best_fit_transform,
@@ -35,7 +40,7 @@ def solve_random_problem(graph: Revolute3dRobotGraph, solver: RiemannianSolver):
     G = graph.complete_from_pos(
         {f"p{n}": T_goal.trans, f"q{n}": T_goal.dot(trans_axis(axis_len, "z")).trans}
     )
-    lb, ub = graph.distance_bounds(G)
+    lb, ub = bound_smoothing(G)
     F = adjacency_matrix_from_graph(G)
     # print(D_goal - lb ** 2)
 
@@ -47,7 +52,7 @@ def solve_random_problem(graph: Revolute3dRobotGraph, solver: RiemannianSolver):
     P_e = (R @ Y.T + t.reshape(3, 1)).T
     X_e = P_e @ P_e.T
 
-    G_sol = graph.graph_from_pos(P_e)
+    G_sol = graph_from_pos(P_e, graph.node_ids)
     T_g = {f"p{n}": T_goal}
     q_sol = robot.joint_angles_from_graph(G_sol, T_g)
     T_riemannian = robot.get_pose(list_to_variable_dict(q_sol), "p" + str(n))

@@ -6,7 +6,12 @@ from graphik.graphs.graph_base import SphericalRobotGraph
 from graphik.robots.robot_base import RobotPlanar
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.utils import best_fit_transform, list_to_variable_dict
-from graphik.utils.dgp import adjacency_matrix_from_graph, pos_from_graph
+from graphik.utils.dgp import (
+    adjacency_matrix_from_graph,
+    pos_from_graph,
+    graph_from_pos,
+    bound_smoothing,
+)
 
 
 def random_problem_2d_tree():
@@ -63,7 +68,7 @@ def random_problem_2d_tree():
             align_ind.append(graph.node_ids.index(name))
 
         G = graph.complete_from_pos(goals)
-        lb, ub = graph.distance_bounds(G)
+        lb, ub = bound_smoothing(G)
         F = adjacency_matrix_from_graph(G)
 
         q_init = list_to_variable_dict(n * [0])
@@ -80,7 +85,7 @@ def random_problem_2d_tree():
         R, t = best_fit_transform(Y[align_ind, :], X_goal[align_ind, :])
         P_e = (R @ Y.T + t.reshape(2, 1)).T
         X_e = P_e @ P_e.T
-        G_e = graph.graph_from_pos(P_e)
+        G_e = graph_from_pos(P_e, graph.node_ids)
 
         q_sol = robot.joint_variables(G_e)
         G_sol = graph.realization(q_sol)

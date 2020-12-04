@@ -9,7 +9,12 @@ from numpy.linalg import norm
 from liegroups import SE3
 from graphik.graphs.graph_base import Graph, Revolute3dRobotGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
-from graphik.utils.dgp import adjacency_matrix_from_graph, pos_from_graph
+from graphik.utils.dgp import (
+    adjacency_matrix_from_graph,
+    pos_from_graph,
+    graph_from_pos,
+    bound_smoothing,
+)
 from graphik.utils.geometry import trans_axis
 from graphik.utils.utils import (
     best_fit_transform,
@@ -36,7 +41,7 @@ def solve_random_problem(graph: Graph, solver: RiemannianSolver):
         f"q{n}": T_goal.dot(trans_axis(axis_len, "z")).trans,
     }
     G = graph.complete_from_pos(goals)
-    lb, ub = graph.distance_bounds(G)
+    lb, ub = bound_smoothing(G)
     # print(ajdacency_matrix_from_graph(G))
 
     omega = adjacency_matrix_from_graph(G)
@@ -53,7 +58,7 @@ def solve_random_problem(graph: Graph, solver: RiemannianSolver):
     R, t = best_fit_transform(Y[align_ind, :], X_goal[align_ind, :])
     P_e = (R @ Y.T + t.reshape(3, 1)).T
 
-    G_sol = graph.graph_from_pos(P_e)
+    G_sol = graph_from_pos(P_e, graph.node_ids)
 
     T_g = {f"p{n}": T_goal}
     q_sol = robot.joint_angles_from_graph(G_sol, T_g)

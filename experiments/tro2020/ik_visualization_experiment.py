@@ -14,7 +14,11 @@ from graphik.robots.robot_base import RobotRevolute
 from graphik.solvers.riemannian_solver import RiemannianSolver
 
 from numpy.testing import assert_array_less
-from graphik.utils.dgp import adjacency_matrix_from_graph, pos_from_graph
+from graphik.utils.dgp import (
+    adjacency_matrix_from_graph,
+    pos_from_graph,
+    graph_from_pos,
+)
 from graphik.utils.utils import (
     best_fit_transform,
     list_to_variable_dict,
@@ -63,7 +67,7 @@ def ik_workspace_sample_riemannian(graph: Graph, solver: RiemannianSolver):
         X_rand = pos_from_graph(G_rand)
         X_init = X_rand
 
-        lb, ub = graph.distance_bounds(G)
+        lb, ub = bound_smoothing(G)
         F = adjacency_matrix_from_graph(G)
         # print(D_goal - lb ** 2)
 
@@ -76,7 +80,7 @@ def ik_workspace_sample_riemannian(graph: Graph, solver: RiemannianSolver):
         P_e = (R @ Y.T + t.reshape(3, 1)).T
         X_e = P_e @ P_e.T
 
-        G_sol = graph.graph_from_pos(P_e)
+        G_sol = graph_from_pos(P_e)
         # T_g = {f"p{n}": T_goal}
         # q_sol = robot.joint_angles_from_graph(G_sol, T_g)
         q_sol = robot.joint_angles_from_graph(G_sol)

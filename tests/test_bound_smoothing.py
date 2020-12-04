@@ -6,7 +6,7 @@ import unittest
 import networkx as nx
 from graphik.graphs.graph_base import Revolute3dRobotGraph, SphericalRobotGraph
 from graphik.robots.robot_base import RobotRevolute, RobotSpherical, RobotPlanar
-from graphik.utils.dgp import pos_from_graph
+from graphik.utils.dgp import pos_from_graph, graph_from_pos, bound_smoothing
 from graphik.utils.utils import list_to_variable_dict
 from graphik.utils.geometry import trans_axis
 
@@ -41,7 +41,7 @@ class TestBoundSmoothing(unittest.TestCase):
             goals = {f"p{n-1}": X_goal[-2, :], f"p{n}": X_goal[-1, :]}
             G = graph.complete_from_pos(goals)
 
-            lb, ub = graph.distance_bounds(G)
+            lb, ub = bound_smoothing(G)
             self.assertIsNone(
                 assert_array_less(D_goal, ub ** 2 + TOL * np.ones(D_goal.shape))
             )
@@ -82,7 +82,7 @@ class TestBoundSmoothing(unittest.TestCase):
 
             G = graph.complete_from_pos(goals)
 
-            lb, ub = graph.distance_bounds(G)
+            lb, ub = bound_smoothing(G)
             self.assertIsNone(
                 assert_array_less(D_goal, ub ** 2 + TOL * np.ones(D_goal.shape))
             )
@@ -120,7 +120,7 @@ class TestBoundSmoothing(unittest.TestCase):
             goals = {f"p{n-1}": X_goal[-2, :], f"p{n}": X_goal[-1, :]}
             G = graph.complete_from_pos(goals)
 
-            lb, ub = graph.distance_bounds(G)
+            lb, ub = bound_smoothing(G)
             self.assertIsNone(
                 assert_array_less(D_goal, ub ** 2 + TOL * np.ones(D_goal.shape))
             )
@@ -166,7 +166,7 @@ class TestBoundSmoothing(unittest.TestCase):
                 goals[ee_pair[1]] = robot.get_pose(q_goal, ee_pair[1]).trans
 
             G = graph.complete_from_pos(goals)
-            lb, ub = graph.distance_bounds(G)
+            lb, ub = bound_smoothing(G)
 
             self.assertIsNone(
                 assert_array_less(D_goal, ub ** 2 + TOL * np.ones(D_goal.shape))
@@ -199,7 +199,7 @@ class TestBoundSmoothing(unittest.TestCase):
             G = graph.complete_from_pos(
                 {f"p{n}": T_goal.trans, f"q{n}": T_goal.dot(trans_axis(dZ, "z")).trans}
             )
-            lb, ub = graph.distance_bounds(G)
+            lb, ub = bound_smoothing(G)
             self.assertIsNone(
                 assert_array_less(D_goal, ub ** 2 + TOL * np.ones(D_goal.shape))
             )

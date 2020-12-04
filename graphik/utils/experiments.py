@@ -18,7 +18,12 @@ from graphik.solvers.geometric_jacobian import jacobian_ik
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.graphs.graph_base import Graph
 from graphik.robots.robot_base import RobotRevolute, RobotSpherical, RobotPlanar
-from graphik.utils.dgp import adjacency_matrix_from_graph, pos_from_graph
+from graphik.utils.dgp import (
+    adjacency_matrix_from_graph,
+    pos_from_graph,
+    graph_from_pos,
+    bound_smoothing,
+)
 from graphik.utils.geometry import trans_axis
 from graphik.utils.utils import (
     list_to_variable_dict,
@@ -56,7 +61,7 @@ def run_multiple_experiments(
     jacobian_params,
     use_limits,
     verbosity,
-    bound_smoothing,
+    do_bound_smoothing,
     local_algorithms,
     riemannian_algorithms,
     fabrik_max_iter,
@@ -92,7 +97,7 @@ def run_multiple_experiments(
             init,
             use_limits,
             verbosity,
-            bound_smoothing,
+            do_bound_smoothing,
             local_algorithms,
             riemannian_algorithms,
             trigsimp,
@@ -121,7 +126,7 @@ def run_full_experiment(
     init: list,
     use_limits: bool = False,
     verbosity: int = 2,
-    bound_smoothing: bool = False,
+    do_bound_smoothing: bool = False,
     local_algorithms: list = None,
     riemannian_algorithms: list = None,
     trigsimp: bool = False,
@@ -299,12 +304,12 @@ def run_full_experiment(
             T_goal=T_goal,
             use_limits=use_limits,
             verbosity=verbosity,
-            bound_smoothing=False,
+            do_bound_smoothing=False,
         )
         res_df["Solver"] = "Riemannian " + algorithm
         results_list.append(res_df)
 
-        if bound_smoothing:
+        if do_bound_smoothing:
             # print("Running Riemannian {:} solver with BS...".format(algorithm))
             riemannian_params["solver"] = algorithm
             riemannian_solver = RiemannianSolver(graph, riemannian_params)
@@ -320,7 +325,7 @@ def run_full_experiment(
                 T_goal=T_goal,
                 use_limits=use_limits,
                 verbosity=verbosity,
-                bound_smoothing=True,
+                do_bound_smoothing=True,
                 pose_goals=use_q_in_cost,
             )
             res_df_bs["Solver"] = "Riemannian " + algorithm + " + BS"
@@ -407,7 +412,7 @@ def run_riemannian_revolute_experiment(
     T_goal=None,
     use_limits: bool = False,
     verbosity=2,
-    bound_smoothing: bool = False,
+    do_bound_smoothing: bool = False,
     pose_goals: bool = False,
 ) -> pd.DataFrame:
     """
@@ -449,8 +454,8 @@ def run_riemannian_revolute_experiment(
 
     # Set bounds if using bound smoothing
     bounds = None
-    if bound_smoothing:
-        lb, ub = graph.distance_bounds(G)  # will take goals and jli
+    if do_bound_smoothing:
+        lb, ub = bound_smoothing(G)  # will take goals and jli
         bounds = (lb, ub)
 
     # Solve problem
@@ -477,7 +482,7 @@ def run_riemannian_revolute_experiment(
     # Get solution config
     R, t = best_fit_transform(Y_opt[align_ind, :], Y_goal[align_ind, :])
     P_e = (R @ Y_opt.T + t.reshape(graph.dim, 1)).T
-    G_e = graph.graph_from_pos(P_e)
+    G_e = graph_from_pos(P_e, graph.node_ids)
     q_sol = graph.robot.joint_angles_from_graph(G_e, T_goal)
 
     # If limits are used check for angle violations
@@ -556,7 +561,7 @@ def run_riemannian_revolute_experiment(
     )
 
     results = pd.DataFrame(data)
-    results["Bound Smoothing"] = bound_smoothing
+    results["Bound Smoothing"] = do_bound_smoothing
     return results
 
 
@@ -680,7 +685,7 @@ def run_riemannian_planar_experiment(
     T_goal=None,
     use_limits: bool = False,
     verbosity=2,
-    bound_smoothing: bool = False,
+    do_bound_smoothing: bool = False,
     pose_goals: bool = False,
 ) -> pd.DataFrame:
     """
@@ -716,8 +721,8 @@ def run_riemannian_planar_experiment(
 
     # Set bounds if using bound smoothing
     bounds = None
-    if bound_smoothing:
-        lb, ub = graph.distance_bounds(G)  # will take goals and jli
+    if do_bound_smoothing:
+        lb, ub = bound_smoothing(G)  # will take goals and jli
         bounds = (lb, ub)
 
     # Solve problem
@@ -744,7 +749,7 @@ def run_riemannian_planar_experiment(
     # Get solution config
     R, t = best_fit_transform(Y_opt[align_ind, :], Y_goal[align_ind, :])
     P_e = (R @ Y_opt.T + t.reshape(graph.dim, 1)).T
-    G_e = graph.graph_from_pos(P_e)
+    G_e = graph_from_pos(P_e, graph.node_ids)
     q_sol = graph.robot.joint_variables(G_e)
 
     # If limits are used check for angle violations
@@ -791,7 +796,7 @@ def run_riemannian_planar_experiment(
     )
 
     results = pd.DataFrame(data)
-    results["Bound Smoothing"] = bound_smoothing
+    results["Bound Smoothing"] = do_bound_smoothing
     return results
 
 
@@ -806,7 +811,7 @@ def run_riemannian_spherical_experiment(
     T_goal=None,
     use_limits: bool = False,
     verbosity=2,
-    bound_smoothing: bool = False,
+    do_bound_smoothing: bool = False,
     pose_goals: bool = False,
 ) -> pd.DataFrame:
     """
@@ -842,8 +847,8 @@ def run_riemannian_spherical_experiment(
 
     # Set bounds if using bound smoothing
     bounds = None
-    if bound_smoothing:
-        lb, ub = graph.distance_bounds(G)  # will take goals and jli
+    if do_bound_smoothing:
+        lb, ub = bound_smoothing(G)  # will take goals and jli
         bounds = (lb, ub)
 
     # Solve problem
@@ -870,7 +875,7 @@ def run_riemannian_spherical_experiment(
     # Get solution config
     R, t = best_fit_transform(Y_opt[align_ind, :], Y_goal[align_ind, :])
     P_e = (R @ Y_opt.T + t.reshape(graph.dim, 1)).T
-    G_e = graph.graph_from_pos(P_e)
+    G_e = graph_from_pos(P_e, graph.node_ids)
     q_sol = graph.robot.joint_variables(G_e)
 
     # If limits are used check for angle violations
@@ -916,7 +921,7 @@ def run_riemannian_spherical_experiment(
     )
 
     results = pd.DataFrame(data)
-    results["Bound Smoothing"] = bound_smoothing
+    results["Bound Smoothing"] = do_bound_smoothing
     return results
 
 
@@ -1115,7 +1120,7 @@ def run_full_fabrik_sweep_experiment(
             P_e = np.insert(P_e, 1, np.eye(2), 0)
         else:
             P_e = np.insert(result["positions"], 1, np.eye(3), 0)
-        G_e = graph.graph_from_pos(P_e)
+        G_e = graph_from_pos(P_e, graph.node_ids)
         try:
             q_sol = graph.robot.joint_variables(G_e)
         except np.linalg.LinAlgError:

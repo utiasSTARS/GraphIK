@@ -62,6 +62,41 @@ def pos_from_graph(G: nx.DiGraph) -> np.ndarray:
     return np.array(X)
 
 
+def graph_from_pos(P: np.ndarray, node_ids: list = None) -> nx.DiGraph:
+    """
+    Generates an nx.DiGraph object of the subclass type given
+    an n x m matrix where n is the number of nodes and m is the dimension.
+    Connects all graph nodes.
+    :param P: n x m matrix of node positions
+    :returns: graph where all nodes have a populated POS field + edges
+    """
+    if not node_ids:
+        node_ids = ["p" + str(idx) for idx in range(P.shape[0])]
+
+    G = nx.empty_graph(node_ids, create_using=nx.DiGraph)
+    for idx, name in enumerate(node_ids):
+        G.nodes[name][POS] = P[idx, :]
+    return graph_complete_edges(G)
+
+
+def graph_from_pos_dict(P: dict) -> nx.DiGraph:
+    """
+    Given a dictionary of node name and position key-value pairs,
+    generate a graph and fill the POS attributes of
+    nodes corresponding to keys with assigned values.
+    Then, populate all edges between nodes with assinged POS attributes.
+    :param P: a dictionary of node name position pairs
+    :returns: graph with connected nodes with POS attribute
+    """
+    G = nx.empty_graph(list(P.keys()), create_using=nx.DiGraph)
+
+    for name, pos in P.items():
+        if name in G.nodes():
+            G.nodes[name][POS] = pos
+
+    return graph_complete_edges(G)
+
+
 def graph_complete_edges(G: nx.DiGraph) -> nx.DiGraph:
     """
     Given a graph with all defined node positions, calculate all unknown edges.
@@ -148,3 +183,45 @@ def sample_matrix(lower_limit, upper_limit):
     # return lower_limit + np.random.normal(75.0, 0.25, (m, n)) * (
     #     upper_limit - lower_limit
     # )
+
+
+def bound_smoothing(G: nx.DiGraph) -> tuple:
+    """
+    Given a graph with some edges containing upper and lower bounds on distance,
+    calculates approximation on lower and upper bounds on all distance matrix elements.
+    Distances known exactly correspond to equal lower and upper limits.
+
+    "Distance Geometry Theory, Algorithms and Chemical Applications", Havel, 2002.
+    """
+
+    # Generate bipartite graph from two copies of G
+    H = nx.DiGraph()
+
+    for u, v, d in G.edges(data=True):
+        H.add_edge(u, f"{u}s", weight=0)
+        H.add_edge(v, f"{v}s", weight=0)
+        H.add_edge(u, f"{v}s", weight=-G[u][v][LOWER])
+        H.add_edge(v, f"{u}s", weight=-G[u][v][LOWER])
+        H.add_edge(u, v, weight=G[u][v][UPPER])
+        H.add_edge(v, u, weight=G[u][v][UPPER])
+        H.add_edge(f"{u}s", f"{v}s", weight=G[u][v][UPPER])
+        H.add_edge(f"{v}s", f"{u}s", weight=G[u][v][UPPER])
+
+    # Find all shortest paths in bipirtatie graph
+    bounds = dict(nx.all_pairs_bellman_ford_path_length(H, weight=DIST))
+
+    N = len(G)
+    lower_bounds = np.zeros([N, N])
+    upper_bounds = np.zeros([N, N])
+
+    ids = list(G.nodes())
+    for u in G:
+        for v in G:
+            if bounds[u][v + "s"] < 0:
+                lower_bounds[ids.index(u), ids.index(v)] = -bounds[u][v + "s"]
+            else:
+                lower_bounds[ids.index(u), ids.index(v)] = 0
+                # lower_bounds[ids.index(u), ids.index(v)] = bounds[u][f"{v}s"]
+            upper_bounds[ids.index(u), ids.index(v)] = bounds[u][v]
+
+    return lower_bounds, upper_bounds
