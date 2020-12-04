@@ -30,7 +30,7 @@ if __name__ == "__main__":
     # ]
     local_algorithms_unbounded = ["trust-exact"]
     local_algorithms_bounded = ["trust-constr"]
-    n_goals = 20  # Number of goals
+    n_goals = 40  # Number of goals
     n_init = 1  # Number of initializations to try (should be 1 for zero_init = True and for bound_smoothing = True)
     zero_init = True  # True makes the angular solvers MUCH better w
     use_limits = False  # Whether to use angular limits for all the solvers
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     ]
 
     n = 6
-    ub = np.minimum(np.random.rand(n)*(pi/2) + pi/2, pi)
+    ub = np.minimum(np.random.rand(n) * (pi / 2) + pi / 2, pi)
     lb = -ub
 
     fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
@@ -130,4 +130,4 @@ if __name__ == "__main__":
     # results.robot = robot
     # results.seed = seed
     # pickle.dump(results, open(save_string + "full_results.p", "wb"))
-    # process_experiment(results)
+    process_experiment(results)

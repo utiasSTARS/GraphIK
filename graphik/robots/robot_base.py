@@ -289,8 +289,7 @@ class RobotPlanar(Robot):
             else list_to_variable_dict(self.n * [-pi])
         )
         if "parents" in params:
-            self.parents = params["parents"]
-            self.structure = self.tree_graph()
+            self.structure = self.tree_graph(params["parents"])
         else:
             self.structure = self.chain_graph()
 
@@ -310,12 +309,12 @@ class RobotPlanar(Robot):
         chain_graph.add_weighted_edges_from(edg_lst)
         return chain_graph
 
-    def tree_graph(self) -> nx.DiGraph:
+    def tree_graph(self, parents: dict) -> nx.DiGraph:
         """
         Needed for forward kinematics (computing the shortest path).
         :return: Directed graph representing the robot's tree structure.
         """
-        tree_graph = nx.DiGraph(self.parents)
+        tree_graph = nx.DiGraph(parents)
         for parent, child in tree_graph.edges():
             tree_graph.edges[parent, child]["weight"] = self.a[child]
         return tree_graph

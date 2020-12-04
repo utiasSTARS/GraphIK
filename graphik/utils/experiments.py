@@ -1018,16 +1018,10 @@ def run_full_fabrik_sweep_experiment(
         for i in range(len(goals)):
             goals[i] = list(goals[i]) + [0]
 
-    # retrieving parents indices in the format of solver_fabrik
-    if (type(robot).__name__ == "RobotPlanar") or (
-        type(robot).__name__ == "RobotSpherical"
-    ):
-        parents_index = [-1] * len(robot.parents)
-        for key in list(robot.parents.keys()):
-            for child in robot.parents[key]:
-                parents_index[int(child[1:])] = int(key[1:])
-    else:
-        parents_index = [-1] + list(range(N - 1))
+    parents_index = [-1] * len(list(robot.structure.nodes))
+    for (u, v, w) in robot.structure.edges.data("weight"):
+        if w:
+            parents_index[int(v[1:])] = int(u[1:])
 
     # Retrieving the position for the initial guess
     initial_guess = []
