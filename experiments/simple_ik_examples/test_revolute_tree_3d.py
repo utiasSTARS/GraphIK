@@ -6,11 +6,11 @@ import numpy as np
 from matplotlib import pyplot as plt
 from numpy import pi, sqrt
 
-from cvxik.graphs.graph_base import Graph, Revolute3dRobotGraph
-from cvxik.robots.revolute import Revolute3dTree
-from cvxik.solvers.riemannian_solver import RiemannianSolver
-
-from cvxik.utils.utils import best_fit_transform, list_to_variable_dict, transZ, dZ
+from graphik.graphs.graph_base import Graph, Revolute3dRobotGraph
+from graphik.robots.revolute import Revolute3dTree
+from graphik.solvers.riemannian_solver import RiemannianSolver
+from graphik.utils.geometry import trans_axis
+from graphik.utils.utils import best_fit_transform, list_to_variable_dict, dZ
 
 
 def solve_random_problem(graph: Graph, solver: RiemannianSolver):
@@ -24,7 +24,7 @@ def solve_random_problem(graph: Graph, solver: RiemannianSolver):
     for _, ee_pair in enumerate(robot.end_effectors):
         T_goal[ee_pair[0]] = robot.get_pose(q_goal, ee_pair[0])
         goals[ee_pair[0]] = T_goal[ee_pair[0]].trans
-        goals[ee_pair[1]] = T_goal[ee_pair[0]].dot(transZ(dZ)).trans
+        goals[ee_pair[1]] = T_goal[ee_pair[0]].dot(trans_axis(dZ, "z")).trans
 
     q_rand = list_to_variable_dict(graph.robot.n * [0])
     G_rand = graph.realization(q_rand)
@@ -66,8 +66,8 @@ def solve_random_problem(graph: Graph, solver: RiemannianSolver):
         e_pos = robot.get_pose(q_sol, key).trans - value.trans
         e_sol += e_pos.T @ e_pos
         e_pos = (
-            robot.get_pose(q_sol, key).dot(transZ(dZ)).trans
-            - value.dot(transZ(dZ)).trans
+            robot.get_pose(q_sol, key).dot(trans_axis(dZ, "z")).trans
+            - value.dot(trans_axis(dZ, "z")).trans
         )
         e_sol += e_pos.T @ e_pos
     print(f"Final error: {e_sol}. Solution time: {t_sol}.")

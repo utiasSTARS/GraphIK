@@ -2,41 +2,9 @@ import numpy as np
 import scipy as sp
 import networkx as nx
 from numpy import pi
-from liegroups.numpy import SE3
-from liegroups.numpy import SO3
 import math
 
-# transZ = se3.SE3(so3.SO3.identity(), np.array([0, 0, 0.5]))
-
 dZ = 1
-
-
-def transZ(d):
-    return SE3(SO3.identity(), np.array([0, 0, d]))
-
-
-def rotZ(x):
-    return SE3(SO3.rotz(x), np.array([0, 0, 0]))
-
-
-def trans_axis(d, axis="z"):
-    if axis == "z":
-        return SE3(SO3.identity(), np.array([0, 0, d]))
-    if axis == "y":
-        return SE3(SO3.identity(), np.array([0, d, 0]))
-    if axis == "x":
-        return SE3(SO3.identity(), np.array([d, 0, 0]))
-    raise Exception("Invalid Axis")
-
-
-def rot_axis(x, axis="z"):
-    if axis == "z":
-        return SE3(SO3.rotz(x), np.array([0, 0, 0]))
-    if axis == "y":
-        return SE3(SO3.roty(x), np.array([0, 0, 0]))
-    if axis == "x":
-        return SE3(SO3.rotx(x), np.array([0, 0, 0]))
-    raise Exception("Invalid Axis")
 
 
 def level2_descendants(G: nx.DiGraph, node_id):
@@ -87,48 +55,11 @@ def list_to_variable_dict_spherical(l: list, label="p", index_start=1, in_pairs=
     return var_dict
 
 
-def bounds_to_spherical_bounds(bounds, max_val=np.inf):
-    new_bounds = []
-    for b in bounds:
-        new_bounds.append(max_val)
-        new_bounds.append(b)
-    return new_bounds
-
-
 def variable_dict_to_list(d: dict, order: list = None) -> list:
     if order is None:
         return [d[item] for item in d]
     else:
         return [d[item] for item in order]
-
-
-def apply_angular_offset_2d(joint_angle_offset, z0):
-    """
-    :param joint_angle_offset:
-    :param z0:
-    :return:
-    """
-    R = np.zeros((2, 2))
-    R[0, 0] = np.cos(joint_angle_offset)
-    R[0, 1] = np.sin(joint_angle_offset)
-    R[1, 0] = -np.sin(joint_angle_offset)
-    R[1, 1] = R[0, 0]
-    return R * z0
-
-
-def constraint_violations(constraints, solution_dict):
-    return [
-        (
-            con.args[1].subs(solution_dict) - con.args[0].subs(solution_dict),
-            con.is_Equality,
-        )
-        for con in constraints
-    ]
-
-
-def normalize(x: np.array):
-    """Returns normalized vector x"""
-    return x / np.linalg.norm(x, 2)
 
 
 def best_fit_transform(A: np.ndarray, B: np.ndarray) -> (np.ndarray, np.ndarray):

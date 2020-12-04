@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import graphik
-from graphik.utils.roboturdf import RobotURDF, plot_balls_from_points
+from graphik.utils.roboturdf import RobotURDF
 import numpy as np
 
 from numpy import pi
@@ -8,17 +8,15 @@ from numpy.linalg import norm
 
 from graphik.graphs.graph_base import Graph, Revolute3dRobotGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
-
+from graphik.utils.geometry import trans_axis
 from graphik.utils.utils import (
     best_fit_transform,
     list_to_variable_dict,
-    transZ,
-    dZ,
-    trans_axis,
     safe_arccos,
 )
 
-def solve_random_problem(graph: Graph, solver: RiemannianSolver):
+
+def solve_random_problem(graph: Revolute3dRobotGraph, solver: RiemannianSolver):
     n = graph.robot.n
     axis_len = graph.robot.axis_length
     fail = False

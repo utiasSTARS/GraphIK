@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
-import cvxik
+import graphik
 import numpy as np
 
-from cvxik.utils.roboturdf import RobotURDF, plot_balls_from_points
+from graphik.utils.roboturdf import RobotURDF, plot_balls_from_points
 from matplotlib import pyplot as plt
 from numpy import pi
 from numpy.linalg import norm
 
-from cvxik.graphs.graph_base import Graph, Revolute3dRobotGraph
+from graphik.graphs.graph_base import Graph, Revolute3dRobotGraph
 
-# from cvxik.robots.revolute import Revolute3dChain
-from cvxik.robots.robot_base import RobotRevolute
-from cvxik.solvers.riemannian_solver import RiemannianSolver
+# from graphik.robots.revolute import Revolute3dChain
+from graphik.robots.robot_base import RobotRevolute
+from graphik.solvers.riemannian_solver import RiemannianSolver
 
 from numpy.testing import assert_array_less
-from cvxik.utils.utils import (
+from graphik.utils.utils import (
     best_fit_transform,
     list_to_variable_dict,
-    transZ,
+    trans_axis,
     dZ,
     trans_axis,
     safe_arccos,
 )
 
-from cvxik.utils.dgp_utils import sample_matrix, PCA, dist_to_gram
+from graphik.utils.dgp_utils import sample_matrix, PCA, dist_to_gram
 
 VERT_SAMPLE = 2
 HOR_SAMPLE = 10
@@ -111,12 +111,12 @@ if __name__ == "__main__":
     ub = angular_limits
     lb = -angular_limits
 
-    fname = cvxik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
-    # fname = cvxik.__path__[0] + "/robots/urdfs/lwa4d.urdf"
-    # fname = cvxik.__path__[0] + "/robots/urdfs/lwa4p.urdf"
-    # fname = cvxik.__path__[0] + "/robots/urdfs/kuka_iiwr.urdf"
-    # fname = cvxik.__path__[0] + "/robots/urdfs/kuka_lwr.urdf"
-    # fname = cvxik.__path__[0] + "/robots/urdfs/jaco2arm6DOF_no_hand.urdf"
+    fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
+    # fname = graphik.__path__[0] + "/robots/urdfs/lwa4d.urdf"
+    # fname = graphik.__path__[0] + "/robots/urdfs/lwa4p.urdf"
+    # fname = graphik.__path__[0] + "/robots/urdfs/kuka_iiwr.urdf"
+    # fname = graphik.__path__[0] + "/robots/urdfs/kuka_lwr.urdf"
+    # fname = graphik.__path__[0] + "/robots/urdfs/jaco2arm6DOF_no_hand.urdf"
 
     urdf_robot = RobotURDF(fname)
     robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF

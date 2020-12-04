@@ -11,12 +11,15 @@ from graphik.utils.utils import (
     level2_descendants,
     wraptopi,
     list_to_variable_dict,
+    spherical_angle_bounds_to_revolute,
+)
+from graphik.utils.geometry import (
+    skew,
+    cross_symb,
+    roty,
     trans_axis,
     rot_axis,
-    spherical_angle_bounds_to_revolute,
-    transZ,
 )
-from graphik.utils.kinematics_helpers import rotZ_symb, skew, cross_symb, roty
 from graphik.utils.forward_kinematics import (
     fk_2d,
     fk_2d_symb,
@@ -114,8 +117,8 @@ class Robot(ABC):
         return self._kinematic_map
 
     @kinematic_map.setter
-    def kinematic_map(self, kmap: dict):
-        self._kinematic_map = kmap
+    def kinematic_map(self, kinematic_map: dict):
+        self._kinematic_map = kinematic_map
 
     @property
     def limit_edges(self) -> list:
@@ -162,8 +165,9 @@ class Robot(ABC):
         self._lb = lb if type(lb) is dict else list_to_variable_dict(flatten([lb]))
 
     ########################################
-    #           DH PARAMETERS
+    #         KINEMATIC PARAMETERS
     ########################################
+
     @property
     def d(self) -> dict:
         return self._d
@@ -199,6 +203,10 @@ class Robot(ABC):
     @property
     def spherical(self) -> bool:
         return False
+
+    ########################################
+    #         LAMBDIFICATION
+    ########################################
 
     @property
     def lambdified(self) -> bool:
@@ -761,7 +769,9 @@ class RobotSpherical(Robot):
                 T_zero[new_child] = T_zero[new_joint].dot(Ry)
                 d = self.d[child]
                 Ry_back = SE3(SO3(roty(-np.pi / 2)), np.zeros(3))
-                T_zero[new_grand_child] = T_zero[new_child].dot(Ry_back).dot(transZ(d))
+                T_zero[new_grand_child] = (
+                    T_zero[new_child].dot(Ry_back).dot(trans_axis(d, "z"))
+                )
                 tree_structure[new_grand_child] = []
 
         # for key in old_to_new_names:
@@ -811,7 +821,7 @@ class RobotSpherical(Robot):
             T_zero[new_node1] = T_zero[joint_prev].dot(Ry)
             d = self.d[joint]
             Ry_back = SE3(SO3(roty(-np.pi / 2)), np.zeros(3))
-            T_zero[new_node2] = T_zero[new_node1].dot(Ry_back).dot(transZ(d))
+            T_zero[new_node2] = T_zero[new_node1].dot(Ry_back).dot(trans_axis(d, "z"))
 
             joint_prev = new_node2
 
@@ -1006,9 +1016,7 @@ class RobotRevolute(Robot):
                     H[idx, jdx] -= dH
                     if idx != jdx:
                         H[jdx, idx] -= dH
-        return (
-            H  # TODO: the Hessian as written is for a coefficient of 1/2 for each term
-        )
+        return H
 
     def max_min_distance(self, T0: SE3, T1: SE3, T2: SE3) -> (float, float, str):
         """
@@ -1068,7 +1076,7 @@ class RobotRevolute(Robot):
         S = self.structure
         T = self.T_zero
         kinematic_map = self.kinematic_map
-        transZ = trans_axis(self.axis_length, "z")
+        T_axis = trans_axis(self.axis_length, "z")
         for u in K:
             for v in (des for des in K.successors(u) if des):
                 S[u][v][LOWER] = S[u][v][DIST]
@@ -1086,9 +1094,9 @@ class RobotRevolute(Robot):
                     T0, T1, T2 = [T[path[0]], T[path[1]], T[path[2]]]
 
                     if "q" in ids[0]:
-                        T0 = T0.dot(transZ)
+                        T0 = T0.dot(T_axis)
                     if "q" in ids[1]:
-                        T2 = T2.dot(transZ)
+                        T2 = T2.dot(T_axis)
 
                     d_max, d_min, limit = self.max_min_distance(T0, T1, T2)
 
@@ -1236,7 +1244,7 @@ class RobotRevolute(Robot):
         for node in kinematic_map["p0"][query_node][1:]:
             pred = [u for u in parents.predecessors(node)]
             T_rel = T_ref[pred[0]].inv().dot(T_ref[node])
-            T = (T.dot(rotZ_symb(joint_angles[node]))).dot(T_rel)
+            T = (T.dot(rot_axis(joint_angles[node], "z"))).dot(T_rel)
         return T
 
     def get_all_poses_symb(self, joint_angles: dict) -> dict:
@@ -1249,7 +1257,7 @@ class RobotRevolute(Robot):
             for node in kinematic_map["p0"][ee[0]][1:]:
                 pred = [u for u in parents.predecessors(node)]
                 T_rel = T_ref[pred[0]].inv().dot(T_ref[node])
-                T[node] = T[pred[0]].dot(rotZ_symb(joint_angles[node])).dot(T_rel)
+                T[node] = T[pred[0]].dot(rot_axis(joint_angles[node], "z")).dot(T_rel)
         return T
 
     def jacobian_linear_symb(

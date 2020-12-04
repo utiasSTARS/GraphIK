@@ -6,10 +6,8 @@ import unittest
 import networkx as nx
 from graphik.graphs.graph_base import Revolute3dRobotGraph, SphericalRobotGraph
 from graphik.robots.robot_base import RobotRevolute, RobotSpherical, RobotPlanar
-from graphik.utils.utils import (
-    transZ,
-    list_to_variable_dict,
-)
+from graphik.utils.utils import list_to_variable_dict
+from graphik.utils.geometry import trans_axis
 
 
 TOL = 1e-6
@@ -198,7 +196,7 @@ class TestBoundSmoothing(unittest.TestCase):
             T_goal = robot.get_pose(list_to_variable_dict(q_goal), "p" + str(n))
 
             G = graph.complete_from_pos(
-                {f"p{n}": T_goal.trans, f"q{n}": T_goal.dot(transZ(dZ)).trans}
+                {f"p{n}": T_goal.trans, f"q{n}": T_goal.dot(trans_axis(dZ, "z")).trans}
             )
             lb, ub = graph.distance_bounds(G)
             self.assertIsNone(

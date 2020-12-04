@@ -18,13 +18,12 @@ from graphik.solvers.geometric_jacobian import jacobian_ik
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.graphs.graph_base import Graph
 from graphik.robots.robot_base import RobotRevolute, RobotSpherical, RobotPlanar
+from graphik.utils.geometry import trans_axis
 from graphik.utils.utils import (
     list_to_variable_dict,
     list_to_variable_dict_spherical,
     variable_dict_to_list,
     best_fit_transform,
-    bounds_to_spherical_bounds,
-    trans_axis,
     safe_arccos,
     wraptopi,
     bernoulli_confidence_jeffreys,
@@ -36,6 +35,14 @@ from graphik.utils.utils import (
 linestyles = ["-", "--", "-."]
 line_colors = ["#000000", "#990000", "#294772", "#F6AA1C"]  # , '#cccccc']
 line_markers = ["s", "o", "d", "*"]
+
+
+def bounds_to_spherical_bounds(bounds, max_val=np.inf):
+    new_bounds = []
+    for b in bounds:
+        new_bounds.append(max_val)
+        new_bounds.append(b)
+    return new_bounds
 
 
 def run_multiple_experiments(

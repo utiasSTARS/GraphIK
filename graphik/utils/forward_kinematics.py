@@ -1,7 +1,7 @@
 import numpy as np
 import sympy as sp
 
-from graphik.utils.kinematics_helpers import *
+from graphik.utils.geometry import *
 from liegroups.numpy import SO2, SO3, SE2, SE2
 
 

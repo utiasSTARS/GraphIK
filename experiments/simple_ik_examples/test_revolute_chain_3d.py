@@ -9,11 +9,10 @@ from numpy.linalg import norm
 from liegroups import SE3
 from graphik.graphs.graph_base import Graph, Revolute3dRobotGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
-
+from graphik.utils.geometry import trans_axis
 from graphik.utils.utils import (
     best_fit_transform,
     list_to_variable_dict,
-    trans_axis,
     safe_arccos,
 )
 
@@ -173,7 +172,7 @@ if __name__ == "__main__":
     graph = Revolute3dRobotGraph(robot)
     # graph.distance_bounds_from_sampling()
     solver = RiemannianSolver(graph)
-    num_tests = 100
+    num_tests = 2
     e_pos = []
     e_rot = []
     t = []

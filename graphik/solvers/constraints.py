@@ -5,8 +5,22 @@ import numpy as np
 import sympy as sp
 import numpy.linalg as la
 from numpy import pi
-from graphik.utils.utils import norm_sq, apply_angular_offset_2d
-from graphik.robots.revolute import Revolute3dChain
+from graphik.utils.utils import norm_sq
+from graphik.robots.robot_base import RobotRevolute
+
+
+def apply_angular_offset_2d(joint_angle_offset, z0):
+    """
+    :param joint_angle_offset:
+    :param z0:
+    :return:
+    """
+    R = np.zeros((2, 2))
+    R[0, 0] = np.cos(joint_angle_offset)
+    R[0, 1] = np.sin(joint_angle_offset)
+    R[1, 0] = -np.sin(joint_angle_offset)
+    R[1, 1] = R[0, 0]
+    return R * z0
 
 
 def archimedean_constraint(variables, M_bounds):
@@ -339,7 +353,7 @@ if __name__ == "__main__":
     lb = -ub
 
     params = {"a": a, "alpha": al, "d": d, "theta": th, "lb": lb, "ub": ub}
-    robot = Revolute3dChain(params)  # instantiate robot
+    robot = RobotRevolute(params)  # instantiate robot
     end_effector_assignments = {"p6": np.array([1.0, 1.0, 1.0])}
     graph = Revolute3dRobotGraph(robot)
     constraints = constraints_from_graph(graph, end_effector_assignments)

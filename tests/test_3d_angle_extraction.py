@@ -4,7 +4,7 @@ import numpy as np
 from numpy import pi
 from numpy.random import rand, randint
 
-from graphik.utils.kinematics_helpers import dh_to_se3, inverse_dh_frame
+from graphik.utils.geometry import dh_to_se3, inverse_dh_frame
 
 
 class TestInverseDH(unittest.TestCase):

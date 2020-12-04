@@ -6,10 +6,9 @@ from abc import ABC
 from liegroups.numpy import SE3
 from numpy.linalg import norm
 from graphik.robots.robot_base import Robot, RobotRevolute
+from graphik.utils.geometry import trans_axis, rot_axis
 from graphik.utils.utils import (
     list_to_variable_dict,
-    rotZ,
-    trans_axis,
 )
 from numpy import cos, pi, sin, sqrt, arctan2
 
@@ -244,9 +243,10 @@ class Graph(ABC):
 
     def distance_bound_matrix(self):
         """
-        Generates a matrix of distance bounds induced by joint variables.
+        Generates a matrix of symmetric lower distance bounds induced by
+        joint variables.
         """
-        X = np.zeros([self.n_nodes, self.n_nodes])  # fake distance matrix
+        X = np.zeros([self.n_nodes, self.n_nodes])  # empty distance matrix
         G = self.directed
         for val in self.robot.limit_edges:
             udx = self.node_ids.index(val[0])
@@ -436,7 +436,7 @@ class Revolute3dRobotGraph(Graph):
         T1 = T["p0"]
         base_names = ["x", "y"]
         names = ["p1", "q1"]
-        transZ = trans_axis(axis_length, "z")
+        T_axis = trans_axis(axis_length, "z")
 
         for base_node in base_names:
             for node in names:
@@ -446,17 +446,18 @@ class Revolute3dRobotGraph(Graph):
                     d_max, d_min, limit = self.robot.max_min_distance(T0, T1, T["p1"])
                 else:
                     d_max, d_min, limit = self.robot.max_min_distance(
-                        T0, T1, T["p1"].dot(transZ)
+                        T0, T1, T["p1"].dot(T_axis)
                     )
 
                 if limit:
                     if node[0] == "p":
                         T_rel = T1.inv().dot(T["p1"])
                     else:
-                        T_rel = T1.inv().dot(T["p1"].dot(transZ))
+                        T_rel = T1.inv().dot(T["p1"].dot(T_axis))
 
                     d_limit = norm(
-                        T1.dot(rotZ(self.robot.ub["p1"])).dot(T_rel).trans - T0.trans
+                        T1.dot(rot_axis(self.robot.ub["p1"], "z")).dot(T_rel).trans
+                        - T0.trans
                     )
 
                     if limit == "above":
