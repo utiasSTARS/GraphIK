@@ -69,7 +69,7 @@ def random_problem_2d_chain():
 
         R, t = best_fit_transform(Y[[0, 1, 2], :], X_goal[[0, 1, 2], :])
         P_e = (R @ Y.T + t.reshape(2, 1)).T
-        G_e = graph_from_pos(P_e)
+        G_e = graph_from_pos(P_e, graph.node_ids)
 
         q_sol = robot.joint_variables(G_e)
         # G_sol = graph.realization(q_sol)
