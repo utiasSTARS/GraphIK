@@ -14,30 +14,9 @@ def sph_to_se3(alpha: float, d: float, theta: float) -> SE3:
     :returns: SE3 matrix
     :rtype: lie.SE3Matrix
     """
-
-    RX = SO3.rotx(alpha)
-    RotX = SE3(RX, np.zeros(3))
-    TransZ = SE3(SO3.identity(), np.array([0, 0, d]))
-    RZ = SO3.rotz(theta)
-    RotZ = SE3(RZ, np.zeros(3))
-    return RotZ.dot(RotX.dot(TransZ))
-
-
-def sph_to_se3_symb(alpha: float, d: float, theta: float) -> SE3:
-    """Transform a single set of DH parameters into an SE3 matrix
-    :param a: displacement along x
-    :param alpha: rotation about x
-    :param d: translation along new z
-    :param theta: rotation around new z
-    :returns: SE3 matrix
-    :rtype: lie.SE3Matrix
-    """
-
-    RX = SO3(rotx(alpha))
-    RotX = SE3(RX, np.zeros(3))
-    TransZ = SE3(SO3.identity(), np.array([0, 0, d]))
-    RZ = SO3(rotz(theta))
-    RotZ = SE3(RZ, np.zeros(3))
+    RotX = rot_axis(alpha, "x")
+    TransZ = trans_axis(d, "z")
+    RotZ = rot_axis(theta, "z")
     return RotZ.dot(RotX.dot(TransZ))
 
 
