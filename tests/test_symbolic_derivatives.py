@@ -9,7 +9,7 @@ import unittest
 from graphik.solvers.local_solver import LocalSolver
 from graphik.robots.robot_base import RobotRevolute
 from graphik.utils.utils import list_to_variable_dict
-from graphik.graphs.graph_base import SphericalRobotGraph
+from graphik.graphs.graph_base import RobotSphericalGraph
 from graphik.robots.robot_base import RobotPlanar
 
 from liegroups.numpy import SO2, SE2, SO3, SE3
@@ -97,7 +97,7 @@ class TestGradient(unittest.TestCase):
 
         robot = RobotPlanar(params)
 
-        graph = SphericalRobotGraph(robot)
+        graph = RobotSphericalGraph(robot)
         solver = LocalSolver()
 
         # Get symbolic results

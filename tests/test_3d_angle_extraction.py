@@ -86,7 +86,7 @@ class TestInverseDH(unittest.TestCase):
     #         "ub": ub,
     #     }
     #     robot = Revolute3dChain(params)
-    #     graph = Revolute3dRobotGraph(robot)
+    #     graph = RobotRevoluteGraph(robot)
 
     #     for idx in range(n_runs):
     #         # q_goal = robot.random_configuration()

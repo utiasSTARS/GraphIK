@@ -16,7 +16,7 @@ from graphik.solvers.local_solver import LocalSolver
 from graphik.solvers.solver_fabrik import solver_fabrik
 from graphik.solvers.geometric_jacobian import jacobian_ik
 from graphik.solvers.riemannian_solver import RiemannianSolver
-from graphik.graphs.graph_base import Graph
+from graphik.graphs.graph_base import RobotGraph
 from graphik.robots.robot_base import RobotRevolute, RobotSpherical, RobotPlanar
 from graphik.utils.dgp import (
     adjacency_matrix_from_graph,
@@ -118,7 +118,7 @@ def run_multiple_experiments(
 
 
 def run_full_experiment(
-    graph: Graph,
+    graph: RobotGraph,
     solver_params: dict,
     riemannian_params: dict,
     jacobian_params: dict,
@@ -143,7 +143,7 @@ def run_full_experiment(
     """
     Run an experiment with a variety of solvers for a single goal specified by ee_goals.
 
-    :param graph: instance of Graph describing our robot
+    :param graph: instance of RobotGraph describing our robot
     :param solver_params: dictionary with local solver parameters
     :param riemannian_params: dictionary with Riemannian solver parameters
     :param jacobian_params: dictionary with Jacobian solver parameters
@@ -402,7 +402,7 @@ def process_experiment(data: pd.DataFrame, pos_threshold=0.01, rot_threshold=0.0
 
 
 def run_riemannian_revolute_experiment(
-    graph: Graph,
+    graph: RobotGraph,
     solver: RiemannianSolver,
     n_per_dim: int,
     D_goal,
@@ -566,7 +566,7 @@ def run_riemannian_revolute_experiment(
 
 
 def run_local_revolute_experiment(
-    graph: Graph,
+    graph: RobotGraph,
     ee_goals: dict,
     solver: LocalSolver,
     n_per_dim: int,
@@ -675,7 +675,7 @@ def run_local_revolute_experiment(
 
 
 def run_riemannian_planar_experiment(
-    graph: Graph,
+    graph: RobotGraph,
     solver: RiemannianSolver,
     n_per_dim: int,
     D_goal,
@@ -801,7 +801,7 @@ def run_riemannian_planar_experiment(
 
 
 def run_riemannian_spherical_experiment(
-    graph: Graph,
+    graph: RobotGraph,
     solver: RiemannianSolver,
     n_per_dim: int,
     D_goal,
@@ -926,7 +926,7 @@ def run_riemannian_spherical_experiment(
 
 
 def run_local_planar_experiment(
-    graph: Graph,
+    graph: RobotGraph,
     ee_goals: dict,
     solver: LocalSolver,
     n_per_dim: int,
@@ -1208,7 +1208,7 @@ def run_full_fabrik_sweep_experiment(
 
 
 def run_full_jacobian_sweep_experiment(
-    graph: Graph,
+    graph: RobotGraph,
     ee_goals: dict,
     init: list,
     q_goal: dict,
@@ -1292,7 +1292,7 @@ def run_full_jacobian_sweep_experiment(
 
 
 def run_full_sweep_experiment(
-    graph: Graph,
+    graph: RobotGraph,
     ee_goals: dict,
     solver: LocalSolver,
     n_per_dim: int,

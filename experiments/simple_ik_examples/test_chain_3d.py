@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import numpy as np
 from numpy.testing import assert_array_less
-from graphik.graphs.graph_base import SphericalRobotGraph
+from graphik.graphs.graph_base import RobotSphericalGraph
 from graphik.robots.robot_base import RobotSpherical
 
 from graphik.solvers.riemannian_solver import RiemannianSolver
@@ -37,7 +37,7 @@ def random_problem_3d_chain():
         "joint_limits_upper": lim_u,
     }
     robot = RobotSpherical(params)  # instantiate robot
-    graph = SphericalRobotGraph(robot)  # instantiate graph
+    graph = RobotSphericalGraph(robot)  # instantiate graph
     solver = RiemannianSolver(graph)
     n_tests = 1000
 

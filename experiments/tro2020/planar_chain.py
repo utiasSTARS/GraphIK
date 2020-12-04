@@ -2,7 +2,7 @@ import numpy as np
 import networkx as nx
 import pickle
 
-from graphik.graphs.graph_base import SphericalRobotGraph
+from graphik.graphs.graph_base import RobotSphericalGraph
 from graphik.robots.robot_base import RobotPlanar
 from graphik.utils.utils import list_to_variable_dict, make_save_string
 from graphik.utils.experiments import (
@@ -127,7 +127,7 @@ if __name__ == "__main__":
         "joint_limits_lower": lim_l,
     }
     robot = RobotPlanar(params)
-    graph = SphericalRobotGraph(robot)
+    graph = RobotSphericalGraph(robot)
 
     results = run_multiple_experiments(
         graph,

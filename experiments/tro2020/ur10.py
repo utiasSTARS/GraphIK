@@ -4,7 +4,7 @@ import numpy as np
 from numpy import pi
 import pickle
 
-from graphik.graphs.graph_base import Revolute3dRobotGraph
+from graphik.graphs.graph_base import RobotRevoluteGraph
 from graphik.utils.utils import make_save_string
 from graphik.utils.experiments import run_multiple_experiments, process_experiment
 
@@ -103,7 +103,7 @@ if __name__ == "__main__":
     urdf_robot = RobotURDF(fname)
 
     robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
-    graph = Revolute3dRobotGraph(robot)
+    graph = RobotRevoluteGraph(robot)
 
     save_string = "results/ur10_" + make_save_string(save_string_properties)
 

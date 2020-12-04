@@ -4,7 +4,7 @@ import sympy as sp
 
 from graphik.robots.robot_base import RobotSpherical
 from graphik.solvers.local_solver import LocalSolver
-from graphik.graphs.graph_base import SphericalRobotGraph
+from graphik.graphs.graph_base import RobotSphericalGraph
 from graphik.utils.utils import list_to_variable_dict, list_to_variable_dict_spherical
 
 from liegroups.numpy import SO3, SE3
@@ -35,7 +35,7 @@ class TestParameterization(unittest.TestCase):
         # solver.set_symbolic_cost_function(robot_rev, end_effector_assignment, variables)
         solver.set_symbolic_cost_function(robot, end_effector_assignment, variables)
 
-        graph = SphericalRobotGraph(robot)
+        graph = RobotSphericalGraph(robot)
         problem_params = {
             "angular_limits": graph.robot.ub,
             "initial_guess": list_to_variable_dict([[0.0, 0.0], [0.0, 0.0]]),
@@ -74,7 +74,7 @@ class TestParameterization(unittest.TestCase):
             end_effector_assignment = {"p" + str(n): goal_pose}
             variables = ["p" + str(idx) for idx in range(1, n + 1)]
             solver.set_symbolic_cost_function(robot, end_effector_assignment, variables)
-            graph = SphericalRobotGraph(robot)
+            graph = RobotSphericalGraph(robot)
             problem_params = {
                 "angular_limits": graph.robot.ub,
                 "initial_guess": list_to_variable_dict(n * [[0.0, 0.0]]),

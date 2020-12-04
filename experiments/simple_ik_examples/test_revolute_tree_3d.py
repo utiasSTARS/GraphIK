@@ -6,7 +6,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from numpy import pi, sqrt
 
-from graphik.graphs.graph_base import Graph, Revolute3dRobotGraph
+from graphik.graphs.graph_base import Graph, RobotRevoluteGraph
 from graphik.robots.revolute import Revolute3dTree
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.geometry import trans_axis
@@ -129,7 +129,7 @@ if __name__ == "__main__":
         "parents": parents,
     }
     robot = Revolute3dTree(params)
-    graph = Revolute3dRobotGraph(robot)
+    graph = RobotRevoluteGraph(robot)
     # print(graph.adjacency_matrix())
     solver = RiemannianSolver(graph)
     num_tests = 1000

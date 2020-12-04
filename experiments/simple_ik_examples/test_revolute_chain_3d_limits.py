@@ -6,7 +6,7 @@ import numpy as np
 from numpy import pi
 from numpy.linalg import norm
 
-from graphik.graphs.graph_base import Graph, Revolute3dRobotGraph
+from graphik.graphs.graph_base import Graph, RobotRevoluteGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.dgp import (
     adjacency_matrix_from_graph,
@@ -22,7 +22,7 @@ from graphik.utils.utils import (
 )
 
 
-def solve_random_problem(graph: Revolute3dRobotGraph, solver: RiemannianSolver):
+def solve_random_problem(graph: RobotRevoluteGraph, solver: RiemannianSolver):
     n = graph.robot.n
     axis_len = graph.robot.axis_length
     fail = False
@@ -138,7 +138,7 @@ if __name__ == "__main__":
     urdf_robot = RobotURDF(fname)
     robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
 
-    graph = Revolute3dRobotGraph(robot)
+    graph = RobotRevoluteGraph(robot)
     print(graph.node_ids)
     print(robot.limit_edges)
     print(robot.limited_joints)

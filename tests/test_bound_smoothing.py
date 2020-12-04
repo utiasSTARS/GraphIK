@@ -4,7 +4,7 @@ from numpy import pi
 from numpy.testing import assert_array_less
 import unittest
 import networkx as nx
-from graphik.graphs.graph_base import Revolute3dRobotGraph, SphericalRobotGraph
+from graphik.graphs.graph_base import RobotRevoluteGraph, RobotSphericalGraph
 from graphik.robots.robot_base import RobotRevolute, RobotSpherical, RobotPlanar
 from graphik.utils.dgp import pos_from_graph, graph_from_pos, bound_smoothing
 from graphik.utils.utils import list_to_variable_dict
@@ -31,7 +31,7 @@ class TestBoundSmoothing(unittest.TestCase):
             }
 
             robot = RobotPlanar(params)
-            graph = SphericalRobotGraph(robot)
+            graph = RobotSphericalGraph(robot)
 
             q_goal = graph.robot.random_configuration()
             G_goal = graph.realization(q_goal)
@@ -70,7 +70,7 @@ class TestBoundSmoothing(unittest.TestCase):
             }
 
             robot = RobotPlanar(params)
-            graph = SphericalRobotGraph(robot)
+            graph = RobotSphericalGraph(robot)
 
             q_goal = graph.robot.random_configuration()
             G_goal = graph.realization(q_goal)
@@ -110,7 +110,7 @@ class TestBoundSmoothing(unittest.TestCase):
                 "joint_limits_upper": lim_u,
             }
             robot = RobotSpherical(params)  # instantiate robot
-            graph = SphericalRobotGraph(robot)  # instantiate graph
+            graph = RobotSphericalGraph(robot)  # instantiate graph
 
             q_goal = graph.robot.random_configuration()
             G_goal = graph.realization(q_goal)
@@ -154,7 +154,7 @@ class TestBoundSmoothing(unittest.TestCase):
                 "joint_limits_upper": lim_u,
             }
             robot = RobotSpherical(params)  # instantiate robot
-            graph = SphericalRobotGraph(robot)  # instantiate graph
+            graph = RobotSphericalGraph(robot)  # instantiate graph
 
             q_goal = graph.robot.random_configuration()
             G_goal = graph.realization(q_goal)
@@ -189,7 +189,7 @@ class TestBoundSmoothing(unittest.TestCase):
 
         params = {"a": a, "alpha": al, "d": d, "theta": th, "lb": lb, "ub": ub}
         robot = RobotRevolute(params)  # instantiate robot
-        graph = Revolute3dRobotGraph(robot)  # instantiate graph
+        graph = RobotRevoluteGraph(robot)  # instantiate graph
 
         for _ in range(100):
             q_goal = graph.robot.random_configuration()

@@ -3,7 +3,7 @@ import networkx as nx
 import pickle
 
 from graphik.robots.robot_base import RobotSpherical
-from graphik.graphs.graph_base import SphericalRobotGraph, Revolute3dRobotGraph
+from graphik.graphs.graph_base import RobotSphericalGraph, RobotRevoluteGraph
 from graphik.utils.utils import list_to_variable_dict, make_save_string
 from graphik.utils.experiments import run_multiple_experiments, process_experiment
 
@@ -129,14 +129,14 @@ if __name__ == "__main__":
     # Robot params
     robot = RobotSpherical(params)
     # robot.lambdify_get_pose()
-    graph = SphericalRobotGraph(robot)
+    graph = RobotSphericalGraph(robot)
 
     print("Converting the spherical robot to a revolute equivalent.")
     robot_revolute, name_map, angle_map = robot.to_revolute()
     if do_jacobian:
         print("Lambdifying get_pose for the Jacobian solver.")
         robot_revolute.lambdify_get_pose()
-    graph_local = Revolute3dRobotGraph(robot_revolute)
+    graph_local = RobotRevoluteGraph(robot_revolute)
 
     print("Running experiments")
     results = run_multiple_experiments(

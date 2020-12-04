@@ -1,5 +1,9 @@
 from copy import deepcopy
-from graphik.graphs.graph_base import Graph, SphericalRobotGraph, Revolute3dRobotGraph
+from graphik.graphs.graph_base import (
+    RobotGraph,
+    RobotSphericalGraph,
+    RobotRevoluteGraph,
+)
 import networkx as nx
 import numpy as np
 import sympy as sp
@@ -35,7 +39,7 @@ def all_symbols(constraints):
 
 
 def generate_symbols(
-    robot_graph: Graph, nodes_with_angular_vars: dict = None
+    robot_graph: RobotGraph, nodes_with_angular_vars: dict = None
 ) -> nx.DiGraph:
     """
     Make a copy of robot_graph's such that the nodes have "sym" fields populated.
@@ -69,7 +73,7 @@ def generate_symbols(
 
 
 def constraints_from_graph(
-    robot_graph: Graph, end_effector_assignments: dict, options: dict = None
+    robot_graph: RobotGraph, end_effector_assignments: dict, options: dict = None
 ) -> list:
     """
 
@@ -110,7 +114,7 @@ def constraints_from_graph(
 
 
 def angular_constraints(
-    robot_graph: Graph,
+    robot_graph: RobotGraph,
     angular_limits: dict,
     end_effector_assignments: dict,
     angular_offsets: dict = None,
@@ -268,7 +272,7 @@ def convex_angular_constraints(node0, node1, node2, as_equality=False):
 
 
 def nearest_neighbour_cost(
-    robot_graph: Graph,
+    robot_graph: RobotGraph,
     nearest_neighbour_points: dict,
     nearest_angular_residuals: dict = None,
 ):
@@ -276,7 +280,7 @@ def nearest_neighbour_cost(
     Produce a nearest-neighbour cost function.
     TODO: add assertions to help with checking this. For graph case, need a (6,) ndarray with p before q.
 
-    :param robot_graph: Graph object describing our robot
+    :param robot_graph: RobotGraph object describing our robot
     :param nearest_neighbour_points: dictionary mapping node ids (strings) to ndarrays
     :param nearest_angular_residuals: list of angular residuals (floats)
     :return: symbolic expression of cost
@@ -357,7 +361,7 @@ if __name__ == "__main__":
     params = {"a": a, "alpha": al, "d": d, "theta": th, "lb": lb, "ub": ub}
     robot = RobotRevolute(params)  # instantiate robot
     end_effector_assignments = {"p6": np.array([1.0, 1.0, 1.0])}
-    graph = Revolute3dRobotGraph(robot)
+    graph = RobotRevoluteGraph(robot)
     constraints = constraints_from_graph(graph, end_effector_assignments)
     print(graph.directed.edges())
     print(constraints)

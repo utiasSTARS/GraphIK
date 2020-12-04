@@ -22,8 +22,7 @@ ROOT = "p0"
 UNDEFINED = None
 
 
-# TODO rename to RobotGraph
-class Graph(ABC):
+class RobotGraph(ABC):
     """
     Abstract base class for graph structures equipped with optimization and EDM completion features.
     Note that the robots analyzed by this graph have a joint structure described by a tree, yet the constraints between
@@ -177,19 +176,8 @@ class Graph(ABC):
                 U[vdx, udx] = U[udx, vdx]
         return L, U
 
-    def parent_node_id(self, node_id):
-        """
-        Returns the id of the parent node of node_id. Returns None for the root node id (0).
-        :param node_id:
-        :returns:
-        """
-        assert node_id in self.directed.nodes(), "Node {:} does not exist!".format(
-            node_id
-        )
-        return tuple(self.robot.structure.predecessors(node_id))[0]
 
-
-class SphericalRobotGraph(Graph):
+class RobotSphericalGraph(RobotGraph):
     def __init__(
         self,
         robot: Robot,
@@ -200,7 +188,7 @@ class SphericalRobotGraph(Graph):
         self.base = self.base_subgraph()
         self.directed = nx.compose(self.base, self.structure)
         self.directed = nx.freeze(self.root_angle_limits(self.directed))
-        super(SphericalRobotGraph, self).__init__()
+        super(RobotSphericalGraph, self).__init__()
 
     def root_angle_limits(self, G: nx.DiGraph) -> nx.DiGraph:
         if self.dim == 2:
@@ -320,7 +308,7 @@ class SphericalRobotGraph(Graph):
         return self.complete_from_pos(pos)
 
 
-class Revolute3dRobotGraph(Graph):
+class RobotRevoluteGraph(RobotGraph):
     def __init__(
         self,
         robot: RobotRevolute,
@@ -332,7 +320,7 @@ class Revolute3dRobotGraph(Graph):
         self.directed = nx.compose(self.base, self.robot.structure)
         # self.directed = nx.freeze(self.root_angle_limits(self.directed))
         self.directed = self.root_angle_limits(self.directed)
-        super(Revolute3dRobotGraph, self).__init__()
+        super(RobotRevoluteGraph, self).__init__()
 
     def root_angle_limits(self, G: nx.DiGraph) -> nx.DiGraph:
         axis_length = self.robot.axis_length

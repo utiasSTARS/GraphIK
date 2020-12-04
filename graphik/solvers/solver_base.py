@@ -1,7 +1,7 @@
 import numpy as np
 import sympy as sp
 from abc import ABC, abstractmethod
-from graphik.graphs.graph_base import Graph
+from graphik.graphs.graph_base import RobotGraph
 
 
 class GraphProblemSolver(ABC):
@@ -18,7 +18,7 @@ class GraphProblemSolver(ABC):
         self._cost = cost
 
     @abstractmethod
-    def solve(self, graph: Graph, problem_params: dict = None):
+    def solve(self, graph: RobotGraph, problem_params: dict = None):
         pass
 
     @property
@@ -30,4 +30,3 @@ class GraphProblemSolver(ABC):
     @abstractmethod
     def params(self, params):
         pass
-

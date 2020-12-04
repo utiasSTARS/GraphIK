@@ -8,7 +8,7 @@ import unittest
 import networkx as nx
 from graphik.solvers.local_solver import LocalSolver
 from graphik.robots.robot_base import RobotSpherical
-from graphik.graphs.graph_base import SphericalRobotGraph, Revolute3dRobotGraph
+from graphik.graphs.graph_base import RobotSphericalGraph, RobotRevoluteGraph
 from graphik.utils.utils import list_to_variable_dict, list_to_variable_dict_spherical
 
 
@@ -64,9 +64,9 @@ class TestForwardKinematics(unittest.TestCase):
         problem_params_revolute = {
             "initial_guess": list_to_variable_dict(2 * n * [0.0])
         }
-        results = solver.solve(SphericalRobotGraph(robot), problem_params)
+        results = solver.solve(RobotSphericalGraph(robot), problem_params)
         results_revolute = solver_revolute.solve(
-            Revolute3dRobotGraph(robot_revolute), problem_params_revolute
+            RobotRevoluteGraph(robot_revolute), problem_params_revolute
         )
 
         self.assertTrue(np.all(np.isclose(results.x, results_revolute.x)))

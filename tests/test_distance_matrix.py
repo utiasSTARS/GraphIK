@@ -3,7 +3,7 @@ import unittest
 import networkx as nx
 from numpy.testing import assert_allclose
 from numpy import pi
-from graphik.graphs.graph_base import Revolute3dRobotGraph, SphericalRobotGraph
+from graphik.graphs.graph_base import RobotRevoluteGraph, RobotSphericalGraph
 from graphik.robots.robot_base import RobotRevolute, RobotSpherical, RobotPlanar
 from graphik.utils.dgp import dist_to_gram, MDS, pos_from_graph
 from graphik.utils.utils import (
@@ -37,7 +37,7 @@ class TestDistanceMatrix(unittest.TestCase):
             "parents": parents,
         }
         robot = RobotRevolute(params)
-        graph = Revolute3dRobotGraph(robot)
+        graph = RobotRevoluteGraph(robot)
 
         for _ in range(100):
 
@@ -89,7 +89,7 @@ class TestDistanceMatrix(unittest.TestCase):
                 "modified_dh": True,
             }
             robot = RobotRevolute(params)  # instantiate robot
-            graph = Revolute3dRobotGraph(robot)  # instantiate graph
+            graph = RobotRevoluteGraph(robot)  # instantiate graph
 
             q = robot.random_configuration()
             T = robot.get_pose(list_to_variable_dict(q), "p" + str(n))
@@ -136,7 +136,7 @@ class TestDistanceMatrix(unittest.TestCase):
                 "joint_limits_upper": lim_u,
             }
             robot = RobotSpherical(params)  # instantiate robot
-            graph = SphericalRobotGraph(robot)  # instantiate graph
+            graph = RobotSphericalGraph(robot)  # instantiate graph
 
             q = robot.random_configuration()
             T = robot.get_pose(q, f"p{n}")
@@ -191,7 +191,7 @@ class TestDistanceMatrix(unittest.TestCase):
                 "joint_limits_upper": lim_u,
             }
             robot = RobotSpherical(params)  # instantiate robot
-            graph = SphericalRobotGraph(robot)  # instantiate graph
+            graph = RobotSphericalGraph(robot)  # instantiate graph
 
             q = robot.random_configuration()
             T = robot.get_pose(q, f"p{n}")
@@ -234,7 +234,7 @@ class TestDistanceMatrix(unittest.TestCase):
             }
 
             robot = RobotPlanar(params)
-            graph = SphericalRobotGraph(robot)
+            graph = RobotSphericalGraph(robot)
 
             q = robot.random_configuration()
             D = graph.distance_matrix_from_joints(q)
@@ -271,7 +271,7 @@ class TestDistanceMatrix(unittest.TestCase):
             }
 
             robot = RobotPlanar(params)
-            graph = SphericalRobotGraph(robot)
+            graph = RobotSphericalGraph(robot)
 
             q = robot.random_configuration()
             D = graph.distance_matrix_from_joints(q)

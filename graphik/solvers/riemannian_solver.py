@@ -12,7 +12,7 @@ from graphik.utils.dgp import (
 )
 from pymanopt.solvers import ConjugateGradient
 from graphik.solvers.trust_region import TrustRegions
-from graphik.graphs.graph_base import Graph
+from graphik.graphs.graph_base import RobotGraph
 
 BetaTypes = tools.make_enum(
     "BetaTypes", "FletcherReeves PolakRibiere HestenesStiefel HagerZhang".split()
@@ -95,7 +95,7 @@ def frobenius_norm_sq(X: np.ndarray):
 
 
 class RiemannianSolver:
-    def __init__(self, graph: Graph, params=None):
+    def __init__(self, graph: RobotGraph, params=None):
 
         if params is None:
             params = {

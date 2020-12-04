@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 from numpy import pi
 from numpy.linalg import norm
 
-from graphik.graphs.graph_base import Graph, Revolute3dRobotGraph
+from graphik.graphs.graph_base import Graph, RobotRevoluteGraph
 
 # from graphik.robots.revolute import Revolute3dChain
 from graphik.robots.robot_base import RobotRevolute
@@ -124,7 +124,7 @@ if __name__ == "__main__":
     urdf_robot = RobotURDF(fname)
     robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
 
-    graph = Revolute3dRobotGraph(robot)
+    graph = RobotRevoluteGraph(robot)
     print(graph.node_ids)
     print(robot.limit_edges)
     print(robot.limited_joints)

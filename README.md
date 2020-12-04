@@ -22,16 +22,16 @@ In this example, we'll parse a [URDF file](https://industrial-training-master.re
 ```
 from graphik.robots.robot_base import RobotRevolute
 from graphik.utils.roboturdf import RobotURDF
-fname = graphik.__path__[0] + "/robots/urdfs/lwa4p.urdf"
+fname = graphik.__path__[0] + "/robots/urdfs/ur10.urdf"
 urdf_robot = RobotURDF(fname)
 robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
 ```
 
 ### 2. Instantiate a Graph Object
-GraphIK's interface between robot models and IK solvers is the abstract [`Graph`](https://github.com/utiasSTARS/graphIK/blob/main/graphik/graphs/graph_base.py) class. For the LWA4P, we'll use `Revolute3dRobotGraph`, a subclass of `Graph`.
+GraphIK's interface between robot models and IK solvers is the abstract [`Graph`](https://github.com/utiasSTARS/graphIK/blob/main/graphik/graphs/graph_base.py) class. For the LWA4P, we'll use `RobotRevoluteGraph`, a subclass of `Graph`.
 ```
-from graphik.graphs.graph_base import Revolute3dRobotGraph
-graph = Revolute3dRobotGraph(robot)
+from graphik.graphs.graph_base import RobotRevoluteGraph
+graph = RobotRevoluteGraph(robot)
 ```
 ### 3. Select and Instantiate a Solver
 The main purpose of our graphical interpretation of robot kinematics is the development of distance geometric IK solvers. One example is the [Riemannian optimization-based solver](https://arxiv.org/abs/2011.04850) implemented in [`RiemannianSolver`](https://github.com/utiasSTARS/graphIK/blob/main/graphik/solvers/riemannian_solver.py). 
@@ -44,7 +44,7 @@ solver = RiemannianSolver(graph)
 For simplicity, we can use a random configuration to get a goal pose that we know is reachable. From this configuration, we can define the objects needed by `RiemannianSolver`.
 ```
 from graphik.utils.utils import list_to_variable_dict, trans_axis
-from graphik.utils.dgp import pos_from_graph, adjacency_matrix_from_graph
+from graphik.utils.dgp import pos_from_graph, adjacency_matrix_from_graph, bound_smoothing, graph_from_pos
 q_goal = robot.random_configuration()
 G_goal = graph.realization(q_goal)
 X_goal = pos_from_graph(G_goal)
@@ -77,7 +77,7 @@ P_e = (R @ Y.T + t.reshape(3, 1)).T
 ```
 Which can be used to finally extract the angular configuration `q_sol` from our point-based solution.
 ```
-G_sol = graph.graph_from_pos(P_e)
+G_sol = graph_from_pos(P_e, graph.node_ids)
 T_g = {f"p{n}": T_goal}
 q_sol = robot.joint_angles_from_graph(G_sol, T_g)
 ```

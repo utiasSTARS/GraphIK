@@ -6,7 +6,7 @@ import graphik
 from numpy.testing import assert_allclose
 from numpy.random import rand, randint
 from numpy import pi
-from graphik.graphs.graph_base import Revolute3dRobotGraph, SphericalRobotGraph
+from graphik.graphs.graph_base import RobotRevoluteGraph, RobotSphericalGraph
 from graphik.robots.robot_base import RobotRevolute, RobotSpherical, RobotPlanar
 from graphik.utils.roboturdf import RobotURDF
 from graphik.utils.utils import (
@@ -38,7 +38,7 @@ class TestJointVariables(unittest.TestCase):
         }
         robot = RobotRevolute(params)
 
-        graph = Revolute3dRobotGraph(robot)
+        graph = RobotRevoluteGraph(robot)
         for _ in range(100):
             q_goal = robot.random_configuration()
             T_goal = {}
@@ -76,7 +76,7 @@ class TestJointVariables(unittest.TestCase):
                 "modified_dh": modified_dh,
             }
             robot = RobotRevolute(params)  # instantiate robot
-            graph = Revolute3dRobotGraph(robot)  # instantiate graph
+            graph = RobotRevoluteGraph(robot)  # instantiate graph
 
             q_goal = robot.random_configuration()
             T_goal = {}
@@ -114,7 +114,7 @@ class TestJointVariables(unittest.TestCase):
                 "joint_limits_upper": lim_u,
             }
             robot = RobotSpherical(params)  # instantiate robot
-            graph = SphericalRobotGraph(robot)  # instantiate graph
+            graph = RobotSphericalGraph(robot)  # instantiate graph
 
             q_goal = robot.random_configuration()
             X = graph.realization(q_goal)
@@ -152,7 +152,7 @@ class TestJointVariables(unittest.TestCase):
                 "joint_limits_upper": lim_u,
             }
             robot = RobotSpherical(params)  # instantiate robot
-            graph = SphericalRobotGraph(robot)  # instantiate graph
+            graph = RobotSphericalGraph(robot)  # instantiate graph
 
             q_goal = robot.random_configuration()
             X = graph.realization(q_goal)
@@ -179,7 +179,7 @@ class TestJointVariables(unittest.TestCase):
             }
 
             robot = RobotPlanar(params)
-            graph = SphericalRobotGraph(robot)
+            graph = RobotSphericalGraph(robot)
 
             q_goal = robot.random_configuration()
             # TODO: was T_goal supposed to be tested too?
@@ -210,7 +210,7 @@ class TestJointVariables(unittest.TestCase):
                 "joint_limits_lower": lim_l,
             }
             robot = RobotPlanar(params)
-            graph = SphericalRobotGraph(robot)
+            graph = RobotSphericalGraph(robot)
             q_goal = robot.random_configuration()
             T_goal = robot.get_pose(q_goal, f"p{n}").trans
             X = graph.realization(q_goal)
@@ -244,7 +244,7 @@ class TestJointVariables(unittest.TestCase):
             "modified_dh": modified_dh,
         }
         robot = RobotRevolute(params)
-        graph = Revolute3dRobotGraph(robot)
+        graph = RobotRevoluteGraph(robot)
 
         for _ in range(100):
             q_goal = robot.random_configuration()
@@ -284,7 +284,7 @@ class TestJointVariables(unittest.TestCase):
             "parents": parents,
         }
         robot = RobotRevolute(params)
-        graph = Revolute3dRobotGraph(robot)
+        graph = RobotRevoluteGraph(robot)
 
         for _ in range(100):
             q_goal = robot.random_configuration()

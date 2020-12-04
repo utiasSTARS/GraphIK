@@ -7,7 +7,7 @@ import networkx as nx
 from numpy import pi
 from numpy.linalg import norm
 from liegroups import SE3
-from graphik.graphs.graph_base import Graph, Revolute3dRobotGraph
+from graphik.graphs.graph_base import RobotGraph, RobotRevoluteGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.dgp import (
     adjacency_matrix_from_graph,
@@ -23,7 +23,7 @@ from graphik.utils.utils import (
 )
 
 
-def solve_random_problem(graph: Graph, solver: RiemannianSolver):
+def solve_random_problem(graph: RobotGraph, solver: RiemannianSolver):
     n = graph.robot.n
     axis_len = graph.robot.axis_length
     q_goal = graph.robot.random_configuration()
@@ -175,7 +175,7 @@ if __name__ == "__main__":
     urdf_robot = RobotURDF(fname)
     robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
 
-    graph = Revolute3dRobotGraph(robot)
+    graph = RobotRevoluteGraph(robot)
     # graph.distance_bounds_from_sampling()
     solver = RiemannianSolver(graph)
     num_tests = 20
