@@ -3,7 +3,7 @@ import numpy as np
 from numpy.testing import assert_array_less
 import networkx as nx
 import time
-from graphik.graphs.graph_base import RobotSphericalGraph
+from graphik.graphs.graph_base import RobotPlanarGraph
 from graphik.robots.robot_base import RobotPlanar
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.dgp import (
@@ -37,7 +37,7 @@ def random_problem_2d_chain():
     }
 
     robot = RobotPlanar(params)
-    graph = RobotSphericalGraph(robot)
+    graph = RobotPlanarGraph(robot)
     solver = RiemannianSolver(graph)
     n_tests = 100
 

@@ -4,7 +4,7 @@ from numpy import pi
 from numpy.testing import assert_array_equal
 import unittest
 
-from graphik.graphs.graph_base import RobotSphericalGraph
+from graphik.graphs.graph_base import RobotPlanarGraph
 from graphik.robots.robot_base import RobotPlanar
 
 from graphik.utils.dgp import adjacency_matrix_from_graph
@@ -38,7 +38,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
         )
 
         robot = RobotPlanar(params)
-        graph = RobotSphericalGraph(robot)
+        graph = RobotPlanarGraph(robot)
 
         q_goal = graph.robot.random_configuration()
         goals = {
@@ -77,7 +77,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
         )
 
         robot = RobotPlanar(params)
-        graph = RobotSphericalGraph(robot)
+        graph = RobotPlanarGraph(robot)
 
         q_goal = graph.robot.random_configuration()
         goals = {
@@ -437,7 +437,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
             ]
         )
         robot = RobotPlanar(params)
-        graph = RobotSphericalGraph(robot)
+        graph = RobotPlanarGraph(robot)
 
         q_goal = robot.random_configuration()
         goals = {}
@@ -798,7 +798,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
             ]
         )
         robot = RobotPlanar(params)
-        graph = RobotSphericalGraph(robot)
+        graph = RobotPlanarGraph(robot)
 
         q_goal = robot.random_configuration()
         goals = {}

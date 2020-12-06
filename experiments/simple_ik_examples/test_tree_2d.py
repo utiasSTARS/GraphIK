@@ -2,7 +2,7 @@
 import numpy as np
 from numpy.testing import assert_array_less
 import networkx as nx
-from graphik.graphs.graph_base import RobotSphericalGraph
+from graphik.graphs.graph_base import RobotPlanarGraph
 from graphik.robots.robot_base import RobotPlanar
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.utils import best_fit_transform, list_to_variable_dict
@@ -23,19 +23,7 @@ def random_problem_2d_tree():
     gen = nx.relabel_nodes(gen, {node: f"p{node}" for node in gen})
     n = gen.number_of_edges()
     parents = nx.to_dict_of_lists(gen)
-    # n = 9
-    # parents = {
-    #     "p0": ["p1"],
-    #     "p1": ["p2", "p3"],
-    #     "p2": ["p4"],
-    #     "p3": ["p5"],
-    #     "p4": ["p6", "p7"],
-    #     "p5": [],
-    #     "p6": ["p8"],
-    #     "p7": ["p9"],
-    #     "p8": [],
-    #     "p9": [],
-    # }
+
     a = list_to_variable_dict(np.ones(n))
     th = list_to_variable_dict(np.zeros(n))
     lim_u = list_to_variable_dict(np.pi * np.ones(n))
@@ -49,7 +37,7 @@ def random_problem_2d_tree():
     }
 
     robot = RobotPlanar(params)
-    graph = RobotSphericalGraph(robot)
+    graph = RobotPlanarGraph(robot)
     solver = RiemannianSolver(graph)
     n_tests = 100
     for idx in range(n_tests):

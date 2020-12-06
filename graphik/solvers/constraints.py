@@ -1,7 +1,6 @@
 from copy import deepcopy
 from graphik.graphs.graph_base import (
     RobotGraph,
-    RobotSphericalGraph,
     RobotRevoluteGraph,
 )
 import networkx as nx

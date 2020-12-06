@@ -3,7 +3,11 @@ import unittest
 import networkx as nx
 from numpy.testing import assert_allclose
 from numpy import pi
-from graphik.graphs.graph_base import RobotRevoluteGraph, RobotSphericalGraph
+from graphik.graphs.graph_base import (
+    RobotPlanarGraph,
+    RobotRevoluteGraph,
+    RobotSphericalGraph,
+)
 from graphik.robots.robot_base import RobotRevolute, RobotSpherical, RobotPlanar
 from graphik.utils.dgp import dist_to_gram, MDS, pos_from_graph
 from graphik.utils.utils import (
@@ -234,7 +238,7 @@ class TestDistanceMatrix(unittest.TestCase):
             }
 
             robot = RobotPlanar(params)
-            graph = RobotSphericalGraph(robot)
+            graph = RobotPlanarGraph(robot)
 
             q = robot.random_configuration()
             D = graph.distance_matrix_from_joints(q)
@@ -271,7 +275,7 @@ class TestDistanceMatrix(unittest.TestCase):
             }
 
             robot = RobotPlanar(params)
-            graph = RobotSphericalGraph(robot)
+            graph = RobotPlanarGraph(robot)
 
             q = robot.random_configuration()
             D = graph.distance_matrix_from_joints(q)

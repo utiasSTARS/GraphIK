@@ -6,8 +6,12 @@ import graphik
 from numpy.testing import assert_allclose
 from numpy.random import rand, randint
 from numpy import pi
-from graphik.graphs.graph_base import RobotRevoluteGraph, RobotSphericalGraph
-from graphik.robots.robot_base import RobotRevolute, RobotSpherical, RobotPlanar
+from graphik.graphs.graph_base import (
+    RobotPlanarGraph,
+    RobotRevoluteGraph,
+    RobotSphericalGraph,
+)
+from graphik.robots.robot_base import RobotPlanar, RobotRevolute, RobotSpherical
 from graphik.utils.roboturdf import RobotURDF
 from graphik.utils.utils import (
     list_to_variable_dict,
@@ -179,7 +183,7 @@ class TestJointVariables(unittest.TestCase):
             }
 
             robot = RobotPlanar(params)
-            graph = RobotSphericalGraph(robot)
+            graph = RobotPlanarGraph(robot)
 
             q_goal = robot.random_configuration()
             # TODO: was T_goal supposed to be tested too?
@@ -210,7 +214,7 @@ class TestJointVariables(unittest.TestCase):
                 "joint_limits_lower": lim_l,
             }
             robot = RobotPlanar(params)
-            graph = RobotSphericalGraph(robot)
+            graph = RobotPlanarGraph(robot)
             q_goal = robot.random_configuration()
             T_goal = robot.get_pose(q_goal, f"p{n}").trans
             X = graph.realization(q_goal)

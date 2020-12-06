@@ -3,13 +3,11 @@ import numpy as np
 from numpy.testing import assert_array_less
 import networkx as nx
 import time
-from graphik.graphs.graph_base import RobotSphericalGraph
+from graphik.graphs.graph_base import RobotPlanarGraph
 
 from graphik.robots.robot_base import RobotPlanar
 
 from graphik.solvers.riemannian_solver import RiemannianSolver
-
-# from graphik.solvers.riemannian_eq_constr import RiemannianSolver
 
 from graphik.utils.dgp import (
     dist_to_gram,
@@ -41,7 +39,7 @@ def random_problem_2d_chain():
 
     # robot = Revolute2dChain(params)
     robot = RobotPlanar(params)
-    graph = RobotSphericalGraph(robot)
+    graph = RobotPlanarGraph(robot)
     solver = RiemannianSolver(graph)
     n_tests = 100
 
@@ -56,12 +54,13 @@ def random_problem_2d_chain():
         D_goal = graph.distance_matrix_from_joints(q_goal)
         T_goal = robot.get_pose(q_goal, f"p{n}")
 
-        goals = {f"p{n-1}": X_goal[-2, :], f"p{n}": X_goal[-1, :]}
-        # goals = {f"p{n}": X_goal[-1, :]}
+        # goals = {p"f{n}": X_goal[-1, :]} # position goal
+        goals = {f"p{n-1}": X_goal[-2, :], f"p{n}": X_goal[-1, :]}  # pose goal
+
         G = graph.complete_from_pos(goals)
-        # lb, ub = bound_smoothing(G)  # will take goals and jli
         F = adjacency_matrix_from_graph(G)
 
+        # lb, ub = bound_smoothing(G)  # get lower and upper distance bounds for init
         # sol_info = solver.solve(D_goal, F, use_limits=False, bounds=(lb, ub))
         sol_info = solver.solve(D_goal, F, use_limits=False, Y_init=X_init)
         Y = sol_info["x"]

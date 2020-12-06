@@ -2,7 +2,7 @@ import numpy as np
 import networkx as nx
 import pickle
 
-from graphik.graphs.graph_base import RobotSphericalGraph
+from graphik.graphs.graph_base import RobotPlanarGraph
 from graphik.robots.robot_base import RobotPlanar
 from graphik.utils.utils import list_to_variable_dict, make_save_string
 from graphik.utils.experiments import run_multiple_experiments, process_experiment
@@ -128,7 +128,7 @@ if __name__ == "__main__":
     # Robot params
     robot = RobotPlanar(params)
     # robot.lambdify_get_pose()
-    graph = RobotSphericalGraph(robot)
+    graph = RobotPlanarGraph(robot)
 
     results = run_multiple_experiments(
         graph,
