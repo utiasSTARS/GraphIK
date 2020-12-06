@@ -264,10 +264,7 @@ class RobotSphericalGraph(RobotGraph):
         super(RobotSphericalGraph, self).__init__()
 
     def root_angle_limits(self, G: nx.DiGraph) -> nx.DiGraph:
-        if self.dim == 2:
-            ax = "x"
-        else:
-            ax = "z"
+        ax = "z"
 
         S = self.robot.structure
         l1 = la.norm(G.nodes[ax][POS])
@@ -278,52 +275,19 @@ class RobotSphericalGraph(RobotGraph):
                 ub = self.robot.ub[node]
                 lim = max(abs(ub), abs(lb))
 
-                if self.dim == 2:
-
-                    # Assumes bounds are less than pi in magnitude
-                    G.add_edge(ax, node)
-                    G[ax][node][UPPER] = l1 + l2
-                    G[ax][node][LOWER] = sqrt(
-                        l1 ** 2 + l2 ** 2 - 2 * l1 * l2 * cos(pi - lim)
-                    )
-                    G[ax][node][BOUNDED] = "below"
-                    self.robot.limit_edges.append([ax, node])
-
-                if self.dim == 3:
-                    # Assumes bounds are less than pi in magnitude
-                    G.add_edge(ax, node)
-                    G[ax][node][UPPER] = l1 + l2
-                    G[ax][node][LOWER] = sqrt(
-                        l1 ** 2 + l2 ** 2 - 2 * l1 * l2 * cos(pi - lim)
-                    )
-                    G[ax][node][BOUNDED] = "below"
-                    self.robot.limit_edges.append([ax, node])
+                # Assumes bounds are less than pi in magnitude
+                G.add_edge(ax, node)
+                G[ax][node][UPPER] = l1 + l2
+                G[ax][node][LOWER] = sqrt(
+                    l1 ** 2 + l2 ** 2 - 2 * l1 * l2 * cos(pi - lim)
+                )
+                G[ax][node][BOUNDED] = "below"
+                self.robot.limit_edges.append([ax, node])
 
         return G
 
     @staticmethod
-    def base_subgraph_2d() -> nx.DiGraph:
-        base = nx.DiGraph([("p0", "x"), ("p0", "y"), ("x", "y")])
-
-        # Invert x axis because of the way joint limits are set up, makes no difference
-        base.add_nodes_from(
-            [
-                ("p0", {POS: np.array([0, 0])}),
-                # ("x", {POS: np.array([1, 0])}),
-                ("x", {POS: np.array([-1, 0])}),
-                ("y", {POS: np.array([0, 1])}),
-            ]
-        )
-
-        for u, v in base.edges():
-            base[u][v][DIST] = la.norm(base.nodes[u][POS] - base.nodes[v][POS])
-            base[u][v][LOWER] = base[u][v][DIST]
-            base[u][v][UPPER] = base[u][v][DIST]
-
-        return base
-
-    @staticmethod
-    def base_subgraph_3d() -> nx.DiGraph:
+    def base_subgraph() -> nx.DiGraph:
         base = nx.DiGraph(
             [
                 ("p0", "x"),
@@ -348,12 +312,6 @@ class RobotSphericalGraph(RobotGraph):
             base[u][v][LOWER] = base[u][v][DIST]
             base[u][v][UPPER] = base[u][v][DIST]
         return base
-
-    def base_subgraph(self) -> nx.DiGraph:
-        if self.dim == 2:
-            return self.base_subgraph_2d()
-        else:
-            return self.base_subgraph_3d()
 
     def realization(self, x: dict) -> nx.DiGraph:
         """
