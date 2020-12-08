@@ -483,7 +483,7 @@ def run_riemannian_revolute_experiment(
     R, t = best_fit_transform(Y_opt[align_ind, :], Y_goal[align_ind, :])
     P_e = (R @ Y_opt.T + t.reshape(graph.dim, 1)).T
     G_e = graph_from_pos(P_e, graph.node_ids)
-    q_sol = graph.robot.joint_angles_from_graph(G_e, T_goal)
+    q_sol = graph.robot.joint_variables(G_e, T_goal)
 
     # If limits are used check for angle violations
     limit_violations = list_to_variable_dict(graph.robot.n * [0])

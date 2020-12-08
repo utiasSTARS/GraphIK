@@ -82,8 +82,8 @@ def ik_workspace_sample_riemannian(graph: Graph, solver: RiemannianSolver):
 
         G_sol = graph_from_pos(P_e)
         # T_g = {f"p{n}": T_goal}
-        # q_sol = robot.joint_angles_from_graph(G_sol, T_g)
-        q_sol = robot.joint_angles_from_graph(G_sol)
+        # q_sol = robot.joint_variables(G_sol, T_g)
+        q_sol = robot.joint_variables(G_sol)
         T_riemannian = robot.get_pose(list_to_variable_dict(q_sol), "p" + str(n))
         err_riemannian_pos = norm(goal - T_riemannian.trans)
 

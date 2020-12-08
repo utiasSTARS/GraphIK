@@ -79,7 +79,7 @@ Which can be used to finally extract the angular configuration `q_sol` from our 
 ```
 G_sol = graph_from_pos(P_e, graph.node_ids)
 T_g = {f"p{n}": T_goal}
-q_sol = robot.joint_angles_from_graph(G_sol, T_g)
+q_sol = robot.joint_variables(G_sol, T_g)
 ```
 
 See [experiments/simple_ik_examples/](https://github.com/utiasSTARS/graphIK/tree/main/experiments/simple_ik_examples) for further examples on other types of robots, including planar and spherical manipulators.

@@ -61,7 +61,7 @@ def solve_random_problem(graph: RobotGraph, solver: RiemannianSolver):
     G_sol = graph_from_pos(P_e, graph.node_ids)
 
     T_g = {f"p{n}": T_goal}
-    q_sol = robot.joint_angles_from_graph(G_sol, T_g)
+    q_sol = robot.joint_variables(G_sol, T_g)
 
     T_riemannian = robot.get_pose(list_to_variable_dict(q_sol), "p" + str(n))
     err_riemannian_pos = norm(T_goal.trans - T_riemannian.trans)

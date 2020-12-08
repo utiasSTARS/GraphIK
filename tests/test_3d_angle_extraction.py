@@ -102,7 +102,7 @@ class TestInverseDH(unittest.TestCase):
     #         )
     #         # print("q goal: {:}".format(q_goal))
     #         X = graph.realization(q_goal)
-    #         q_rec = robot.joint_angles_from_graph(X)
+    #         q_rec = robot.joint_variables(X)
     #         # print("q recovered: {:}".format(q_rec))
     #         # TODO: Last point's angle not observable through this method. Avoid for now
     #         self.assertIsNone(assert_allclose(q_goal[0:-1], q_rec[0:-1], rtol=1e-5))

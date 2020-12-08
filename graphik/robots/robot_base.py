@@ -1094,7 +1094,7 @@ class RobotRevolute(Robot):
                     S[ids[0]][ids[1]][LOWER] = d_min
                     S[ids[0]][ids[1]][BOUNDED] = limit
 
-    def joint_angles_from_graph(self, G: nx.Graph, T_final: dict = None) -> np.ndarray:
+    def joint_variables(self, G: nx.Graph, T_final: dict = None) -> np.ndarray:
         """
         Calculate joint angles from a complete set of point positions.
         """

@@ -52,11 +52,11 @@ def solve_random_problem(graph: Graph, solver: RiemannianSolver):
     X_e = P_e @ P_e.T
 
     G_sol = graph_from_pos(P_e, graph.node_ids)
-    # q_sol = robot.joint_angles_from_graph(G_sol, T_goal.as_matrix())
-    q_sol = robot.joint_angles_from_graph(G_sol, T_goal)
+    # q_sol = robot.joint_variables(G_sol, T_goal.as_matrix())
+    q_sol = robot.joint_variables(G_sol, T_goal)
     q_sol = dict(sorted(q_sol.items()))
 
-    # q_sol_old = robot.joint_angles_from_graph_old(G_sol, T_goal)
+    # q_sol_old = robot.joint_variables_old(G_sol, T_goal)
     # q_sol_old = dict(sorted(q_sol_old.items()))
     # print(q_sol_old)
     # print(
