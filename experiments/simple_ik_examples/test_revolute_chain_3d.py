@@ -1,23 +1,19 @@
 #!/usr/bin/env python3
 import graphik
-from graphik.utils.roboturdf import RobotURDF
 import numpy as np
-from numpy import pi
-from numpy.linalg import norm
 from graphik.graphs.graph_base import RobotGraph, RobotRevoluteGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.dgp import (
     adjacency_matrix_from_graph,
-    pos_from_graph,
-    graph_from_pos,
     bound_smoothing,
+    graph_from_pos,
+    pos_from_graph,
 )
 from graphik.utils.geometry import trans_axis
-from graphik.utils.utils import (
-    best_fit_transform,
-    list_to_variable_dict,
-    safe_arccos,
-)
+from graphik.utils.roboturdf import RobotURDF
+from graphik.utils.utils import best_fit_transform, list_to_variable_dict, safe_arccos
+from numpy import pi
+from numpy.linalg import norm
 
 
 def solve_random_problem(graph: RobotGraph, solver: RiemannianSolver):

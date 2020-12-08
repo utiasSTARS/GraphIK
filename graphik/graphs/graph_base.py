@@ -1,19 +1,15 @@
-import networkx as nx
-
-import numpy as np
-import numpy.linalg as la
-from numpy import cos, pi, sin, sqrt, arctan2
-
-from liegroups.numpy import SE3
 from abc import ABC, abstractmethod
 
+import networkx as nx
+import numpy as np
+import numpy.linalg as la
 from graphik.robots.robot_base import Robot, RobotPlanar, RobotRevolute
 from graphik.utils.constants import *
-from graphik.utils.geometry import trans_axis, rot_axis
-from graphik.utils.dgp import pos_from_graph, graph_from_pos, graph_complete_edges
-from graphik.utils.utils import (
-    list_to_variable_dict,
-)
+from graphik.utils.dgp import graph_complete_edges, graph_from_pos, pos_from_graph
+from graphik.utils.geometry import rot_axis, trans_axis
+from graphik.utils.utils import list_to_variable_dict
+from liegroups.numpy import SE3
+from numpy import cos, pi, sqrt
 
 
 class RobotGraph(ABC):
@@ -399,6 +395,8 @@ class RobotRevoluteGraph(RobotGraph):
                 G[base_node][node][LOWER] = d_min
                 G[base_node][node][BOUNDED] = limit
         return G
+
+    nx.incidence_matrix
 
     def base_subgraph(self) -> nx.DiGraph:
         axis_length = self.robot.axis_length

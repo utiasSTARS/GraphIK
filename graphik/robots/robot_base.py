@@ -1,31 +1,21 @@
 from abc import ABC, abstractmethod
+
+import networkx as nx
 import numpy as np
 import sympy as sp
-import networkx as nx
-from numpy import sqrt, sin, cos, pi, arctan2, cross
-from numpy.linalg import norm
-from liegroups.numpy._base import SEMatrixBase
-from liegroups.numpy import SO2, SO3, SE2, SE3
+from graphik.utils.geometry import cross_symb, rot_axis, roty, skew, trans_axis
+from graphik.utils.kinematics import fk_2d, fk_3d, fk_3d_sph, modified_fk_3d
 from graphik.utils.utils import (
     flatten,
     level2_descendants,
-    wraptopi,
     list_to_variable_dict,
     spherical_angle_bounds_to_revolute,
+    wraptopi,
 )
-from graphik.utils.geometry import (
-    skew,
-    cross_symb,
-    roty,
-    trans_axis,
-    rot_axis,
-)
-from graphik.utils.kinematics import (
-    fk_2d,
-    fk_3d,
-    modified_fk_3d,
-    fk_3d_sph,
-)
+from liegroups.numpy import SE2, SE3, SO2, SO3
+from liegroups.numpy._base import SEMatrixBase
+from numpy import arctan2, cos, cross, pi, sin, sqrt
+from numpy.linalg import norm
 
 LOWER = "lower_limit"
 UPPER = "upper_limit"
