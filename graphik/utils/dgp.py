@@ -19,6 +19,14 @@ def dist_to_gram(D):
     return G
 
 
+def distance_matrix_from_gram(X: np.ndarray):
+    return (np.diagonal(X)[:, np.newaxis] + np.diagonal(X)) - 2 * X
+
+
+def distance_matrix_from_pos(Y: np.ndarray):
+    return distance_matrix_from_gram(Y.dot(Y.T))
+
+
 def distance_matrix_from_graph(G: nx.DiGraph) -> np.ndarray:
     if not isinstance(G, nx.DiGraph):
         raise TypeError("Input must a DiGraph.")
