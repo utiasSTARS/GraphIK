@@ -9,6 +9,7 @@ import sympy as sp
 import numpy.linalg as la
 from numpy import pi
 from graphik.utils.utils import norm_sq
+from graphik.utils.dgp import pos_from_graph
 from graphik.robots.robot_base import RobotRevolute
 
 
@@ -96,6 +97,7 @@ def constraints_from_graph(
                 u not in ("x", "y")
                 and v not in ("x", "y")
                 and set((u, v)) != set(("p0", "q0"))
+                and ("bounded" not in G[u][v] or (G[u][v]["bounded"]))
             ):
                 p_u = (
                     G.nodes[u]["pos"]
@@ -107,7 +109,9 @@ def constraints_from_graph(
                     if v in end_effector_assignments or v in ("p0", "q0")
                     else G.nodes[v]["sym"]
                 )
-                constraints.append(sp.Eq(norm_sq(p_u - p_v), weight ** 2))
+                equality = sp.Eq(norm_sq(p_u - p_v), weight ** 2)
+                if type(equality) == sp.Equality:  # This will be a boolean expression if both values are set
+                    constraints.append(equality)
 
     return constraints
 
@@ -132,8 +136,7 @@ def angular_constraints(
             x2 = G.nodes[node]["pos"]
         else:
             x2 = G.nodes[node]["sym"]
-        # parent = robot_graph.parent_node_id(node)
-        parent = tuple(robot.structure.predecessors(node))[0]
+        parent = robot_graph.parent_node_id(node)
         if parent in end_effector_assignments:
             x1 = end_effector_assignments[parent]
         elif parent in robot_graph.base.nodes:
@@ -147,8 +150,7 @@ def angular_constraints(
             x0[0] = 1.0  # np.array([1., 0., 0.])
             x0 = G.nodes[parent]["pos"] - x0
         else:
-            # grandparent = robot_graph.parent_node_id(parent)
-            grandparent = tuple(robot.structure.predecessors(parent))[0]
+            grandparent = robot_graph.parent_node_id(parent)
             if grandparent in end_effector_assignments:
                 x0 = end_effector_assignments[grandparent]
             elif grandparent in robot_graph.base.nodes:
@@ -177,99 +179,6 @@ def angular_constraints(
     return constraints
 
 
-def edm_angular_constraints(node0, node1, node2, as_equality=False) -> list:
-    """
-    TODO: as_equality? Not sure it's needed yet
-    TODO: angular offset? Not sure it's possible or easy
-    :param node0:
-    :param node1:
-    :param node2:
-    :param as_equality:
-    :return:
-    """
-    if node0 is None:
-        assert node1.is_root(), "Node1 needs to be root for node0 to be None."
-        v0 = np.array([-1.0, 0.0, 0.0])
-    if node0.value is not None:
-        v0 = node0["pos"]
-    else:
-        v0 = node0["sym"]
-    if node2.value is not None:
-        v2 = node2["pos"]
-    else:
-        v2 = node2["sym"]
-    l1 = node1.link_length
-    l2 = node2.link_length
-    constraints = []
-    angle_max = node2.angular_limit
-    if not as_equality:
-        constraints.append(
-            norm_sq(v2 - v0) >= l1 ** 2 + l2 ** 2 + 2.0 * l1 * l2 * np.cos(angle_max)
-        )
-        constraints.append(norm_sq(v2 - v0) <= (l1 + l2) ** 2)
-    else:
-        constraints.append(
-            sp.Eq(
-                norm_sq(v2 - v0) - node2.angle_variable ** 2,
-                l1 ** 2 + l2 ** 2 + 2.0 * l2 * l2 * np.cos(angle_max),
-            )
-        )
-        constraints.append(
-            sp.Eq(norm_sq(v2 - v0) + node2.angle_variable ** 2, (l1 + l2) ** 2)
-        )
-    return constraints
-
-
-def convex_angular_constraints(node0, node1, node2, as_equality=False):
-    """
-            2
-           /
-          /
-    0----1
-
-    :param node0:
-    :param node1:
-    :param node2:
-    :param as_equality:
-    :return:
-    """
-    if node0 is None:
-        assert node1.is_root, "Node1 needs to be root for node0 to be None."
-        v_base = np.zeros((node2.dim,))
-        v_base[0] = 1.0  # np.array([1., 0., 0.])
-        v0 = node1.value - v_base
-    elif node0.value is not None:
-        v0 = node0.value
-    else:
-        v0 = node0.variable
-    if node1.value is not None:
-        v1 = node1.value
-    else:
-        v1 = node1.variable
-    if node2.value is not None:
-        v2 = node2.value
-    else:
-        v2 = node2.variable
-    l1 = node1.link_length
-    l2 = node2.link_length
-    z0 = (v1 - v0) / l1
-    z1 = (v2 - v1) / l2
-    if node2.angular_offset != 0:
-        z0 = apply_angular_offset_2d(node2.angular_offset, z0)
-    angle_max = node2.angular_limit
-    if as_equality:
-        constraints = [
-            sp.Eq(
-                norm_sq(z1 - z0) + node2.angle_variable ** 2,
-                2.0 * (1.0 - np.cos(angle_max)),
-            )
-        ]
-    else:
-        constraints = [norm_sq(z1 - z0) <= 2.0 * (1.0 - np.cos(angle_max))]
-
-    return constraints
-
-
 def nearest_neighbour_cost(
     robot_graph: RobotGraph,
     nearest_neighbour_points: dict,
@@ -279,7 +188,7 @@ def nearest_neighbour_cost(
     Produce a nearest-neighbour cost function.
     TODO: add assertions to help with checking this. For graph case, need a (6,) ndarray with p before q.
 
-    :param robot_graph: RobotGraph object describing our robot
+    :param robot_graph: Graph object describing our robot
     :param nearest_neighbour_points: dictionary mapping node ids (strings) to ndarrays
     :param nearest_angular_residuals: list of angular residuals (floats)
     :return: symbolic expression of cost
@@ -304,35 +213,24 @@ def nearest_neighbour_cost(
     return cost
 
 
-# TODO: move get_nearest_neighbour_cost/linear cost into the Solver/QcqpToSdpRelaxation classes
+def get_full_revolute_nearest_points_pose(graph, q):
+    full_points = [f'p{idx}' for idx in range(1, graph.robot.n)] + \
+                  [f'q{idx}' for idx in range(1, graph.robot.n)]
+    return get_full_revolute_nearest_point(graph, q, full_points)
 
-# def symbolic_constraints(self) -> list:
-#     """
-#     Assumes all the parameters (value vs. variable) in the nodes have been set.
-#     :param params: dictionary of parameters
-#     :return:
-#     """
-#     constraints = []
-#     for node in self.nodes[1:]:  # Root does not need to be handled
-#         node_id = node.node_id
-#         parent_node = self.parent_node(node_id)
-#         if parent_node.is_root:
-#             grandparent_node = None
-#         else:
-#             grandparent_node = self.parent_node(parent_node.node_id)
 
-#         constraints += node.distance_constraints(parent_node)
-
-#         if self.angle_constraints_are_convex:
-#             constraints += PlanarNode.convex_angular_constraints(
-#                 grandparent_node, parent_node, node, as_equality=self.as_equality
-#             )
-#         else:
-#             constraints += PlanarNode.edm_angular_constraints(
-#                 grandparent_node, parent_node, node, as_equality=self.as_equality
-#             )
-
-#     return constraints
+def get_full_revolute_nearest_point(graph, q, full_points=None):
+    nearest_points = {}
+    if full_points is None:
+        # Assume only x, y, p0, q0, and the final p (p{n+1}) is constrained
+        full_points = [f'p{idx}' for idx in range(1, graph.robot.n)] + \
+                      [f'q{idx}' for idx in range(1, graph.robot.n + 1)]
+    G = graph.realization(q)
+    P = pos_from_graph(G)
+    for idx, key in enumerate(graph.node_ids):
+        if key in full_points:
+            nearest_points[key] = P[idx, :]
+    return nearest_points
 
 
 if __name__ == "__main__":

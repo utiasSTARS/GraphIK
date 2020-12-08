@@ -4,7 +4,7 @@ from liegroups import SE3, SO3
 import numpy as np
 import trimesh
 import pyrender
-# from graphik.robots.revolute import Revolute3dChain, Revolute3dTree
+from graphik.graphs.graph_base import RobotRevoluteGraph
 from graphik.robots.robot_base import RobotRevolute
 import graphik
 from operator import itemgetter
@@ -439,3 +439,15 @@ def get_T_from_joint_axis(axis: str, switch=False):
 
 def normalize(x):
     return x / np.linalg.norm(x)
+
+
+def load_ur10():
+    fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
+    urdf_robot = RobotURDF(fname)
+    n = 6
+    ub = np.ones(n) * np.pi
+    lb = -ub
+    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
+    # print(robot.structure.nodes())
+    graph = RobotRevoluteGraph(robot)
+    return robot, graph

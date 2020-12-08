@@ -3,7 +3,6 @@ import sympy as sp
 from abc import ABC, abstractmethod
 from graphik.graphs.graph_base import RobotGraph
 
-
 class GraphProblemSolver(ABC):
     def __init__(self, params):
         self.params = params  # Uses the abstract setter
@@ -30,3 +29,5 @@ class GraphProblemSolver(ABC):
     @abstractmethod
     def params(self, params):
         pass
+
+

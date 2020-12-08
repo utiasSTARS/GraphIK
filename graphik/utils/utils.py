@@ -210,6 +210,18 @@ def bernoulli_confidence_jeffreys(n, n_success, confidence=0.95):
     return p_hat, rad
 
 
+def measure_perturbation(points: dict, points_perturbed: dict) -> (float, float):
+    squared_sum = 0.
+    max_perturb = -np.inf
+    for key in points:
+        p = points[key]
+        p_perturbed = points_perturbed[key]
+        max_perturb = max(max_perturb, max(np.abs(p-p_perturbed)))
+        squared_sum += np.linalg.norm(p - p_perturbed)**2
+
+    return np.sqrt(squared_sum), max_perturb
+
+
 if __name__ == "__main__":
 
     # print("Bernoulli: ")
