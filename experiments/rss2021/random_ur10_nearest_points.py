@@ -4,11 +4,11 @@ import pandas as pd
 import pickle
 import matplotlib.pyplot as plt
 import mosek
-from cvxik.utils.utils import list_to_variable_dict, constraint_violations, measure_perturbation
-from cvxik.solvers.constraints import constraints_from_graph, nearest_neighbour_cost, get_full_revolute_nearest_point
-from cvxik.solvers.sdp_formulations import SdpSolverParams
-from cvxik.solvers.solver_base import SdpRelaxationSolver
-from cvxik.graphs.graph_base import load_ur10
+from graphik.utils.utils import list_to_variable_dict, constraint_violations, measure_perturbation
+from graphik.solvers.constraints import constraints_from_graph, nearest_neighbour_cost, get_full_revolute_nearest_point
+from graphik.solvers.sdp_formulations import SdpSolverParams
+from graphik.solvers.solver_generic_sdp import SdpRelaxationSolver
+from graphik.utils.roboturdf import load_ur10
 
 from progress.bar import ShadyBar as Bar
 from matplotlib import rc

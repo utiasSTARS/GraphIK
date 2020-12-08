@@ -1,6 +1,6 @@
 import pickle
 import numpy as np
-from cvxik.utils.experiments import make_latex_results_table, plot_waterfall_curve, create_box_plot_from_data
+from graphik.utils.experiments import make_latex_results_table, plot_waterfall_curve, create_box_plot_from_data
 
 
 if __name__ == '__main__':

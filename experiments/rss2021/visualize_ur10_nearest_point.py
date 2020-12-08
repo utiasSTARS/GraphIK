@@ -2,12 +2,12 @@ import numpy as np
 import cvxpy as cp
 import matplotlib.pyplot as plt
 import mosek
-from cvxik.utils.utils import list_to_variable_dict, constraint_violations
-from cvxik.solvers.constraints import constraints_from_graph, nearest_neighbour_cost, get_full_revolute_nearest_point
-from cvxik.solvers.sdp_formulations import SdpSolverParams
-from cvxik.solvers.solver_base import SdpRelaxationSolver
-from cvxik.utils.robot_visualization import plot_heatmap
-from cvxik.graphs.graph_base import load_ur10
+from graphik.utils.utils import list_to_variable_dict, constraint_violations
+from graphik.solvers.constraints import constraints_from_graph, nearest_neighbour_cost, get_full_revolute_nearest_point
+from graphik.solvers.sdp_formulations import SdpSolverParams
+from graphik.solvers.solver_generic_sdp import SdpRelaxationSolver
+from graphik.utils.robot_visualization import plot_heatmap
+from graphik.utils.roboturdf import load_ur10
 
 from matplotlib import rc
 rc("font", **{"family": "serif", "serif": ["Computer Modern"], "size": 18})

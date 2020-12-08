@@ -4,7 +4,7 @@ import pandas as pd
 import pickle
 import matplotlib.pyplot as plt
 import mosek
-from graphik.utils.utils import list_to_variable_dict, measure_perturbation
+from graphik.utils.utils import list_to_variable_dict, measure_perturbation, constraint_violations
 from graphik.solvers.constraints import constraints_from_graph, nearest_neighbour_cost, get_full_revolute_nearest_point
 from graphik.solvers.sdp_formulations import SdpSolverParams
 from graphik.solvers.solver_generic_sdp import SdpRelaxationSolver
@@ -15,16 +15,6 @@ from progress.bar import ShadyBar as Bar
 from matplotlib import rc
 rc("font", **{"family": "serif", "serif": ["Computer Modern"], "size": 18})
 rc("text", usetex=True)
-
-
-def constraint_violations(constraints, solution_dict):
-    return [
-        (
-            con.args[1].subs(solution_dict) - con.args[0].subs(solution_dict),
-            con.is_Equality,
-        )
-        for con in constraints
-    ]
 
 
 def ball_perturb(points: dict, r_max=1.0):

@@ -222,6 +222,16 @@ def measure_perturbation(points: dict, points_perturbed: dict) -> (float, float)
     return np.sqrt(squared_sum), max_perturb
 
 
+def constraint_violations(constraints, solution_dict):
+    return [
+        (
+            con.args[1].subs(solution_dict) - con.args[0].subs(solution_dict),
+            con.is_Equality,
+        )
+        for con in constraints
+    ]
+
+
 if __name__ == "__main__":
 
     # print("Bernoulli: ")

@@ -1,14 +1,12 @@
-import cvxik
-from cvxik.utils.roboturdf import RobotURDF
+import graphik
+from graphik.utils.roboturdf import RobotURDF
 import numpy as np
 from numpy import pi
-import networkx as nx
 import pickle
 
-from cvxik.robots.revolute import Revolute3dChain
-from cvxik.graphs.graph_base import SphericalRobotGraph, Revolute3dRobotGraph
-from cvxik.utils.utils import list_to_variable_dict, make_save_string
-from cvxik.utils.experiments import run_multiple_experiments, process_experiment
+from graphik.graphs.graph_base import RobotRevoluteGraph
+from graphik.utils.utils import list_to_variable_dict, make_save_string
+from graphik.utils.experiments import run_multiple_experiments, process_experiment
 
 
 if __name__ == "__main__":
@@ -92,12 +90,12 @@ if __name__ == "__main__":
     n = 6
     ub = np.minimum(np.random.rand(n)*(pi/2) + pi/2, pi)
     lb = -ub
-    fname = cvxik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
+    fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
     urdf_robot = RobotURDF(fname)
 
     robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
     print(robot.structure.nodes())
-    graph = Revolute3dRobotGraph(robot)
+    graph = RobotRevoluteGraph(robot)
 
     save_string = "results/ur10_" + make_save_string(save_string_properties)
 
