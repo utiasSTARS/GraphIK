@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 import graphik
-from graphik.robots.robot_base import RobotRevolute
-from graphik.utils.roboturdf import RobotURDF, plot_balls_from_points
+from graphik.utils.roboturdf import RobotURDF
 import numpy as np
-import networkx as nx
 from numpy import pi
 from numpy.linalg import norm
-from liegroups import SE3
 from graphik.graphs.graph_base import RobotGraph, RobotRevoluteGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.dgp import (
