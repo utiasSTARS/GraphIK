@@ -28,8 +28,8 @@ def linear_matrix_equality_with_anchor(i: int, n_vars: int, ee: np.ndarray) -> n
     A = np.zeros((n_vars, n_vars))
     d = len(ee)
     A[i, i] = 1.
-    A[i, -d:] = ee
-    A[-d:, i] = ee
+    A[i, -d:] = -ee
+    A[-d:, i] = -ee
     return A
 
 
