@@ -189,11 +189,11 @@ def constraint_clique_dict_to_sdp(constraint_clique_dict: dict, nearest_points: 
             constraint_clique_dict[clique][0] = augment_square_matrix(constraint_clique_dict[clique][0], d)
             constraint_clique_dict[clique][3] = True
 
-    # Construct the cost function
+
     remaining_ees = list(nearest_points.keys())
     for clique in constraint_clique_dict:
         A, b, mapping, is_augmented = constraint_clique_dict[clique]
-        # if is_augmented:
+        # Construct the cost function
         C_clique = []
         for ee in clique:
             if ee in remaining_ees:
@@ -208,7 +208,7 @@ def constraint_clique_dict_to_sdp(constraint_clique_dict: dict, nearest_points: 
                 remaining_ees.remove(ee)
         if len(C_clique) > 0:
             sdp_cost_map[clique] = C_clique
-
+        # Construct the SDP variable and constraints
         Z_clique = cp.Variable(A[0].shape, PSD=True)
         sdp_variable_map[clique] = Z_clique
         constraints_clique = [cp.trace(A[idx]@Z_clique) == b[idx] for idx in range(len(A))]
@@ -219,19 +219,35 @@ def constraint_clique_dict_to_sdp(constraint_clique_dict: dict, nearest_points: 
     return sdp_variable_map, sdp_constraints_map, sdp_cost_map
 
 
-def end_effector_cost(constraint_clique_dict: dict, sdp_variable_map: dict, end_effectors: dict):
-    """
-    For nearest-point, assign targets to all variables through end_effectors.
-    For nuclear norm, assign all variables to target 0 through end_effectors.
-    Otherwise, just use the subset that actually corresponds to end_effectors.
-    """
-    remaining_ees = list(end_effectors.keys())
+def form_sdp_problem(constraint_clique_dict, sdp_variable_map, sdp_constraints_map, sdp_cost_map, d) -> cp.Problem:
+    constraints = [cons for cons_clique in sdp_constraints_map.values() for cons in cons_clique]
+    # Link up the repeated values via equality constraints
+    seen_vars = {}
     for clique in constraint_clique_dict:
-        _, _, mapping = constraint_clique_dict[clique]
+        _, _, mapping, is_augmented = constraint_clique_dict[clique]
+        for var in mapping:
+            if type(var) == str:
+                if var in seen_vars:
+                    # Do linking
+                    _, _, target_mapping, target_is_augmented = constraint_clique_dict[seen_vars[var]]
+                    Z = sdp_variable_map[clique]
+                    Z_target = sdp_variable_map[seen_vars[var]]
+                    constraints += [Z[mapping[var], mapping[var]] == Z_target[target_mapping[var], target_mapping[var]]]
+                    if is_augmented and target_is_augmented:
+                        constraints += [Z[mapping[var], -d:] == Z_target[-d:, target_mapping[var]]]
+                else:
+                    seen_vars[var] = clique
 
-        for ee in remaining_ees:
-            if ee in clique:
-                Z_ee = sdp_variable_map[clique]
+    # Convert constrain matrices to cvxpy cost function
+    cost = 0.
+    for clique in sdp_cost_map:
+        C_list = sdp_cost_map[clique]
+        C_clique = 0.
+        for C in C_list:
+            C_clique += C
+        cost += cp.trace(C@sdp_variable_map[clique])
+
+    return cp.Problem(cp.Minimize(cost), constraints)
 
 
 if __name__ == '__main__':
@@ -257,3 +273,4 @@ if __name__ == '__main__':
     sdp_variable_map, sdp_constraints_map, sdp_cost_map = constraint_clique_dict_to_sdp(constraint_clique_dict,
                                                                                         interior_nearest_points)
 
+    prob = form_sdp_problem(constraint_clique_dict, sdp_variable_map, sdp_constraints_map, sdp_cost_map, 3)
