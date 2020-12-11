@@ -55,7 +55,7 @@ def adjacency_matrix_from_graph(G: nx.DiGraph) -> np.ndarray:
     )
 
 
-def pos_from_graph(G: nx.DiGraph) -> np.ndarray:
+def pos_from_graph(G: nx.DiGraph, node_names=None) -> np.ndarray:
     """
     Returns an n x m matrix of node positions from a given graph,
     where n is the number of nodes and m is the point dimension.
@@ -64,8 +64,10 @@ def pos_from_graph(G: nx.DiGraph) -> np.ndarray:
     """
     # TODO add check to see if all POS defined
     # X = np.zeros([len(G), self.dim])  # matrix of vertex positions
+    if not node_names:
+        node_names = list(G)
     X = []
-    for idx, name in enumerate(G):
+    for idx, name in enumerate(node_names):
         X += [list(G.nodes[name][POS])]
     return np.array(X)
 
