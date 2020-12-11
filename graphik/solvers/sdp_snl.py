@@ -275,7 +275,7 @@ if __name__ == '__main__':
     ee_cost = False  # Whether to treat the end-effectors as variables with targets in the cost
 
     # robot, graph = load_ur10()
-    n = 2
+    n = 3
     dof = n
     a_full = [0, -0.612, -0.5723, 0, 0, 0]
     d_full = [0.1273, 0, 0, 0.1639, 0.1157, 0.0922]
@@ -321,5 +321,5 @@ if __name__ == '__main__':
                                                                                         interior_nearest_points)
 
     prob = form_sdp_problem(constraint_clique_dict, sdp_variable_map, sdp_constraints_map, sdp_cost_map, 3)
+    prob.solve(verbose=True, solver='CVXOPT')
 
-    sol = prob.solve(verbose=True, solver='CVXOPT')
