@@ -7,6 +7,7 @@ import cvxpy as cp
 
 from graphik.utils.roboturdf import load_ur10
 from graphik.robots.robot_base import RobotRevolute
+from graphik.graphs.graph_base import RobotRevoluteGraph
 from graphik.solvers.constraints import get_full_revolute_nearest_point
 
 
@@ -270,14 +271,42 @@ def form_sdp_problem(constraint_clique_dict, sdp_variable_map, sdp_constraints_m
 
 if __name__ == '__main__':
     # TODO: unit test on random q's with all 4 combos of sparse and ee_cost values for UR10
-    sparse = True  # Whether to exploit chordal sparsity in the SDP formulation
+    sparse = False  # Whether to exploit chordal sparsity in the SDP formulation
     ee_cost = False  # Whether to treat the end-effectors as variables with targets in the cost
-    robot, graph = load_ur10()
+
+    # robot, graph = load_ur10()
+    n = 2
+    dof = n
+    a_full = [0, -0.612, -0.5723, 0, 0, 0]
+    d_full = [0.1273, 0, 0, 0.1639, 0.1157, 0.0922]
+    al_full = [np.pi / 2, 0, 0, np.pi / 2, -np.pi / 2, 0]
+    th_full = [0, 0, 0, 0, 0, 0]
+    a = a_full[0:n]
+    d = d_full[0:n]
+    al = al_full[0:n]
+    th = th_full[0:n]
+    ub = (np.pi) * np.ones(n)
+    lb = -ub
+    ub = np.minimum(np.random.rand(n) * (np.pi / 2) + np.pi / 2, np.pi)
+    lb = -ub
+    modified_dh = False
+    params = {
+        "a": a[:n],
+        "alpha": al[:n],
+        "d": d[:n],
+        "theta": th[:n],
+        "lb": lb[:n],
+        "ub": ub[:n],
+        "modified_dh": modified_dh,
+    }
+    robot = RobotRevolute(params)
+    graph = RobotRevoluteGraph(robot)
+
     q = robot.random_configuration()
     full_points = [f'p{idx}' for idx in range(0, graph.robot.n + 1)] + \
                   [f'q{idx}' for idx in range(0, graph.robot.n + 1)]
     input_vals = get_full_revolute_nearest_point(graph, q, full_points)
-    end_effectors = {key: input_vals[key] for key in ['p0', 'q0', 'p6', 'q6']}
+    end_effectors = {key: input_vals[key] for key in ['p0', 'q0', f'p{robot.n}', f'q{robot.n}']}
 
     constraint_clique_dict = distance_constraints(robot, end_effectors, sparse, ee_cost)
     A, b, mapping, _ = list(constraint_clique_dict.values())[0]
@@ -287,7 +316,7 @@ if __name__ == '__main__':
         print(evaluate_linear_map(clique, A, b, mapping, input_vals))
 
     # Make cost function stuff
-    interior_nearest_points = {key: input_vals[key] for key in input_vals if key not in ['p0', 'q0', 'p6', 'q6']}
+    interior_nearest_points = {key: input_vals[key] for key in input_vals if key not in ['p0', 'q0', f'p{robot.n}', f'q{robot.n}']}
     sdp_variable_map, sdp_constraints_map, sdp_cost_map = constraint_clique_dict_to_sdp(constraint_clique_dict,
                                                                                         interior_nearest_points)
 
