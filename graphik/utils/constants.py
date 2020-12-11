@@ -1,6 +1,8 @@
 LOWER = "lower_limit"
 UPPER = "upper_limit"
 BOUNDED = "bounded"
+OBSTACLE = "obstacle"
+RADIUS = "radius"
 DIST = "weight"
 POS = "pos"
 ROOT = "p0"

@@ -148,6 +148,24 @@ class RobotGraph(ABC):
 
         return graph_complete_edges(G)
 
+    # def distance_bound_matrices(self):
+    #     """
+    #     Generates a matrices of distance bounds induced by joint variables.
+    #     """
+    #     L = np.zeros([self.n_nodes, self.n_nodes])  # fake distance matrix
+    #     U = np.zeros([self.n_nodes, self.n_nodes])  # fake distance matrix
+    #     G = self.directed
+    #     for val in self.robot.limit_edges:
+    #         udx = self.node_ids.index(val[0])
+    #         vdx = self.node_ids.index(val[1])
+    #         if "below" in G[val[0]][val[1]][BOUNDED]:
+    #             L[udx, vdx] = G[val[0]][val[1]][LOWER] ** 2
+    #             L[vdx, udx] = L[udx, vdx]
+    #         if "above" in G[val[0]][val[1]][BOUNDED]:
+    #             U[udx, vdx] = G[val[0]][val[1]][UPPER] ** 2
+    #             U[vdx, udx] = U[udx, vdx]
+    #     return L, U
+
     def distance_bound_matrices(self):
         """
         Generates a matrices of distance bounds induced by joint variables.
@@ -155,16 +173,36 @@ class RobotGraph(ABC):
         L = np.zeros([self.n_nodes, self.n_nodes])  # fake distance matrix
         U = np.zeros([self.n_nodes, self.n_nodes])  # fake distance matrix
         G = self.directed
-        for val in self.robot.limit_edges:
-            udx = self.node_ids.index(val[0])
-            vdx = self.node_ids.index(val[1])
-            if "below" in G[val[0]][val[1]][BOUNDED]:
-                L[udx, vdx] = G[val[0]][val[1]][LOWER] ** 2
-                L[vdx, udx] = L[udx, vdx]
-            if "above" in G[val[0]][val[1]][BOUNDED]:
-                U[udx, vdx] = G[val[0]][val[1]][UPPER] ** 2
-                U[vdx, udx] = U[udx, vdx]
+        for e1, e2, data in G.edges(data=True):
+            if BOUNDED in data:
+                udx = self.node_ids.index(e1)
+                vdx = self.node_ids.index(e2)
+                if "below" in data[BOUNDED]:
+                    L[udx, vdx] = data[LOWER] ** 2
+                    L[vdx, udx] = L[udx, vdx]
+                if "above" in data[BOUNDED]:
+                    U[udx, vdx] = data[UPPER] ** 2
+                    U[vdx, udx] = U[udx, vdx]
         return L, U
+
+    def add_fixed_node(self, name: str, data: dict):
+        if POS not in data:
+            raise KeyError("Node needs to gave a position to be added.")
+
+        self.directed.add_nodes_from([(name, data)])
+        for nname, ndata in self.directed.nodes(data=True):
+            if POS in ndata and nname != name:
+                self.directed.add_edge(nname, name)
+                self.directed[nname][name][DIST] = la.norm(ndata[POS] - data[POS])
+
+    def add_spherical_obstacle(self, name: str, position: np.ndarray, radius: float):
+        self.add_fixed_node(name, {POS: position, OBSTACLE: True})
+        for node, data in self.directed.nodes(data=True):
+            if node != name:
+                self.directed.add_edge(node, name)
+                self.directed[node][name][BOUNDED] = "below"
+                self.directed[node][name][LOWER] = radius
+                self.directed[node][name][UPPER] = 100
 
 
 class RobotPlanarGraph(RobotGraph):
@@ -174,7 +212,8 @@ class RobotPlanarGraph(RobotGraph):
         self.structure = robot.structure
         self.base = self.base_subgraph()
         self.directed = nx.compose(self.base, self.structure)
-        self.directed = nx.freeze(self.root_angle_limits(self.directed))
+        # self.directed = nx.freeze(self.root_angle_limits(self.directed))
+        self.directed = self.root_angle_limits(self.directed)
         super(RobotPlanarGraph, self).__init__()
 
     @staticmethod
