@@ -5,13 +5,13 @@ import pandas as pd
 import pickle
 import matplotlib.pyplot as plt
 import mosek
-from cvxik.utils.utils import list_to_variable_dict, constraint_violations, measure_perturbation
-from cvxik.solvers.constraints import constraints_from_graph, nearest_neighbour_cost, get_full_revolute_nearest_point
-from cvxik.solvers.sdp_formulations import SdpSolverParams
-from cvxik.solvers.solver_base import SdpRelaxationSolver
-from cvxik.graphs.graph_base import load_ur10, Revolute3dRobotGraph
-from cvxik.utils.sdp_experiments import sdp_sol_to_point_matrix
-from cvxik.robots.revolute import RobotRevolute
+from graphik.utils.utils import list_to_variable_dict, constraint_violations, measure_perturbation
+from graphik.solvers.constraints import constraints_from_graph, nearest_neighbour_cost, get_full_revolute_nearest_point
+from graphik.solvers.sdp_formulations import SdpSolverParams
+from graphik.solvers.solver_generic_sdp import SdpRelaxationSolver
+from graphik.utils.roboturdf import load_ur10
+from graphik.graphs.graph_base import RobotRevoluteGraph
+from graphik.robots.robot_base import RobotRevolute
 
 from progress.bar import ShadyBar as Bar
 from matplotlib import rc
@@ -50,7 +50,7 @@ if __name__ == '__main__':
         "modified_dh": modified_dh,
     }
     robot = RobotRevolute(params)
-    graph = Revolute3dRobotGraph(robot)
+    graph = RobotRevoluteGraph(robot)
 
     q = robot.random_configuration()
 

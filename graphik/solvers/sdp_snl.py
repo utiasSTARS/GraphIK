@@ -186,36 +186,39 @@ def constraint_clique_dict_to_sdp(constraint_clique_dict: dict, nearest_points: 
     cliques_to_cover = greedy_set_cover(cliques_remaining, targets_to_cover)
     for clique in constraint_clique_dict:
         if clique in cliques_to_cover:
-            constraint_clique_dict[clique][0] = augment_square_matrix(constraint_clique_dict[clique][0], d)
-            constraint_clique_dict[clique][3] = True
+            for idx, A_matrix in enumerate(constraint_clique_dict[clique][0]):
+                constraint_clique_dict[clique][0][idx] = augment_square_matrix(A_matrix, d)
 
+            # Replace augmented variable (sloppy)
+            new_tuple = constraint_clique_dict[clique][0], constraint_clique_dict[clique][1],\
+                        constraint_clique_dict[clique][2], True
+            constraint_clique_dict[clique] = new_tuple
 
-    remaining_ees = list(nearest_points.keys())
+    remaining_nearest_points = list(nearest_points.keys())
     for clique in constraint_clique_dict:
         A, b, mapping, is_augmented = constraint_clique_dict[clique]
-        # Construct the cost function
-        C_clique = []
-        for ee in clique:
-            if ee in remaining_ees:
-                # if not np.all(nearest_points[ee] == np.zeros(d)):
-                C = np.zeros(A[0].shape)
-                C[mapping[ee], mapping[ee]] = 1.
-                if np.any(nearest_points[ee] != np.zeros(d)):
-                    assert is_augmented
-                    C[mapping[ee], -d:] = nearest_points[ee]
-                    C[-d:, mapping[ee]] = nearest_points[ee]
-                C_clique.append(C)
-                remaining_ees.remove(ee)
-        if len(C_clique) > 0:
-            sdp_cost_map[clique] = C_clique
         # Construct the SDP variable and constraints
         Z_clique = cp.Variable(A[0].shape, PSD=True)
         sdp_variable_map[clique] = Z_clique
         constraints_clique = [cp.trace(A[idx]@Z_clique) == b[idx] for idx in range(len(A))]
         if is_augmented:
             constraints_clique += [Z_clique[-d:, -d:] == np.eye(d)]
+            # Construct the cost function
+            C_clique = []
+            for joint in clique:
+                if joint in remaining_nearest_points:
+                    # if not np.all(nearest_points[ee] == np.zeros(d)):
+                    C = np.zeros(A[0].shape)
+                    C[mapping[joint], mapping[joint]] = 1.
+                    if is_augmented and np.any(nearest_points[joint] != np.zeros(d)):
+                        C[mapping[joint], -d:] = nearest_points[joint]
+                        C[-d:, mapping[joint]] = nearest_points[joint]
+                    C_clique.append(C)
+                    remaining_nearest_points.remove(joint)
+            if len(C_clique) > 0:
+                sdp_cost_map[clique] = C_clique
         sdp_constraints_map[clique] = constraints_clique
-    # constraints = [cons for cons_clique in constraints_clique for cons in cons_clique]
+    assert len(remaining_nearest_points) == 0
     return sdp_variable_map, sdp_constraints_map, sdp_cost_map
 
 
@@ -225,20 +228,35 @@ def form_sdp_problem(constraint_clique_dict, sdp_variable_map, sdp_constraints_m
     seen_vars = {}
     for clique in constraint_clique_dict:
         _, _, mapping, is_augmented = constraint_clique_dict[clique]
-        for var in mapping:
-            if type(var) == str:
-                if var in seen_vars:
-                    # Do linking
-                    _, _, target_mapping, target_is_augmented = constraint_clique_dict[seen_vars[var]]
-                    Z = sdp_variable_map[clique]
-                    Z_target = sdp_variable_map[seen_vars[var]]
-                    constraints += [Z[mapping[var], mapping[var]] == Z_target[target_mapping[var], target_mapping[var]]]
-                    if is_augmented and target_is_augmented:
-                        constraints += [Z[mapping[var], -d:] == Z_target[-d:, target_mapping[var]]]
-                else:
-                    seen_vars[var] = clique
 
-    # Convert constrain matrices to cvxpy cost function
+        # Find overlap (all shared variables) and equate their cross terms as well
+        overlapping_vars = list(set(mapping.keys()).intersection(seen_vars.keys()))  # Overlap of clique's vars and seen_vars
+        overlapping_vars_cliques = [seen_vars[var] for var in overlapping_vars]  # Cliques of seen_vars that overlap
+        assert len(np.unique(overlapping_vars_cliques)) <= 1  # Assert that 1 or 0 cliques exist
+        if len(np.unique(overlapping_vars_cliques)) == 1:
+            # Add the linking equalities
+            target_clique = overlapping_vars_cliques[0]
+            _, _, target_mapping, target_is_augmented = constraint_clique_dict[target_clique]
+            Z = sdp_variable_map[clique]
+            Z_target = sdp_variable_map[target_clique]
+            for idx, var1 in enumerate(overlapping_vars):
+                for jdx, var2 in enumerate(overlapping_vars[idx:]):  # Don't double count
+                    if idx == jdx:
+                        constraints += [Z[mapping[var1], mapping[var1]] ==
+                                        Z_target[target_mapping[var1], target_mapping[var1]]]
+                        if is_augmented and target_is_augmented:
+                            constraints += [Z[mapping[var1], -d:] == Z_target[-d:, target_mapping[var1]]]
+                    else:
+                        constraints += [
+                            Z[mapping[var1], mapping[var2]] == Z_target[target_mapping[var1], target_mapping[var2]],
+                            Z[mapping[var2], mapping[var1]] == Z_target[target_mapping[var2], target_mapping[var1]]
+                        ]
+        # Add all vars to seen_vars
+        for var in clique:
+            if var not in seen_vars:
+                seen_vars[var] = clique
+
+    # Convert constraint matrices to cvxpy cost function
     cost = 0.
     for clique in sdp_cost_map:
         C_list = sdp_cost_map[clique]
@@ -252,7 +270,7 @@ def form_sdp_problem(constraint_clique_dict, sdp_variable_map, sdp_constraints_m
 
 if __name__ == '__main__':
     # TODO: unit test on random q's with all 4 combos of sparse and ee_cost values for UR10
-    sparse = False  # Whether to exploit chordal sparsity in the SDP formulation
+    sparse = True  # Whether to exploit chordal sparsity in the SDP formulation
     ee_cost = False  # Whether to treat the end-effectors as variables with targets in the cost
     robot, graph = load_ur10()
     q = robot.random_configuration()
@@ -274,3 +292,5 @@ if __name__ == '__main__':
                                                                                         interior_nearest_points)
 
     prob = form_sdp_problem(constraint_clique_dict, sdp_variable_map, sdp_constraints_map, sdp_cost_map, 3)
+
+    sol = prob.solve(verbose=True, solver='CVXOPT')
