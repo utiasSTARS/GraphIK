@@ -12,17 +12,11 @@ from graphik.utils.utils import (
     spherical_angle_bounds_to_revolute,
     wraptopi,
 )
+from graphik.utils.constants import *
 from liegroups.numpy import SE2, SE3, SO2, SO3
 from liegroups.numpy._base import SEMatrixBase
 from numpy import arctan2, cos, cross, pi, sin, sqrt
 from numpy.linalg import norm
-
-LOWER = "lower_limit"
-UPPER = "upper_limit"
-BOUNDED = "bounded"
-DIST = "weight"
-POS = "pos"
-ROOT = "p0"
 
 
 class Robot(ABC):
@@ -59,6 +53,14 @@ class Robot(ABC):
         determined by lb and ub.
         """
         raise NotImplementedError
+
+    def end_effector_pos(self, q: dict) -> dict:
+        T_all = self.get_all_poses(q)
+        goals = {}
+        for ee in self.end_effectors:
+            goals[ee[0]] = T_all[ee[0]].trans
+            goals[ee[1]] = T_all[ee[1]].trans
+        return goals
 
     @property
     def n(self) -> int:
@@ -297,6 +299,8 @@ class RobotPlanar(Robot):
         ]
         chain_graph = nx.DiGraph()
         chain_graph.add_weighted_edges_from(edg_lst)
+        nx.set_node_attributes(chain_graph, "robot", TYPE)
+        # nx.set_node_attributes(chain_graph, None, POS)
         return chain_graph
 
     def tree_graph(self, parents: dict) -> nx.DiGraph:
@@ -306,7 +310,9 @@ class RobotPlanar(Robot):
         """
         tree_graph = nx.DiGraph(parents)
         for parent, child in tree_graph.edges():
-            tree_graph.edges[parent, child]["weight"] = self.a[child]
+            tree_graph.edges[parent, child][DIST] = self.a[child]
+        nx.set_node_attributes(tree_graph, "robot", TYPE)
+        # nx.set_node_attributes(tree_graph, None, POS)
         return tree_graph
 
     @property
@@ -524,6 +530,7 @@ class RobotSpherical(Robot):
         ]
         chain_graph = nx.DiGraph()
         chain_graph.add_weighted_edges_from(edg_lst)
+        nx.set_node_attributes(chain_graph, "robot", TYPE)
         return chain_graph
 
     def tree_graph(self) -> nx.DiGraph:
@@ -533,7 +540,8 @@ class RobotSpherical(Robot):
         """
         tree_graph = nx.DiGraph(self.parents)
         for parent, child in tree_graph.edges():
-            tree_graph.edges[parent, child]["weight"] = self.d[child]
+            tree_graph.edges[parent, child][DIST] = self.d[child]
+        nx.set_node_attributes(tree_graph, "robot", TYPE)
         return tree_graph
 
     @property
@@ -571,13 +579,6 @@ class RobotSpherical(Robot):
         d = np.array([self.d[node] for node in path_nodes])
 
         return fk_3d_sph(a, alpha, d, q)
-
-    # def get_all_poses(self, joint_angles: dict) -> dict:
-    #     T = {"p0": SE3.identity()}
-    #     for ee in self.end_effectors:
-    #         for node in self.kinematic_map["p0"][ee[0]][1:]:
-    #             T[node] = self.get_pose(joint_angles, node)
-    #     return T
 
     def joint_variables(self, G: nx.Graph, T_final: dict = None) -> np.ndarray:
         """
@@ -955,6 +956,9 @@ class RobotRevolute(Robot):
         # Delete positions used for weights
         for u in S.nodes:
             del S.nodes[u][POS]
+
+        # Set node type to robot
+        nx.set_node_attributes(S, "robot", TYPE)
         return S
 
     def euclidean_cost_hessian(self, J: dict, K: dict, r: dict):

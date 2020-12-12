@@ -74,7 +74,6 @@ def random_problem_2d_chain():
         P_e = (R @ Y.T + t.reshape(2, 1)).T
         # X_e = P_e @ P_e.T
         G_e = graph_from_pos(P_e, graph.node_ids)
-
         q_sol = robot.joint_variables(G_e)
 
         T_riemannian = robot.get_pose(list_to_variable_dict(q_sol), "p" + f"{robot.n}")

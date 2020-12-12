@@ -48,6 +48,24 @@ class RobotGraph(ABC):
         self._directed = G
 
     @property
+    def base(self) -> nx.DiGraph:
+        return self._base
+
+    @base.setter
+    def base(self, G: nx.DiGraph):
+        self._base = G
+
+    @property
+    def obstacles(self) -> nx.DiGraph:
+        if not self._obstacles:
+            self.obstacles = nx.empty_graph()
+        return self.obstacles
+
+    @obstacles.setter
+    def obstacles(self, G: nx.DiGraph):
+        self._obstacles = G
+
+    @property
     def dim(self) -> int:
         """
         :returns: Expected lowest embedding dimension of the graph
@@ -196,11 +214,16 @@ class RobotGraph(ABC):
                 self.directed[nname][name][DIST] = la.norm(ndata[POS] - data[POS])
 
     def add_spherical_obstacle(self, name: str, position: np.ndarray, radius: float):
-        self.add_fixed_node(name, {POS: position, OBSTACLE: True})
-        for node, data in self.directed.nodes(data=True):
-            if node != name:
+
+        # Add a fixed node representing the obstacle to the graph
+        self.add_fixed_node(name, {POS: position, TYPE: "obstacle"})
+
+        # Set lower (and upper) distance limits to robot nodes
+        for node, node_type in self.directed.nodes(data=TYPE):
+            if node_type == "robot":
+                print(node)
                 self.directed.add_edge(node, name)
-                self.directed[node][name][BOUNDED] = "below"
+                self.directed[node][name][BOUNDED] = ["below"]
                 self.directed[node][name][LOWER] = radius
                 self.directed[node][name][UPPER] = 100
 
@@ -224,9 +247,8 @@ class RobotPlanarGraph(RobotGraph):
         base.add_nodes_from(
             [
                 ("p0", {POS: np.array([0, 0])}),
-                # ("x", {POS: np.array([1, 0])}),
-                ("x", {POS: np.array([-1, 0])}),
-                ("y", {POS: np.array([0, 1])}),
+                ("x", {POS: np.array([-1, 0]), TYPE: "base"}),
+                ("y", {POS: np.array([0, 1]), TYPE: "base"}),
             ]
         )
 
@@ -336,10 +358,10 @@ class RobotSphericalGraph(RobotGraph):
         base.add_nodes_from(
             [
                 ("p0", {POS: np.array([0, 0, 0])}),
-                ("x", {POS: np.array([1, 0, 0])}),
-                ("y", {POS: np.array([0, 1, 0])}),
+                ("x", {POS: np.array([1, 0, 0]), TYPE: "base"}),
+                ("y", {POS: np.array([0, 1, 0]), TYPE: "base"}),
                 # ("z", {POS: np.array([0, 0, 1])}),
-                ("z", {POS: np.array([0, 0, -1])}),
+                ("z", {POS: np.array([0, 0, -1]), TYPE: "base"}),
             ]
         )
         for u, v in base.edges():
@@ -452,8 +474,8 @@ class RobotRevoluteGraph(RobotGraph):
         base.add_nodes_from(
             [
                 ("p0", {POS: np.array([0, 0, 0])}),
-                ("x", {POS: np.array([axis_length, 0, 0])}),
-                ("y", {POS: np.array([0, -axis_length, 0])}),
+                ("x", {POS: np.array([axis_length, 0, 0]), TYPE: "base"}),
+                ("y", {POS: np.array([0, -axis_length, 0]), TYPE: "base"}),
                 ("q0", {POS: np.array([0, 0, axis_length])}),
             ]
         )

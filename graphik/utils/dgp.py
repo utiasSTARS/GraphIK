@@ -2,14 +2,17 @@
 import numpy as np
 import networkx as nx
 import math
+from graphik.utils.constants import *
+from graphik.utils.utils import best_fit_transform
 
-LOWER = "lower_limit"
-UPPER = "upper_limit"
-BOUNDED = "bounded"
-DIST = "weight"
-POS = "pos"
-ROOT = "p0"
-UNDEFINED = None
+
+def orthogonal_procrustes(G1, G2):
+    Y = pos_from_graph(G1, list(G1))
+    X = pos_from_graph(G2, list(G1))
+    R, t = best_fit_transform(X, Y)
+    X = pos_from_graph(G2, list(G2))
+    P_e = (R @ X.T + t.reshape(2, 1)).T
+    return graph_from_pos(P_e, list(G2))  # not really order-dependent
 
 
 def dist_to_gram(D):
@@ -118,6 +121,11 @@ def graph_complete_edges(G: nx.DiGraph) -> nx.DiGraph:
         for jdx, v in enumerate(G.nodes()):
             # if both nodes have known positions
             if (POS in G.nodes[u]) and (POS in G.nodes[v]) and jdx > idx:
+                # if (
+                #     (G.nodes[u][POS] is not None)
+                #     and (G.nodes[v][POS] is not None)
+                #     and jdx > idx
+                # ):
                 # if a distance edge exists already in the other direction
                 if G.has_edge(v, u):
                     if DIST in G[v][u]:
@@ -131,6 +139,25 @@ def graph_complete_edges(G: nx.DiGraph) -> nx.DiGraph:
                     ]
                 )
 
+    # TODO get back to pre-setting all node positions to None
+    # for u, pos_u in G.nodes(data=POS):
+    #     for v, pos_v in G.nodes(data=POS):
+    #         # if both nodes have known positions
+    #         if (pos_u is not None) and (pos_v is not None) and u != v:
+    #             # if a distance edge exists already in the other direction
+    #             if G.has_edge(v, u):
+    #                 if DIST in G[v][u]:
+    #                     continue
+    #             else:
+    #                 d = np.linalg.norm(pos_u - pos_v)
+    #                 G.add_edges_from(
+    #                     [
+    #                         (u, v, {DIST: d}),
+    #                         (u, v, {LOWER: d}),
+    #                         (u, v, {UPPER: d}),
+    #                     ]
+    #                 )
+    # print(distance_matrix_from_graph(G))
     return G
 
 

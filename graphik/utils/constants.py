@@ -1,7 +1,7 @@
 LOWER = "lower_limit"
 UPPER = "upper_limit"
 BOUNDED = "bounded"
-OBSTACLE = "obstacle"
+TYPE = "type"
 RADIUS = "radius"
 DIST = "weight"
 POS = "pos"
