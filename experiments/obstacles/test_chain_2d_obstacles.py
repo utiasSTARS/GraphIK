@@ -94,82 +94,78 @@ def random_problem_2d_chain():
     ax = plot_obstacles(obstacles)
     solver = RiemannianSolver(graph)
     n_tests = 500
-    x = np.linspace(-5, 5, 50)
-    y = np.linspace(-5, 5, 50)
-    xv, yv = np.meshgrid(x, y, sparse=True)
-    print(xv, yv)
+    # x = np.linspace(-5, 5, 50)
+    # y = np.linspace(-5, 5, 50)
+    # xv, yv = np.meshgrid(x, y, sparse=True)
+    # print(xv, yv)
     q_init = list_to_variable_dict(n * [0])
     G_init = graph.realization(q_init)
     X_init = pos_from_graph(G_init)
 
     ax = plt.gca()
-    for kdx in range(len(xv[0])):
-        for jdx in range(len(yv)):
-            goals = {f"p{n}": np.array([xv[0][kdx], yv[jdx][0]])}
-            # q_goal = graph.robot.random_configuration()
-            # T_goal = robot.get_pose(q_goal, f"p{n}")
-            # goals = robot.end_effector_pos(q_goal)
+    # for kdx in range(len(xv[0])):
+    for _ in range(n_tests):
+        # for jdx in range(len(yv)):
+        # goals = {f"p{n}": np.array([xv[0][kdx], yv[jdx][0]])}
+        q_goal = graph.robot.random_configuration()
+        T_goal = robot.get_pose(q_goal, f"p{n}")
+        goals = robot.end_effector_pos(q_goal)
 
-            G = graph.complete_from_pos(goals)
-            D_goal = distance_matrix_from_graph(G)
-            F = adjacency_matrix_from_graph(G)
+        G = graph.complete_from_pos(goals)
+        D_goal = distance_matrix_from_graph(G)
+        F = adjacency_matrix_from_graph(G)
 
-            lb, ub = bound_smoothing(G)  # get lower and upper distance bounds for init
-            sol_info = solver.solve(D_goal, F, use_limits=True, bounds=(lb, ub))
-            # sol_info = solver.solve(D_goal, F, use_limits=True, Y_init=X_init)
-            Y = sol_info["x"]
-            t_sol += [sol_info["time"]]
+        lb, ub = bound_smoothing(G)  # get lower and upper distance bounds for init
+        sol_info = solver.solve(D_goal, F, use_limits=True, bounds=(lb, ub))
+        # sol_info = solver.solve(D_goal, F, use_limits=True, Y_init=X_init)
+        Y = sol_info["x"]
+        t_sol += [sol_info["time"]]
 
-            G_raw = graph_from_pos(Y, graph.node_ids)  # not really order-dependent
-            G_e = orthogonal_procrustes(graph.base, G_raw)
-            # R, t = best_fit_transform(Y[[0, 1, 2], :], base)
-            # P_e = (R @ Y.T + t.reshape(2, 1)).T
-            # G_e = graph_from_pos(P_e, graph.node_ids)  # not really order-dependent
+        G_raw = graph_from_pos(Y, graph.node_ids)  # not really order-dependent
+        G_e = orthogonal_procrustes(graph.base, G_raw)
 
-            q_sol = robot.joint_variables(G_e)
-            P_sol = pos_from_graph(graph.realization(q_sol), list(robot.structure))
+        q_sol = robot.joint_variables(G_e)
+        P_sol = pos_from_graph(graph.realization(q_sol), list(robot.structure))
 
-            T_riemannian = robot.get_pose(
-                list_to_variable_dict(q_sol), "p" + f"{robot.n}"
+        T_riemannian = robot.get_pose(list_to_variable_dict(q_sol), "p" + f"{robot.n}")
+        err_riemannian = T_goal.dot(T_riemannian.inv()).log()
+        err_riemannian_pos = np.linalg.norm(T_goal.trans - T_riemannian.trans)
+        # err_riemannian_pos = np.linalg.norm(goals[f"p{n}"] - T_riemannian.trans)
+        err_riemannian_rot = np.linalg.norm(err_riemannian[2:])
+        e_rot += [err_riemannian_rot]
+        # e_rot += [0]
+        e_pos += [err_riemannian_pos]
+
+        infeas = False
+        for idx, obs in enumerate(obstacles):
+            for goal in goals.values():
+                center, radius, I = obs[0], obs[1], np.identity(2)
+                if (goal - center).T @ I @ (goal - center) <= radius ** 2:
+                    infeas = True
+
+        col = False
+        if check_collison(P_sol, obstacles):
+            col = True
+
+        not_reach = False
+        if err_riemannian_pos > 0.01 or err_riemannian_rot > 0.01:
+            # if err_riemannian_pos > 0.01:
+            not_reach = True
+
+        if infeas or col or not_reach:
+            print(
+                col * "collision"
+                + infeas * "+ infeasible goal"
+                + not_reach * "+ didn't reach"
             )
-            # err_riemannian = T_goal.dot(T_riemannian.inv()).log()
-            # err_riemannian_pos = np.linalg.norm(T_goal.trans - T_riemannian.trans)
-            err_riemannian_pos = np.linalg.norm(goals[f"p{n}"] - T_riemannian.trans)
-            # err_riemannian_rot = np.linalg.norm(err_riemannian[2:])
-            # e_rot += [err_riemannian_rot]
-            e_rot += [0]
-            e_pos += [err_riemannian_pos]
-
-            infeas = False
-            for idx, obs in enumerate(obstacles):
-                for goal in goals.values():
-                    center, radius, I = obs[0], obs[1], np.identity(2)
-                    if (goal - center).T @ I @ (goal - center) <= radius ** 2:
-                        infeas = True
-
-            col = False
-            if check_collison(P_sol, obstacles):
-                col = True
-
-            not_reach = False
-            # if err_riemannian_pos > 0.01 or err_riemannian_rot > 0.01:
-            if err_riemannian_pos > 0.01:
-                not_reach = True
-
-            if infeas or col or not_reach:
-                print(
-                    col * "collision"
-                    + infeas * "+ infeasible goal"
-                    + not_reach * "+ didn't reach"
-                )
-                if not infeas:
-                    fails += 1
-                else:
-                    num_infeas += 1
+            if not infeas:
+                fails += 1
             else:
-                ax.plot(P_sol[:-3, 0], P_sol[:-3, 1], "-o")
-                plt.pause(0.1)
-            # print(f"{idx}", end="\r")
+                num_infeas += 1
+        else:
+            ax.plot(P_sol[:-3, 0], P_sol[:-3, 1], "-o")
+            plt.pause(0.1)
+        # print(f"{idx}", end="\r")
 
     t_sol = np.array(t_sol)
     t_sol = t_sol[abs(t_sol - np.mean(t_sol)) < 2 * np.std(t_sol)]

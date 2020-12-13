@@ -6,12 +6,20 @@ from graphik.utils.constants import *
 from graphik.utils.utils import best_fit_transform
 
 
-def orthogonal_procrustes(G1, G2):
-    Y = pos_from_graph(G1, list(G1))
-    X = pos_from_graph(G2, list(G1))
+def orthogonal_procrustes(G1: nx.DiGraph, G2: nx.DiGraph) -> nx.DiGraph:
+    """
+    Aligns two point clouds represented by graphs by aligning nodes with
+    matching labels and returns a graph representing the aligned points.
+
+    Keyword Arguments:
+    G1: nx.DiGraph -- Graph representing the point set to align with.
+    G2: nx.DiGraph -- Graph representing the point set to be aligned.
+    """
+    Y = pos_from_graph(G1, node_names=list(G1))
+    X = pos_from_graph(G2, node_names=list(G1))
     R, t = best_fit_transform(X, Y)
-    X = pos_from_graph(G2, list(G2))
-    P_e = (R @ X.T + t.reshape(2, 1)).T
+    X = pos_from_graph(G2)
+    P_e = (R @ X.T + t.reshape(len(t), 1)).T
     return graph_from_pos(P_e, list(G2))  # not really order-dependent
 
 

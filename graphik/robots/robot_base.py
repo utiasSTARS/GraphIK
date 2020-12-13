@@ -55,11 +55,10 @@ class Robot(ABC):
         raise NotImplementedError
 
     def end_effector_pos(self, q: dict) -> dict:
-        T_all = self.get_all_poses(q)
         goals = {}
         for ee in self.end_effectors:
-            goals[ee[0]] = T_all[ee[0]].trans
-            goals[ee[1]] = T_all[ee[1]].trans
+            goals[ee[0]] = self.get_pose(q, ee[0]).trans
+            goals[ee[1]] = self.get_pose(q, ee[1]).trans
         return goals
 
     @property
@@ -905,14 +904,21 @@ class RobotRevolute(Robot):
         of the query_node in the configuration determined by
         node_inputs.
         """
-        kinematic_map = self.kinematic_map
-        parents = self.parents
-        T_ref = self.T_zero
+        aux = False
+        if query_node[0] == "q":
+            query_node = "p" + query_node[1:]
+            aux = True
+
+        kinematic_map, parents, T_ref = self.kinematic_map, self.parents, self.T_zero
         T = T_ref["p0"]
         for node in kinematic_map["p0"][query_node][1:]:
             pred = [u for u in parents.predecessors(node)]
             T_rel = T_ref[pred[0]].inv().dot(T_ref[node])
             T = T.dot(rot_axis(joint_angles[node], "z")).dot(T_rel)
+
+        if aux:
+            T = T.dot(trans_axis(self.axis_length, "z"))
+
         return T
 
     def structure_graph(self) -> nx.DiGraph:
@@ -1084,9 +1090,9 @@ class RobotRevolute(Robot):
                     S.add_edge(ids[0], ids[1])
                     if d_max == d_min:
                         S[ids[0]][ids[1]][DIST] = d_max
+                    S[ids[0]][ids[1]][BOUNDED] = [limit]
                     S[ids[0]][ids[1]][UPPER] = d_max
                     S[ids[0]][ids[1]][LOWER] = d_min
-                    S[ids[0]][ids[1]][BOUNDED] = limit
 
     def joint_variables(self, G: nx.Graph, T_final: dict = None) -> np.ndarray:
         """

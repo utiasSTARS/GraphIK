@@ -56,16 +56,6 @@ class RobotGraph(ABC):
         self._base = G
 
     @property
-    def obstacles(self) -> nx.DiGraph:
-        if not self._obstacles:
-            self.obstacles = nx.empty_graph()
-        return self.obstacles
-
-    @obstacles.setter
-    def obstacles(self, G: nx.DiGraph):
-        self._obstacles = G
-
-    @property
     def dim(self) -> int:
         """
         :returns: Expected lowest embedding dimension of the graph
@@ -193,6 +183,7 @@ class RobotGraph(ABC):
         G = self.directed
         for e1, e2, data in G.edges(data=True):
             if BOUNDED in data:
+                # print(e1, e2, data)
                 udx = self.node_ids.index(e1)
                 vdx = self.node_ids.index(e2)
                 if "below" in data[BOUNDED]:
@@ -221,7 +212,6 @@ class RobotGraph(ABC):
         # Set lower (and upper) distance limits to robot nodes
         for node, node_type in self.directed.nodes(data=TYPE):
             if node_type == "robot":
-                print(node)
                 self.directed.add_edge(node, name)
                 self.directed[node][name][BOUNDED] = ["below"]
                 self.directed[node][name][LOWER] = radius
@@ -448,16 +438,13 @@ class RobotRevoluteGraph(RobotGraph):
                     self.robot.limit_edges += [[base_node, node]]  # TODO remove/fix
 
                 G.add_edge(base_node, node)
-
                 if d_max == d_min:
                     G[base_node][node][DIST] = d_max
-
+                G[base_node][node][BOUNDED] = [limit]
                 G[base_node][node][UPPER] = d_max
                 G[base_node][node][LOWER] = d_min
-                G[base_node][node][BOUNDED] = limit
-        return G
 
-    nx.incidence_matrix
+        return G
 
     def base_subgraph(self) -> nx.DiGraph:
         axis_length = self.robot.axis_length
