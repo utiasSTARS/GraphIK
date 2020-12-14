@@ -307,7 +307,8 @@ class RobotSphericalGraph(RobotGraph):
         self.structure = robot.structure
         self.base = self.base_subgraph()
         self.directed = nx.compose(self.base, self.structure)
-        self.directed = nx.freeze(self.root_angle_limits(self.directed))
+        # self.directed = nx.freeze(self.root_angle_limits(self.directed))
+        self.directed = self.root_angle_limits(self.directed)
         super(RobotSphericalGraph, self).__init__()
 
     def root_angle_limits(self, G: nx.DiGraph) -> nx.DiGraph:
@@ -328,7 +329,7 @@ class RobotSphericalGraph(RobotGraph):
                 G[ax][node][LOWER] = sqrt(
                     l1 ** 2 + l2 ** 2 - 2 * l1 * l2 * cos(pi - lim)
                 )
-                G[ax][node][BOUNDED] = "below"
+                G[ax][node][BOUNDED] = ["below"]
                 self.robot.limit_edges.append([ax, node])
 
         return G
