@@ -136,16 +136,16 @@ def distance_constraints(robot: RobotRevolute, end_effectors: dict, sparse: bool
     return clique_dict
 
 
-def evaluate_linear_map(clique: frozenset, A:list, b: list, mapping: dict, input_vals: dict) -> list:
+def evaluate_linear_map(clique: frozenset, A:list, b: list, mapping: dict, input_vals: dict, n_vars: int = None) -> list:
     """
     Evaluate the linear map given by A, b, mapping over the variables in clique for input_vals.
     """
     d = len(list(input_vals.values())[0])
-    n_vars = len(mapping) - len(A)
+    n_vars = len(mapping) - len(A) if n_vars is None else n_vars
 
     X = np.zeros((d, n_vars))
     for var in clique:
-        if var in mapping:
+        if var in mapping and var in input_vals:
             X[:, mapping[var]] = input_vals[var]
     if A[0].shape[0] != n_vars:
         # assert d == A[0].shape[0] - n, print(f"len(A): {A[0].shape[0]}, n:{n}")
@@ -154,6 +154,19 @@ def evaluate_linear_map(clique: frozenset, A:list, b: list, mapping: dict, input
     output = [np.trace(A[idx]@Z) - b[idx] for idx in range(len(A))]
 
     return output
+
+
+def evaluate_cost(constraint_clique_dict: dict, sdp_cost_map: dict, nearest_points: dict):
+
+    # d = len(list(nearest_points.values())[0])
+    cost = 0.
+    for clique in sdp_cost_map:
+        A, _, mapping, _ = constraint_clique_dict[clique]
+        n_vars = len(mapping) - len(A)
+        C_list = sdp_cost_map[clique]
+        b_list = [0. for _ in C_list]
+        cost += sum(evaluate_linear_map(clique, C_list, b_list, mapping, nearest_points, n_vars))
+    return cost
 
 
 def constraint_clique_dict_to_sdp(constraint_clique_dict: dict, nearest_points: dict):
@@ -195,6 +208,7 @@ def constraint_clique_dict_to_sdp(constraint_clique_dict: dict, nearest_points: 
                         constraint_clique_dict[clique][2], True
             constraint_clique_dict[clique] = new_tuple
 
+    # Construct the cost and SDP variables
     remaining_nearest_points = list(nearest_points.keys())
     for clique in constraint_clique_dict:
         A, b, mapping, is_augmented = constraint_clique_dict[clique]
@@ -211,9 +225,10 @@ def constraint_clique_dict_to_sdp(constraint_clique_dict: dict, nearest_points: 
                     # if not np.all(nearest_points[ee] == np.zeros(d)):
                     C = np.zeros(A[0].shape)
                     C[mapping[joint], mapping[joint]] = 1.
-                    if is_augmented and np.any(nearest_points[joint] != np.zeros(d)):
-                        C[mapping[joint], -d:] = nearest_points[joint]
-                        C[-d:, mapping[joint]] = nearest_points[joint]
+                    if np.any(nearest_points[joint] != np.zeros(d)):
+                        C[mapping[joint], -d:] = -nearest_points[joint]
+                        C[-d:, mapping[joint]] = -nearest_points[joint]
+                        C[-1, -1] = np.linalg.norm(nearest_points[joint])**2  # Add the constant part
                     C_clique.append(C)
                     remaining_nearest_points.remove(joint)
             if len(C_clique) > 0:
@@ -275,7 +290,7 @@ if __name__ == '__main__':
     ee_cost = False  # Whether to treat the end-effectors as variables with targets in the cost
 
     # robot, graph = load_ur10()
-    n = 3
+    n = 4
     dof = n
     a_full = [0, -0.612, -0.5723, 0, 0, 0]
     d_full = [0.1273, 0, 0, 0.1639, 0.1157, 0.0922]
