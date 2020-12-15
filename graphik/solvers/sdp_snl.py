@@ -11,23 +11,46 @@ from graphik.graphs.graph_base import RobotRevoluteGraph
 from graphik.solvers.constraints import get_full_revolute_nearest_point
 
 
-def greedy_set_cover(cliques: set, targets) -> set:
-    covering_cliques = set()
+def greedy_set_cover(sources: set, targets: list) -> set:
+    """
+    Perform a greedy set cover (https://en.wikipedia.org/wiki/Set_cover_problem).
+    Returns a subset of the sets in sources such that the union of this subset contains all elements in targets.
+
+    This assumes that
+
+    :param sources: set of sets with which to compute the cover.
+    :param targets: list of elements which need to be covered.
+
+    :return: subset of sources whose union covers targets.
+    """
+    covering_sets = set()
     targets_remaining = set(targets)
     while len(targets_remaining) > 0:
+        # Greedily take the next source that covers the most remaining elements in targets_remaining
         n_covered = 0
-        best_clique = None
-        for clique in cliques.difference(covering_cliques):
-            if len(clique.intersection(targets_remaining)) > n_covered:
-                best_clique = clique
-                n_covered = len(clique.intersection(targets_remaining))
-        covering_cliques.add(best_clique)
-        targets_remaining = targets_remaining.difference(best_clique)
+        best_source = None
+        for source in sources.difference(covering_sets):
+            if len(source.intersection(targets_remaining)) > n_covered:
+                best_source = source
+                n_covered = len(source.intersection(targets_remaining))
+        if n_covered == 0:
+            print("WARNING: Sources do not cover targets. Returning partial cover.")
+            return covering_sets
+        covering_sets.add(best_source)
+        targets_remaining = targets_remaining.difference(best_source)
 
-    return covering_cliques
+    return covering_sets
 
 
 def augment_square_matrix(A:np.ndarray, d: int) -> np.ndarray:
+    """
+    Augment the square matrix A with a d-by-d identity matrix and padding zeros.
+    Essentially, returns A_ug = [A 0; 0 eye(d)].
+
+    :param A: square matrix representing a linear map on a symmetric matrix.
+    :param d: dimension of the points in the SNL/DG problem instance (2 or 3 for our application)
+    :return:
+    """
     assert A.shape[0] == A.shape[1]
     A_aug = np.zeros((A.shape[0] + d, A.shape[0]+d))
     A_aug[0:A.shape[0], 0:A.shape[0]] = A
@@ -37,7 +60,12 @@ def augment_square_matrix(A:np.ndarray, d: int) -> np.ndarray:
 
 def linear_matrix_equality(i: int, j: int, n_vars: int) -> np.ndarray:
     """
-    Convert a distance constraint into a LME for internal variables (no constant so no linear term).
+    Convert a Euclidean distance constraint into a LME for internal variables (no constant so no linear term).
+    Essentially, we are converting the expression (x_i - x_j)**2 into tr(A@Z) where Z = X.T @ X.
+
+    :param i: index of one of the two points involved in the LME.
+    :param j: index of the otehr point involved in the LME.
+    :return: square matrix A representing the linear map
     """
     A = np.zeros((n_vars, n_vars))
     A[i, i] = 1.
@@ -50,6 +78,11 @@ def linear_matrix_equality(i: int, j: int, n_vars: int) -> np.ndarray:
 def linear_matrix_equality_with_anchor(i: int, n_vars: int, ee: np.ndarray) -> np.ndarray:
     """
     Convert a distance constraint into a LME for an internal variable and a constant end-effector (needs homog. vars).
+    Essentially, we are converting the expression (x_i - ee)**2 into tr(A@Z) where Z = [X eye(d)].T @ [X eye(d)].
+
+    :param i: index of the variable point involved in the LME.
+    :param n_vars: number of variable points in the clique of points that contains this distance constraint.
+    :param ee: fixed position of the anchor involved
     """
     A = np.zeros((n_vars, n_vars))
     d = len(ee)
@@ -59,14 +92,61 @@ def linear_matrix_equality_with_anchor(i: int, n_vars: int, ee: np.ndarray) -> n
     return A
 
 
+def constraint_for_variable_pair(u: str, v: str, graph: nx.Graph, index_mapping: dict, ees_clique: list,
+                                 ee_assignments: dict, n: int, ee_cost: bool):
+    if (u, v) in graph.edges and frozenset((u, v)) not in index_mapping:
+        if not ee_cost:
+            if u in ees_clique and v in ees_clique:  # Don't need the const. dist between two assigned end-effectors
+                return None, None
+            elif u in ees_clique:
+                A_uv = linear_matrix_equality_with_anchor(index_mapping[v], n, ee_assignments[u])
+                b_uv = graph[u][v]['weight'] ** 2 - ee_assignments[u].dot(ee_assignments[u])
+            elif v in ees_clique:
+                A_uv = linear_matrix_equality_with_anchor(index_mapping[u], n, ee_assignments[v])
+                b_uv = graph[u][v]['weight'] ** 2 - ee_assignments[v].dot(ee_assignments[v])
+            else:
+                A_uv = linear_matrix_equality(index_mapping[u], index_mapping[v], n)
+                b_uv = graph[u][v]['weight'] ** 2
+
+        else:
+            A_uv = linear_matrix_equality(index_mapping[u], index_mapping[v], n)
+            b_uv = graph[u][v]['weight'] ** 2
+        return A_uv, b_uv
+    else:
+        return None, None
+
+
 def distance_clique_linear_map(graph: nx.Graph, clique: frozenset,
                                ee_assignments: dict = None, ee_cost: bool = False) -> (list, list, dict, bool):
     """
     Produce a set of SDP-relaxed constraints in the form of A: S^n -> R^m (with constant values b) for a clique of
     variables in a DG problem.
 
+    :param graph: undirected graph weighted with distances between points.
+    :param clique: a maximal clique of graph. We are generating linear matrix equalities (LMEs) corresponding
+        to distance constraints between points contained within this clique.
+    :param ee_assignments: a dictionary mapping point names (e.g., 'p0', 'q0') to desired targets.
+    :param ee_cost: boolean indicating whether the cost function of the SDP we are formulating is made up of squared
+        distances between variables and their assignments in ee_assignments. If False, these points are treated as fixed
+        parameters with no associated variable.
+
+    :returns: tuple (A, b, index_mapping, is_augmented)
+        WHERE
+        list A is a list of square np.ndarray's representing the linear matrices in the map from S^n -> R^m
+        list b is a list of floats representing the m values in the image of the map S^n -> R^m
+        dict index_mapping maps variables (e.g., 'p1', 'q1') in clique to their indices in elements of A, and maps pairs
+            (e.g. frozenset(('p1', 'q1'))) to the index of the constraint between them in A and b. For example, to get
+            the linear mapping that describes the SDP/LME version of the squared distance constraint between points
+            'p0' and 'q1', we write:
+                A_p0_q1 = A[frozenset(('p0', 'q1))]; b_p0_q1 = b[frozenset(('p0', 'q1))].
+            This is key for keeping track of SDP variables for cvxpy and extracting solutions.
+        bool is_augmented indicates whether the matrices in A are augmented via augment_square_matrix() to have a
+            d-by-d identity matrix and padding zeros. These are needed for linear terms (as opposed to scalar or
+            quadratic) in the constraints described by A and b.
     """
+    # Get a list of assigned end-effectors clique
     ees_clique = [key for key in ee_assignments if key in clique]
+    # The dimension by which to augment this clique: don't augment it (i.e., d = 0) if there are no ee's in clique
     d = 0 if len(ees_clique) == 0 else len(list(ee_assignments.values())[0])
     n_ees = len(ees_clique)
     n_vars = len(clique) if ee_cost else len(clique) - n_ees  # If not using ee's in the cost, they are not variables
@@ -75,54 +155,42 @@ def distance_clique_linear_map(graph: nx.Graph, clique: frozenset,
     # Linear map from S^n -> R^m
     A = []
     b = []
-    A_mapping = {}
+    index_mapping = {}
     constraint_idx = 0
     var_idx = 0
     for u in clique:  # Populate the index mapping
         if u not in ees_clique or ee_cost:
-            A_mapping[u] = var_idx
+            index_mapping[u] = var_idx
             var_idx += 1
     assert n_vars == var_idx, print(f"n_vars:{n_vars}, var_idx:{var_idx}")
     for u in clique:
         for v in clique:
-            #   TODO: factor out this whole loop
-            if (u, v) in graph.edges and frozenset((u, v)) not in A_mapping:
-                if not ee_cost:
-                    if u in ees_clique and v in ees_clique:  # Don't need the const. dist between two assigned end-effectors
-                        continue
-                    elif u in ees_clique:
-                        A_uv = linear_matrix_equality_with_anchor(A_mapping[v], n, ee_assignments[u])
-                        b_uv = graph[u][v]['weight']**2 - ee_assignments[u].dot(ee_assignments[u])
-                    elif v in ees_clique:
-                        A_uv = linear_matrix_equality_with_anchor(A_mapping[u], n, ee_assignments[v])
-                        b_uv = graph[u][v]['weight']**2 - ee_assignments[v].dot(ee_assignments[v])
-                    else:
-                        A_uv = linear_matrix_equality(A_mapping[u], A_mapping[v], n)
-                        b_uv = graph[u][v]['weight']**2
-
-                else:
-                    A_uv = linear_matrix_equality(A_mapping[u], A_mapping[v], n)
-                    b_uv = graph[u][v]['weight']**2  # TODO: squared or not? I forget
+            A_uv, b_uv = constraint_for_variable_pair(u, v, graph, index_mapping, ees_clique,
+                                                      ee_assignments, n, ee_cost)
+            if A_uv is not None:
                 A.append(A_uv)
                 b.append(b_uv)
-                A_mapping[frozenset((u, v))] = constraint_idx
+                index_mapping[frozenset((u, v))] = constraint_idx
                 constraint_idx += 1
-    return A, b, A_mapping, d > 0
+    return A, b, index_mapping, d > 0
 
 
 def distance_constraints(robot: RobotRevolute, end_effectors: dict, sparse: bool=False,
-                         ee_cost: bool=False) -> (np.ndarray, dict):
+                         ee_cost: bool=False) -> dict:
     """
-    Produce an SDP-relaxed linear mapping for the equality constraints describing our DG problem instance.
+    Produce an SDP-relaxed linear mappings (LMEs) for the equality constraints describing our DG problem instance.
+    If sparse, use the maximal cliques to create a sparse relaxation.
+    If not sparse, use the full set of variables for a dense or standard SDP relaxation.
 
-    :param robot:
+
+    :param robot: robot whose structure we're using
     :param end_effectors: dict of end-effector assignments
-    :param sparse:
+    :param sparse: whether to use a chordal decomposition
     :param ee_cost: whether to use end-effectors in the cost function (as opposed to constraints)
-    :return: linear mapping and variable mapping
+    :return: mapping from cliques to LMEs
     """
-    undirected = nx.Graph(robot.structure_graph())
-    equality_cliques = nx.chordal_graph_cliques(undirected)
+    undirected = nx.Graph(robot.structure_graph())  # This graph must be chordal
+    equality_cliques = nx.chordal_graph_cliques(undirected)  # Returns maximal cliques (in spite of name)
 
     if not sparse:
         full_set = frozenset()
@@ -331,10 +399,12 @@ if __name__ == '__main__':
         print(evaluate_linear_map(clique, A, b, mapping, input_vals))
 
     # Make cost function stuff
-    perturb = 0.1
+    perturb = 0.0
     interior_nearest_points = {key: input_vals[key] + perturb*np.random.randn(robot.dim)
                                for key in input_vals if key not in ['p0', 'q0', f'p{robot.n}', f'q{robot.n}']}
-
+    # Nuclear norm
+    # interior_nearest_points = {key: np.zeros(robot.dim)
+    #                            for key in input_vals if key not in ['p0', 'q0', f'p{robot.n}', f'q{robot.n}']}
     sdp_variable_map, sdp_constraints_map, sdp_cost_map = constraint_clique_dict_to_sdp(constraint_clique_dict,
                                                                                         interior_nearest_points)
 
