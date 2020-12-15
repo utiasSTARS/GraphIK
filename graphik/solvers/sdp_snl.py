@@ -11,6 +11,25 @@ from graphik.graphs.graph_base import RobotRevoluteGraph
 from graphik.solvers.constraints import get_full_revolute_nearest_point
 
 
+def prepare_set_cover_problem(constraint_clique_dict: dict, nearest_points:dict, d: int):
+    targets_to_cover = list(nearest_points.keys())
+    cliques_remaining = set()
+    for clique in constraint_clique_dict:
+        _, _, _, is_augmented = constraint_clique_dict[clique]
+        if is_augmented:
+            for joint in clique:
+                if joint in targets_to_cover:
+                    targets_to_cover.remove(joint)
+        else:
+            cliques_remaining.add(clique)
+    # We also only need to augment non-zero nearest points (important for nuclear norm case)
+    for target in nearest_points.keys():
+        if target in targets_to_cover and np.all(nearest_points[target] == np.zeros(d)):
+            targets_to_cover.remove()
+
+    return cliques_remaining, targets_to_cover
+
+
 def greedy_set_cover(sources: set, targets: list) -> set:
     """
     Perform a greedy set cover (https://en.wikipedia.org/wiki/Set_cover_problem).
@@ -40,6 +59,42 @@ def greedy_set_cover(sources: set, targets: list) -> set:
         targets_remaining = targets_remaining.difference(best_source)
 
     return covering_sets
+
+
+def sdp_variables_and_cost(constraint_clique_dict: dict, nearest_points: dict, d:int):
+    """
+
+    """
+    sdp_variable_map = {}
+    sdp_constraints_map = {}
+    sdp_cost_map = {}
+    remaining_nearest_points = list(nearest_points.keys())
+    for clique in constraint_clique_dict:
+        A, b, mapping, is_augmented = constraint_clique_dict[clique]
+        # Construct the SDP variable and constraints
+        Z_clique = cp.Variable(A[0].shape, PSD=True)
+        sdp_variable_map[clique] = Z_clique
+        constraints_clique = [cp.trace(A[idx]@Z_clique) == b[idx] for idx in range(len(A))]
+        if is_augmented:
+            constraints_clique += [Z_clique[-d:, -d:] == np.eye(d)]
+            # Construct the cost function
+            C_clique = []
+            for joint in clique:
+                if joint in remaining_nearest_points:
+                    # if not np.all(nearest_points[ee] == np.zeros(d)):
+                    C = np.zeros(A[0].shape)
+                    C[mapping[joint], mapping[joint]] = 1.
+                    if np.any(nearest_points[joint] != np.zeros(d)):
+                        C[mapping[joint], -d:] = -nearest_points[joint]
+                        C[-d:, mapping[joint]] = -nearest_points[joint]
+                        C[-1, -1] = np.linalg.norm(nearest_points[joint])**2  # Add the constant part
+                    C_clique.append(C)
+                    remaining_nearest_points.remove(joint)
+            if len(C_clique) > 0:
+                sdp_cost_map[clique] = C_clique
+        sdp_constraints_map[clique] = constraints_clique
+    assert len(remaining_nearest_points) == 0
+    return sdp_variable_map, sdp_constraints_map, sdp_cost_map
 
 
 def augment_square_matrix(A:np.ndarray, d: int) -> np.ndarray:
@@ -225,14 +280,15 @@ def evaluate_linear_map(clique: frozenset, A:list, b: list, mapping: dict, input
 
 
 def evaluate_cost(constraint_clique_dict: dict, sdp_cost_map: dict, nearest_points: dict):
-
-    # d = len(list(nearest_points.values())[0])
+    """
+    Evaluate a cost function defined by sdp_cost map for points in nearest_points.
+    """
     cost = 0.
     for clique in sdp_cost_map:
         A, _, mapping, _ = constraint_clique_dict[clique]
         n_vars = len(mapping) - len(A)
         C_list = sdp_cost_map[clique]
-        b_list = [0. for _ in C_list]
+        b_list = [0. for _ in C_list]  # The constant part is embedded in the augmented A's final entry (A[-1, -1]).
         cost += sum(evaluate_linear_map(clique, C_list, b_list, mapping, nearest_points, n_vars))
     return cost
 
@@ -243,67 +299,27 @@ def constraint_clique_dict_to_sdp(constraint_clique_dict: dict, nearest_points: 
     :param constraints_clique_dict: output of distance_constraints function
     :param nearest_points: defines the cost function with squared distances
     """
-    sdp_variable_map = {}
-    sdp_constraints_map = {}
-    sdp_cost_map = {}
     # Need to cover the cost ee's with augmented cliques (for linear terms)
     d = len(list(nearest_points.values())[0])
 
-    # Prepare the set cover problem
-    targets_to_cover = list(nearest_points.keys())
-    cliques_remaining = set()
-    for clique in constraint_clique_dict:
-        _, _, _, is_augmented = constraint_clique_dict[clique]
-        if is_augmented:
-            for joint in clique:
-                if joint in targets_to_cover:
-                    targets_to_cover.remove(joint)
-        else:
-            cliques_remaining.add(clique)
-    # Only need to augment non-zero nearest points (important for nuclear norm!)
-    for target in nearest_points.keys():
-        if target in targets_to_cover and np.all(nearest_points[target] == np.zeros(d)):
-            targets_to_cover.remove()
+    # Prepare the set cover problem: we only want to augment the minimal set of cliques required to cover all ee's
+    cliques_remaining, targets_to_cover = prepare_set_cover_problem(constraint_clique_dict, nearest_points, d)
+
     # Solve the set cover problem and augment the needed cliques to accommodate linear terms
     cliques_to_cover = greedy_set_cover(cliques_remaining, targets_to_cover)
+
+    # Augment the cliques our cover has told us need to be augmented
     for clique in constraint_clique_dict:
         if clique in cliques_to_cover:
             for idx, A_matrix in enumerate(constraint_clique_dict[clique][0]):
                 constraint_clique_dict[clique][0][idx] = augment_square_matrix(A_matrix, d)
-
             # Replace augmented variable (sloppy)
             new_tuple = constraint_clique_dict[clique][0], constraint_clique_dict[clique][1],\
                         constraint_clique_dict[clique][2], True
             constraint_clique_dict[clique] = new_tuple
 
     # Construct the cost and SDP variables
-    remaining_nearest_points = list(nearest_points.keys())
-    for clique in constraint_clique_dict:
-        A, b, mapping, is_augmented = constraint_clique_dict[clique]
-        # Construct the SDP variable and constraints
-        Z_clique = cp.Variable(A[0].shape, PSD=True)
-        sdp_variable_map[clique] = Z_clique
-        constraints_clique = [cp.trace(A[idx]@Z_clique) == b[idx] for idx in range(len(A))]
-        if is_augmented:
-            constraints_clique += [Z_clique[-d:, -d:] == np.eye(d)]
-            # Construct the cost function
-            C_clique = []
-            for joint in clique:
-                if joint in remaining_nearest_points:
-                    # if not np.all(nearest_points[ee] == np.zeros(d)):
-                    C = np.zeros(A[0].shape)
-                    C[mapping[joint], mapping[joint]] = 1.
-                    if np.any(nearest_points[joint] != np.zeros(d)):
-                        C[mapping[joint], -d:] = -nearest_points[joint]
-                        C[-d:, mapping[joint]] = -nearest_points[joint]
-                        C[-1, -1] = np.linalg.norm(nearest_points[joint])**2  # Add the constant part
-                    C_clique.append(C)
-                    remaining_nearest_points.remove(joint)
-            if len(C_clique) > 0:
-                sdp_cost_map[clique] = C_clique
-        sdp_constraints_map[clique] = constraints_clique
-    assert len(remaining_nearest_points) == 0
-    return sdp_variable_map, sdp_constraints_map, sdp_cost_map
+    return sdp_variables_and_cost(constraint_clique_dict, nearest_points, d)
 
 
 def form_sdp_problem(constraint_clique_dict, sdp_variable_map, sdp_constraints_map, sdp_cost_map, d) -> cp.Problem:
