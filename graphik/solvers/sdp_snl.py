@@ -290,7 +290,7 @@ if __name__ == '__main__':
     ee_cost = False  # Whether to treat the end-effectors as variables with targets in the cost
 
     # robot, graph = load_ur10()
-    n = 4
+    n = 2
     dof = n
     a_full = [0, -0.612, -0.5723, 0, 0, 0]
     d_full = [0.1273, 0, 0, 0.1639, 0.1157, 0.0922]
@@ -331,10 +331,17 @@ if __name__ == '__main__':
         print(evaluate_linear_map(clique, A, b, mapping, input_vals))
 
     # Make cost function stuff
-    interior_nearest_points = {key: input_vals[key] for key in input_vals if key not in ['p0', 'q0', f'p{robot.n}', f'q{robot.n}']}
+    perturb = 0.1
+    interior_nearest_points = {key: input_vals[key] + perturb*np.random.randn(robot.dim)
+                               for key in input_vals if key not in ['p0', 'q0', f'p{robot.n}', f'q{robot.n}']}
+
     sdp_variable_map, sdp_constraints_map, sdp_cost_map = constraint_clique_dict_to_sdp(constraint_clique_dict,
                                                                                         interior_nearest_points)
 
     prob = form_sdp_problem(constraint_clique_dict, sdp_variable_map, sdp_constraints_map, sdp_cost_map, 3)
     prob.solve(verbose=True, solver='CVXOPT')
 
+    # Analysis below assumes dense (sparse = False) case
+    _, s, _ = np.linalg.svd(list(sdp_variable_map.values())[0].value)
+    Z = list(sdp_variable_map.values())[0].value
+    solution_rank = np.linalg.matrix_rank(Z, tol=1e-7)
