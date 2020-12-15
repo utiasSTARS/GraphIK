@@ -11,6 +11,39 @@ from graphik.solvers.sdp_snl import distance_constraints, evaluate_linear_map, \
 from graphik.utils.roboturdf import load_ur10
 
 
+def run_constraint_test(test_case, graph, sparse=False, ee_cost=False):
+    undirected = nx.Graph(graph.robot.structure_graph())
+    q = graph.robot.random_configuration()
+    full_points = [f'p{idx}' for idx in range(0, graph.robot.n + 1)] + \
+                  [f'q{idx}' for idx in range(0, graph.robot.n + 1)]
+    true_input_vals = get_full_revolute_nearest_point(graph, q, full_points)
+    random_input_vals = {key: np.random.rand(graph.robot.dim) for key in true_input_vals}
+    end_effectors = {key: true_input_vals[key] for key in ['p0', 'q0', f'p{graph.robot.n}', f'q{graph.robot.n}']}
+    constraint_clique_dict = distance_constraints(graph.robot, end_effectors, sparse, ee_cost)
+
+    for clique in constraint_clique_dict:
+        A_clique, b_clique, mapping, _ = constraint_clique_dict[clique]
+        true_evaluations = evaluate_linear_map(clique, A_clique, b_clique, mapping, true_input_vals)
+        for true_eval in true_evaluations:
+            # try:
+            test_case.assertAlmostEqual(true_eval, 0.)
+            # except AssertionError:
+            #     pass
+        random_evaluations = evaluate_linear_map(clique, A_clique, b_clique, mapping, random_input_vals)
+        for u in clique:
+            for v in clique:
+                if frozenset((u, v)) in mapping:
+                    idx = mapping[frozenset((u, v))]
+                    sdp_residual = random_evaluations[idx]
+                    u_val = end_effectors[u] if u in end_effectors and not ee_cost else random_input_vals[u]
+                    v_val = end_effectors[v] if v in end_effectors and not ee_cost else random_input_vals[v]
+                    true_residual = np.linalg.norm(u_val - v_val)**2 - undirected[u][v]['weight']**2
+                    try:
+                        test_case.assertAlmostEqual(sdp_residual, true_residual)
+                    except AssertionError:
+                        pass
+
+
 def run_cost_test(test_case, robot, graph, sparse=False, ee_cost=False):
     q = robot.random_configuration()
     full_points = [f'p{idx}' for idx in range(0, robot.n + 1)] + \
@@ -23,7 +56,7 @@ def run_cost_test(test_case, robot, graph, sparse=False, ee_cost=False):
 
     # Make cost function stuff
     interior_nearest_points = {key: input_vals[key] for key in input_vals if
-                               key not in ['p0', 'q0', f'p{robot.n}', f'q{robot.n}']}
+                               key not in ['p0', 'q0', f'p{robot.n}', f'q{robot.n}']} if not ee_cost else end_effectors
     sdp_variable_map, sdp_constraints_map, sdp_cost_map = constraint_clique_dict_to_sdp(constraint_clique_dict,
                                                                                         interior_nearest_points)
     cost = evaluate_cost(constraint_clique_dict, sdp_cost_map, interior_nearest_points)
@@ -72,6 +105,15 @@ class TestUR10(unittest.TestCase):
                 for ee_cost in [True, False]:
                     run_cost_test(self, self.robot, self.graph, sparse, ee_cost)
 
+    def test_distance_constraints(self):
+        n_runs = 10
+        # sparse = False
+        # ee_cost = False
+        for _ in range(n_runs):
+            for sparse in [True, False]:
+                for ee_cost in [True, False]:
+                    run_constraint_test(self, self.graph, sparse, ee_cost)
+
 
 class TestTruncatedUR10(unittest.TestCase):
     def setUp(self):
@@ -108,6 +150,15 @@ class TestTruncatedUR10(unittest.TestCase):
             for sparse in [True, False]:
                 for ee_cost in [True, False]:
                     run_cost_test(self, self.robot, self.graph, sparse, ee_cost)
+
+    def test_distance_constraints(self):
+        n_runs = 10
+        # sparse = False
+        # ee_cost = False
+        for _ in range(n_runs):
+            for sparse in [True, False]:
+                for ee_cost in [True, False]:
+                    run_constraint_test(self, self.graph, sparse, ee_cost)
 
 
 if __name__ == '__main__':
