@@ -156,24 +156,6 @@ class RobotGraph(ABC):
 
         return graph_complete_edges(G)
 
-    # def distance_bound_matrices(self):
-    #     """
-    #     Generates a matrices of distance bounds induced by joint variables.
-    #     """
-    #     L = np.zeros([self.n_nodes, self.n_nodes])  # fake distance matrix
-    #     U = np.zeros([self.n_nodes, self.n_nodes])  # fake distance matrix
-    #     G = self.directed
-    #     for val in self.robot.limit_edges:
-    #         udx = self.node_ids.index(val[0])
-    #         vdx = self.node_ids.index(val[1])
-    #         if "below" in G[val[0]][val[1]][BOUNDED]:
-    #             L[udx, vdx] = G[val[0]][val[1]][LOWER] ** 2
-    #             L[vdx, udx] = L[udx, vdx]
-    #         if "above" in G[val[0]][val[1]][BOUNDED]:
-    #             U[udx, vdx] = G[val[0]][val[1]][UPPER] ** 2
-    #             U[vdx, udx] = U[udx, vdx]
-    #     return L, U
-
     def distance_bound_matrices(self):
         """
         Generates a matrices of distance bounds induced by joint variables.
