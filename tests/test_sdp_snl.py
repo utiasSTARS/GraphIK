@@ -7,7 +7,7 @@ from graphik.graphs.graph_base import RobotRevoluteGraph
 from graphik.robots.robot_base import RobotRevolute
 from graphik.solvers.constraints import get_full_revolute_nearest_point
 from graphik.solvers.sdp_snl import distance_constraints, evaluate_linear_map, \
-    constraint_clique_dict_to_sdp, evaluate_cost
+    constraints_and_nearest_points_to_sdp_vars, evaluate_cost
 from graphik.utils.roboturdf import load_ur10
 
 
@@ -57,8 +57,8 @@ def run_cost_test(test_case, robot, graph, sparse=False, ee_cost=False):
     # Make cost function stuff
     interior_nearest_points = {key: input_vals[key] for key in input_vals if
                                key not in ['p0', 'q0', f'p{robot.n}', f'q{robot.n}']} if not ee_cost else end_effectors
-    sdp_variable_map, sdp_constraints_map, sdp_cost_map = constraint_clique_dict_to_sdp(constraint_clique_dict,
-                                                                                        interior_nearest_points)
+    sdp_variable_map, sdp_constraints_map, sdp_cost_map = \
+        constraints_and_nearest_points_to_sdp_vars(constraint_clique_dict, interior_nearest_points, robot.dim)
     cost = evaluate_cost(constraint_clique_dict, sdp_cost_map, interior_nearest_points)
     test_case.assertAlmostEqual(cost, 0.)
     random_nearest_points = {key: np.random.rand(3) for key in interior_nearest_points}

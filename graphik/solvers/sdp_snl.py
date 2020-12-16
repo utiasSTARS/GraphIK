@@ -5,13 +5,13 @@ import numpy as np
 import networkx as nx
 import cvxpy as cp
 
-from graphik.utils.roboturdf import load_ur10
+from graphik.utils.roboturdf import load_ur10, load_truncated_ur10
 from graphik.robots.robot_base import RobotRevolute
 from graphik.graphs.graph_base import RobotRevoluteGraph
 from graphik.solvers.constraints import get_full_revolute_nearest_point
 
 
-def prepare_set_cover_problem(constraint_clique_dict: dict, nearest_points:dict, d: int):
+def prepare_set_cover_problem(constraint_clique_dict: dict, nearest_points: dict, d: int):
     targets_to_cover = list(nearest_points.keys())
     cliques_remaining = set()
     for clique in constraint_clique_dict:
@@ -293,15 +293,16 @@ def evaluate_cost(constraint_clique_dict: dict, sdp_cost_map: dict, nearest_poin
     return cost
 
 
-def constraint_clique_dict_to_sdp(constraint_clique_dict: dict, nearest_points: dict):
+def constraints_and_nearest_points_to_sdp_vars(constraint_clique_dict: dict, nearest_points: dict, d: int):
     """
+    Takes in a dictionary of clique-indexed constraints and a dictionary of nearest-points for a cost function and
+    produces SDP variables (cvxpy) that correspond to the constraint LMEs as well as LM cost expressions.
 
     :param constraints_clique_dict: output of distance_constraints function
     :param nearest_points: defines the cost function with squared distances
+    :param d: int representing the dimension of the point variables (2 or 3 for IK)
+    :return:
     """
-    # Need to cover the cost ee's with augmented cliques (for linear terms)
-    d = len(list(nearest_points.values())[0])
-
     # Prepare the set cover problem: we only want to augment the minimal set of cliques required to cover all ee's
     cliques_remaining, targets_to_cover = prepare_set_cover_problem(constraint_clique_dict, nearest_points, d)
 
@@ -319,10 +320,13 @@ def constraint_clique_dict_to_sdp(constraint_clique_dict: dict, nearest_points: 
             constraint_clique_dict[clique] = new_tuple
 
     # Construct the cost and SDP variables
-    return sdp_variables_and_cost(constraint_clique_dict, nearest_points, d)
+    sdp_variable_map, sdp_constraints_map, sdp_cost_map = sdp_variables_and_cost(constraint_clique_dict,
+                                                                                 nearest_points, d)
+    return sdp_variable_map, sdp_constraints_map, sdp_cost_map
 
 
-def form_sdp_problem(constraint_clique_dict, sdp_variable_map, sdp_constraints_map, sdp_cost_map, d) -> cp.Problem:
+def form_sdp_problem(constraint_clique_dict: dict, sdp_variable_map: dict, sdp_constraints_map:
+                     dict, sdp_cost_map: dict, d: int) -> cp.Problem:
     constraints = [cons for cons_clique in sdp_constraints_map.values() for cons in cons_clique]
     # Link up the repeated values via equality constraints
     seen_vars = {}
@@ -356,78 +360,83 @@ def form_sdp_problem(constraint_clique_dict, sdp_variable_map, sdp_constraints_m
             if var not in seen_vars:
                 seen_vars[var] = clique
 
-    # Convert constraint matrices to cvxpy cost function
+    # Convert cost matrices to cvxpy cost function
+    cost = lme_to_cvxpy_cost(sdp_cost_map, sdp_variable_map)
+    return cp.Problem(cp.Minimize(cost), constraints)
+
+
+def lme_to_cvxpy_cost(sdp_cost_map: dict, sdp_variable_map: dict):
+    """
+    Convert a mapping from cliques to cost matrices and variables to a cvxpy cost function.
+    """
     cost = 0.
     for clique in sdp_cost_map:
         C_list = sdp_cost_map[clique]
         C_clique = 0.
         for C in C_list:
             C_clique += C
-        cost += cp.trace(C@sdp_variable_map[clique])
-
-    return cp.Problem(cp.Minimize(cost), constraints)
+        cost += cp.trace(C @ sdp_variable_map[clique])
+    return cost
 
 
 if __name__ == '__main__':
-    # TODO: unit test on random q's with all 4 combos of sparse and ee_cost values for UR10
+    # Simple examples
     sparse = False  # Whether to exploit chordal sparsity in the SDP formulation
-    ee_cost = False  # Whether to treat the end-effectors as variables with targets in the cost
+    ee_cost = False  # Whether to treat the end-effectors as variables with targets in the cost.
+                     # If False, end-effectors are NOT variables (they are baked in to constraints as parameters)
 
+    # Full UR10 convenience
     # robot, graph = load_ur10()
-    n = 2
-    dof = n
-    a_full = [0, -0.612, -0.5723, 0, 0, 0]
-    d_full = [0.1273, 0, 0, 0.1639, 0.1157, 0.0922]
-    al_full = [np.pi / 2, 0, 0, np.pi / 2, -np.pi / 2, 0]
-    th_full = [0, 0, 0, 0, 0, 0]
-    a = a_full[0:n]
-    d = d_full[0:n]
-    al = al_full[0:n]
-    th = th_full[0:n]
-    ub = (np.pi) * np.ones(n)
-    lb = -ub
-    ub = np.minimum(np.random.rand(n) * (np.pi / 2) + np.pi / 2, np.pi)
-    lb = -ub
-    modified_dh = False
-    params = {
-        "a": a[:n],
-        "alpha": al[:n],
-        "d": d[:n],
-        "theta": th[:n],
-        "lb": lb[:n],
-        "ub": ub[:n],
-        "modified_dh": modified_dh,
-    }
-    robot = RobotRevolute(params)
-    graph = RobotRevoluteGraph(robot)
 
+    # Truncated UR10 (only the first n joints)
+    n = 4
+    robot, graph = load_truncated_ur10(n)
+
+    # Generate a random feasible target
     q = robot.random_configuration()
+
+    # Extract the positions of the points
     full_points = [f'p{idx}' for idx in range(0, graph.robot.n + 1)] + \
                   [f'q{idx}' for idx in range(0, graph.robot.n + 1)]
     input_vals = get_full_revolute_nearest_point(graph, q, full_points)
+
+    # End-effectors are 'generalized' to include the base pair ('p0', 'q0')
     end_effectors = {key: input_vals[key] for key in ['p0', 'q0', f'p{robot.n}', f'q{robot.n}']}
 
+    # Form the constraints
     constraint_clique_dict = distance_constraints(robot, end_effectors, sparse, ee_cost)
     A, b, mapping, _ = list(constraint_clique_dict.values())[0]
 
-    for clique in constraint_clique_dict:
-        A, b, mapping, _ = constraint_clique_dict[clique]
-        print(evaluate_linear_map(clique, A, b, mapping, input_vals))
+    # Different cost function options here - cost function is controlled by a dictionary mapping some subset of the keys
+    # of input_vals (all the points' positions) to some nearest point.
 
-    # Make cost function stuff
-    perturb = 0.0
-    interior_nearest_points = {key: input_vals[key] + perturb*np.random.randn(robot.dim)
-                               for key in input_vals if key not in ['p0', 'q0', f'p{robot.n}', f'q{robot.n}']}
-    # Nuclear norm
+    # Nuclear norm - the nearest points are all zero
     # interior_nearest_points = {key: np.zeros(robot.dim)
     #                            for key in input_vals if key not in ['p0', 'q0', f'p{robot.n}', f'q{robot.n}']}
-    sdp_variable_map, sdp_constraints_map, sdp_cost_map = constraint_clique_dict_to_sdp(constraint_clique_dict,
-                                                                                        interior_nearest_points)
 
-    prob = form_sdp_problem(constraint_clique_dict, sdp_variable_map, sdp_constraints_map, sdp_cost_map, 3)
-    prob.solve(verbose=True, solver='CVXOPT')
-
+    # Feasibility (no nearest points means cost function is 0)
+    no_nearest_points = {}
+    sdp_variable_map, sdp_constraints_map, sdp_cost_map = \
+        constraints_and_nearest_points_to_sdp_vars(constraint_clique_dict, no_nearest_points, robot.dim)
+    prob_feas = form_sdp_problem(constraint_clique_dict, sdp_variable_map, sdp_constraints_map, sdp_cost_map, robot.dim)
+    prob_feas.solve(verbose=True, solver='CVXOPT')
     # Analysis below assumes dense (sparse = False) case
-    _, s, _ = np.linalg.svd(list(sdp_variable_map.values())[0].value)
     Z = list(sdp_variable_map.values())[0].value
-    solution_rank = np.linalg.matrix_rank(Z, tol=1e-7)
+    _, s, _ = np.linalg.svd(Z)
+    solution_rank = np.linalg.matrix_rank(Z, tol=1e-6, hermitian=True)
+
+    # Exact nearest point - use the true value from q (don't perturb)
+    exact_nearest_points = {key: input_vals[key]
+                                for key in input_vals if key not in ['p0', 'q0', f'p{robot.n}', f'q{robot.n}']}
+    sdp_variable_map_exact, sdp_constraints_map_exact, sdp_cost_map_exact = \
+        constraints_and_nearest_points_to_sdp_vars(constraint_clique_dict, exact_nearest_points, robot.dim)
+    prob_exact = form_sdp_problem(constraint_clique_dict, sdp_variable_map_exact, sdp_constraints_map_exact,
+                                  sdp_cost_map_exact, robot.dim)
+    prob_exact.solve(verbose=True, solver='CVXOPT')
+    Z_exact = list(sdp_variable_map_exact.values())[0].value
+    _, s_exact, _ = np.linalg.svd(Z_exact)
+    solution_rank_exact = np.linalg.matrix_rank(Z_exact, tol=1e-6, hermitian=True)
+
+    # Compare the ranks
+    print(f"Feasibility formulation rank: {solution_rank}")
+    print(f"Exact nearest point rank:     {solution_rank_exact}")

@@ -451,3 +451,33 @@ def load_ur10():
     # print(robot.structure.nodes())
     graph = RobotRevoluteGraph(robot)
     return robot, graph
+
+
+def load_truncated_ur10(n: int):
+    """
+    Produce a robot and graph representing the first n links of a UR10.
+    """
+    a_full = [0, -0.612, -0.5723, 0, 0, 0]
+    d_full = [0.1273, 0, 0, 0.1639, 0.1157, 0.0922]
+    al_full = [np.pi / 2, 0, 0, np.pi / 2, -np.pi / 2, 0]
+    th_full = [0, 0, 0, 0, 0, 0]
+    a = a_full[0:n]
+    d = d_full[0:n]
+    al = al_full[0:n]
+    th = th_full[0:n]
+    ub = (np.pi) * np.ones(n)
+    lb = -ub
+    modified_dh = False
+    params = {
+        "a": a[:n],
+        "alpha": al[:n],
+        "d": d[:n],
+        "theta": th[:n],
+        "lb": lb[:n],
+        "ub": ub[:n],
+        "modified_dh": modified_dh,
+    }
+
+    robot = RobotRevolute(params)
+    graph = RobotRevoluteGraph(robot)
+    return robot, graph
