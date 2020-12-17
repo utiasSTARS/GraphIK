@@ -379,6 +379,24 @@ def lme_to_cvxpy_cost(sdp_cost_map: dict, sdp_variable_map: dict):
     return cost
 
 
+def extract_solution(constraint_clique_dict: dict, sdp_variable_map: dict, d: int) -> dict:
+    solution = {}
+    for clique in constraint_clique_dict:
+        _, _, mapping, is_augmented = constraint_clique_dict[clique]
+        if is_augmented:  # Might not get all the
+            Z_clique = sdp_variable_map[clique].value
+            X_clique = Z_clique[-d:, 0:-d]
+            for var in clique:
+                if var in mapping and var not in solution:
+                    solution[var] = X_clique[:, mapping[var]]
+            # _, s, vh = np.linalg.svd(Z_clique, hermitian=True)
+            # clique_sol = np.diag(np.sqrt(s[0:d]))@vh[0:d, :]
+            # for var in clique:
+            #     if var in mapping and var not in solution:
+            #         solution[var] = clique_sol[:, mapping[var]]
+    return solution
+
+
 if __name__ == '__main__':
     # Simple examples
     sparse = False  # Whether to exploit chordal sparsity in the SDP formulation
@@ -389,7 +407,7 @@ if __name__ == '__main__':
     # robot, graph = load_ur10()
 
     # Truncated UR10 (only the first n joints)
-    n = 4
+    n = 2
     robot, graph = load_truncated_ur10(n)
 
     # Generate a random feasible target
@@ -424,6 +442,7 @@ if __name__ == '__main__':
     Z = list(sdp_variable_map.values())[0].value
     _, s, _ = np.linalg.svd(Z)
     solution_rank = np.linalg.matrix_rank(Z, tol=1e-6, hermitian=True)
+    solution = extract_solution(constraint_clique_dict, sdp_variable_map, robot.dim)
 
     # Exact nearest point - use the true value from q (don't perturb)
     exact_nearest_points = {key: input_vals[key]
@@ -436,6 +455,7 @@ if __name__ == '__main__':
     Z_exact = list(sdp_variable_map_exact.values())[0].value
     _, s_exact, _ = np.linalg.svd(Z_exact)
     solution_rank_exact = np.linalg.matrix_rank(Z_exact, tol=1e-6, hermitian=True)
+    solution_exact = extract_solution(constraint_clique_dict, sdp_variable_map_exact, robot.dim)
 
     # Compare the ranks
     print(f"Feasibility formulation rank: {solution_rank}")
