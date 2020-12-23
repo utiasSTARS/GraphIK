@@ -185,6 +185,9 @@ class RobotGraph(ABC):
             if POS in ndata and nname != name:
                 self.directed.add_edge(nname, name)
                 self.directed[nname][name][DIST] = la.norm(ndata[POS] - data[POS])
+                self.directed[nname][name][LOWER] = la.norm(ndata[POS] - data[POS])
+                self.directed[nname][name][UPPER] = la.norm(ndata[POS] - data[POS])
+                self.directed[nname][name][BOUNDED] = []
 
     def add_spherical_obstacle(self, name: str, position: np.ndarray, radius: float):
 
