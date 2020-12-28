@@ -407,8 +407,11 @@ if __name__ == '__main__':
     # robot, graph = load_ur10()
 
     # Truncated UR10 (only the first n joints)
-    n = 2
-    robot, graph = load_truncated_ur10(n)
+    n = 6
+    if n == 6:
+        robot, graph = load_ur10()
+    else:
+        robot, graph = load_truncated_ur10(n)
 
     # Generate a random feasible target
     q = robot.random_configuration()
@@ -429,8 +432,17 @@ if __name__ == '__main__':
     # of input_vals (all the points' positions) to some nearest point.
 
     # Nuclear norm - the nearest points are all zero
-    # interior_nearest_points = {key: np.zeros(robot.dim)
-    #                            for key in input_vals if key not in ['p0', 'q0', f'p{robot.n}', f'q{robot.n}']}
+    nearest_points_nuclear = {key: np.zeros(robot.dim)
+                               for key in input_vals if key not in ['p0', 'q0', f'p{robot.n}', f'q{robot.n}']}
+    sdp_variable_map_nuclear, sdp_constraints_map_nuclear, sdp_cost_map_nuclear = \
+        constraints_and_nearest_points_to_sdp_vars(constraint_clique_dict, nearest_points_nuclear, robot.dim)
+    prob_nuclear = form_sdp_problem(constraint_clique_dict, sdp_variable_map_nuclear, sdp_constraints_map_nuclear, sdp_cost_map_nuclear, robot.dim)
+    prob_nuclear.solve(verbose=True, solver='CVXOPT')
+    # Analysis below assumes dense (sparse = False) case
+    Z_nuclear = list(sdp_variable_map_nuclear.values())[0].value
+    _, s_nuclear, _ = np.linalg.svd(Z_nuclear)
+    solution_rank_nuclear = np.linalg.matrix_rank(Z_nuclear, tol=1e-6, hermitian=True)
+    solution_nuclear = extract_solution(constraint_clique_dict, sdp_variable_map_nuclear, robot.dim)
 
     # Feasibility (no nearest points means cost function is 0)
     no_nearest_points = {}
@@ -457,6 +469,30 @@ if __name__ == '__main__':
     solution_rank_exact = np.linalg.matrix_rank(Z_exact, tol=1e-6, hermitian=True)
     solution_exact = extract_solution(constraint_clique_dict, sdp_variable_map_exact, robot.dim)
 
+
+    total_error_exact = 0.
+    total_error_nuclear = 0.
+    total_error_feas = 0.
+    for key in solution_exact:
+        print(f"{key}")
+        print(f"True value:          {input_vals[key]}")
+        print(f"Nearest point value: {solution_exact[key]}")
+        print(f"Nuclear norm value:  {solution_nuclear[key]}")
+        print(f"Feasibility value:   {solution[key]}")
+        print("------------------------------------------------------------------------")
+        total_error_exact += np.linalg.norm(input_vals[key] - solution_exact[key])
+        total_error_nuclear += np.linalg.norm(input_vals[key] - solution_nuclear[key])
+        total_error_feas += np.linalg.norm(input_vals[key] - solution[key])
+
     # Compare the ranks
     print(f"Feasibility formulation rank: {solution_rank}")
+    print(f"Nuclear norm rank:            {solution_rank_nuclear}")
     print(f"Exact nearest point rank:     {solution_rank_exact}")
+
+    # Print the total L2 error
+    print(f"Total error feas:          {total_error_feas}")
+    print(f"Total error nuclear:       {total_error_nuclear}")
+    print(f"Total error exact nearest: {total_error_exact}")
+
+    # TODO: check constraint violations
+    
