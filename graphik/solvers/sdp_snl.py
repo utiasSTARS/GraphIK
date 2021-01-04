@@ -338,6 +338,7 @@ def form_sdp_problem(constraint_clique_dict: dict, sdp_variable_map: dict, sdp_c
         overlapping_vars_cliques = [seen_vars[var] for var in overlapping_vars]  # Cliques of seen_vars that overlap
         assert len(np.unique(overlapping_vars_cliques)) <= 1  # Assert that 1 or 0 cliques exist
         if len(np.unique(overlapping_vars_cliques)) == 1:
+            assert len(constraint_clique_dict) != 1, "Dense case entered sparse code!!"
             # Add the linking equalities
             target_clique = overlapping_vars_cliques[0]
             _, _, target_mapping, target_is_augmented = constraint_clique_dict[target_clique]
@@ -426,7 +427,7 @@ if __name__ == '__main__':
 
     # Form the constraints
     constraint_clique_dict = distance_constraints(robot, end_effectors, sparse, ee_cost)
-    A, b, mapping, _ = list(constraint_clique_dict.values())[0]
+    # A, b, mapping, _ = list(constraint_clique_dict.values())[0]
 
     # Different cost function options here - cost function is controlled by a dictionary mapping some subset of the keys
     # of input_vals (all the points' positions) to some nearest point.
@@ -437,7 +438,7 @@ if __name__ == '__main__':
     sdp_variable_map_nuclear, sdp_constraints_map_nuclear, sdp_cost_map_nuclear = \
         constraints_and_nearest_points_to_sdp_vars(constraint_clique_dict, nearest_points_nuclear, robot.dim)
     prob_nuclear = form_sdp_problem(constraint_clique_dict, sdp_variable_map_nuclear, sdp_constraints_map_nuclear, sdp_cost_map_nuclear, robot.dim)
-    prob_nuclear.solve(verbose=True, solver='CVXOPT')
+    prob_nuclear.solve(verbose=True, solver='MOSEK')
     # Analysis below assumes dense (sparse = False) case
     Z_nuclear = list(sdp_variable_map_nuclear.values())[0].value
     _, s_nuclear, _ = np.linalg.svd(Z_nuclear)
@@ -449,7 +450,7 @@ if __name__ == '__main__':
     sdp_variable_map, sdp_constraints_map, sdp_cost_map = \
         constraints_and_nearest_points_to_sdp_vars(constraint_clique_dict, no_nearest_points, robot.dim)
     prob_feas = form_sdp_problem(constraint_clique_dict, sdp_variable_map, sdp_constraints_map, sdp_cost_map, robot.dim)
-    prob_feas.solve(verbose=True, solver='CVXOPT')
+    prob_feas.solve(verbose=True, solver='MOSEK')
     # Analysis below assumes dense (sparse = False) case
     Z = list(sdp_variable_map.values())[0].value
     _, s, _ = np.linalg.svd(Z)
@@ -463,7 +464,7 @@ if __name__ == '__main__':
         constraints_and_nearest_points_to_sdp_vars(constraint_clique_dict, exact_nearest_points, robot.dim)
     prob_exact = form_sdp_problem(constraint_clique_dict, sdp_variable_map_exact, sdp_constraints_map_exact,
                                   sdp_cost_map_exact, robot.dim)
-    prob_exact.solve(verbose=True, solver='CVXOPT')
+    prob_exact.solve(verbose=True, solver='MOSEK')
     Z_exact = list(sdp_variable_map_exact.values())[0].value
     _, s_exact, _ = np.linalg.svd(Z_exact)
     solution_rank_exact = np.linalg.matrix_rank(Z_exact, tol=1e-6, hermitian=True)
@@ -495,4 +496,3 @@ if __name__ == '__main__':
     print(f"Total error exact nearest: {total_error_exact}")
 
     # TODO: check constraint violations
-    

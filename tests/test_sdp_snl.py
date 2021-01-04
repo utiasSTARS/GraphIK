@@ -30,6 +30,7 @@ def run_constraint_test(test_case, graph, sparse=False, ee_cost=False):
             # except AssertionError:
             #     pass
         random_evaluations = evaluate_linear_map(clique, A_clique, b_clique, mapping, random_input_vals)
+        # TODO: change this to iterate over edges in the graph object and check that they exist with assert!
         for u in clique:
             for v in clique:
                 if frozenset((u, v)) in mapping:
@@ -86,7 +87,6 @@ class TestUR10(unittest.TestCase):
                     end_effectors = {key: input_vals[key] for key in ['p0', 'q0', f'p{self.robot.n}', f'q{self.robot.n}']}
 
                     constraint_clique_dict = distance_constraints(self.robot, end_effectors, sparse, ee_cost)
-                    A, b, mapping, _ = list(constraint_clique_dict.values())[0]
 
                     random_input_vals = {key: np.random.rand(3) for key in input_vals}
                     for clique in constraint_clique_dict:
