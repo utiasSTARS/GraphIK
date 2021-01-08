@@ -16,10 +16,10 @@ if __name__ == "__main__":
     np.random.seed(seed)
     local_algorithms_unbounded = ["trust-exact"]
     local_algorithms_bounded = ["trust-constr"]
-    n_goals = 3000  # Number of goals
+    n_goals = 100  # Number of goals
     n_init = 1  # Number of initializations to try (should be 1 for zero_init = True and for bound_smoothing = True)
     zero_init = True  # True makes the angular solvers MUCH better w
-    sdp_random_init = True  # Whether to use a random initialization for the SDP solver (vs. zero_init like the others)
+    sdp_random_init = False  # Whether to use a random initialization for the SDP solver (vs. zero_init like the others)
     use_limits = False  # Whether to use angular limits for all the solvers
     do_sdp = True
     do_jacobian = False  # Jacobian doesn't work well for zero_init (need a more local starting point)

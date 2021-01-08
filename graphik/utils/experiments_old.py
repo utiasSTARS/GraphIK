@@ -1,4 +1,3 @@
-from graphik.robots.robot_base import RobotRevolute
 import numpy as np
 import itertools
 import time
@@ -9,10 +8,11 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import to_rgba
 from matplotlib import rc
 
+rc("font", **{"family": "serif", "serif": ["Computer Modern"], "size": 18})
+rc("text", usetex=True)
 from progress.bar import ShadyBar as Bar
 
 from graphik.solvers.local_solver import LocalSolver
-# from graphik.solvers.local_solver_no_sym import LocalSolverJac
 from graphik.solvers.solver_fabrik import solver_fabrik
 from graphik.solvers.geometric_jacobian import jacobian_ik
 from graphik.solvers.riemannian_solver import RiemannianSolver
@@ -22,7 +22,7 @@ from graphik.utils.dgp import (
     adjacency_matrix_from_graph,
     pos_from_graph,
     graph_from_pos,
-    bound_smoothing
+    bound_smoothing,
 )
 from graphik.utils.geometry import trans_axis
 from graphik.utils.utils import (
@@ -32,17 +32,15 @@ from graphik.utils.utils import (
     best_fit_transform,
     safe_arccos,
     wraptopi,
-    bernoulli_confidence_jeffreys
+    bernoulli_confidence_jeffreys,
+    # bernoulli_confidence_normal_approximation
 )
-from graphik.utils.sdp_experiments import run_sdp_revolute_experiment
-rc("font", **{"family": "serif", "serif": ["Computer Modern"], "size": 18})
-rc("text", usetex=True)
 
 
 # Colours and styles used throughout
 linestyles = ["-", "--", "-."]
-line_colors = ["#000000", "#990000", "#294772", "#F6AA1C", '#558b6e']
-line_markers = ["s", "o", "d", "*", "v", "P"]
+line_colors = ["#000000", "#990000", "#294772", "#F6AA1C"]  # , '#cccccc']
+line_markers = ["s", "o", "d", "*"]
 
 
 def bounds_to_spherical_bounds(bounds, max_val=np.inf):
@@ -63,7 +61,7 @@ def run_multiple_experiments(
     jacobian_params,
     use_limits,
     verbosity,
-    bound_smoothing,
+    do_bound_smoothing,
     local_algorithms,
     riemannian_algorithms,
     fabrik_max_iter,
@@ -76,8 +74,6 @@ def run_multiple_experiments(
     local_graph=None,
     local_graph_map=None,
     pose_goals=False,
-    do_sdp=False,
-    sdp_random_init=False
 ):
     results_list = []
 
@@ -101,7 +97,7 @@ def run_multiple_experiments(
             init,
             use_limits,
             verbosity,
-            bound_smoothing,
+            do_bound_smoothing,
             local_algorithms,
             riemannian_algorithms,
             trigsimp,
@@ -114,8 +110,6 @@ def run_multiple_experiments(
             local_graph=local_graph,
             local_graph_map=local_graph_map,
             pose_goals=pose_goals,
-            do_sdp=do_sdp,
-            sdp_random_init=sdp_random_init
         )
         results_list.append(res)
         bar.next()
@@ -145,13 +139,11 @@ def run_full_experiment(
     local_graph=None,
     local_graph_map=None,
     pose_goals=False,
-    do_sdp=False,
-    sdp_random_init=False
 ) -> pd.DataFrame:
     """
     Run an experiment with a variety of solvers for a single goal specified by ee_goals.
 
-    :param graph: instance of Graph describing our robot
+    :param graph: instance of RobotGraph describing our robot
     :param solver_params: dictionary with local solver parameters
     :param riemannian_params: dictionary with Riemannian solver parameters
     :param jacobian_params: dictionary with Jacobian solver parameters
@@ -159,7 +151,7 @@ def run_full_experiment(
     :param init: a list of angular configurations to try as initial points
     :param use_limits: boolean indicating whether to use the angular limits in graph.robot
     :param verbosity: integer representing solver verbosity (0 to 2)
-    :param do_bound_smoothing: boolean indicating whether to initialize the Riemannian solver with bound smoothing (only
+    :param bound_smoothing: boolean indicating whether to initialize the Riemannian solver with bound smoothing (only
                             makes sense for a comparison with a single init)
     :param local_algorithms: list of local algorithms to use with local_solver (e.g., "L-BFGS-B", "TNC")
     :param riemannian_algorithms: list of algorithms to use with the riemannian solver
@@ -181,6 +173,7 @@ def run_full_experiment(
         riemannian_algorithms = ["TrustRegions", "ConjugateGradient"]
     results_list = []  # Stores all data frames to be eventually merged
 
+    # is_revolute3d = type(graph.robot) in (Revolute3dChain, Revolute3dTree)
     is_revolute3d = type(graph.robot) is RobotRevolute
     is_spherical = type(graph.robot) is RobotSpherical
     is_planar = not (is_revolute3d or is_spherical)
@@ -201,7 +194,11 @@ def run_full_experiment(
         if pose_goals and not is_revolute3d:
             ee_goals_points[ee[1]] = graph.robot.get_pose(q_goal, ee[1]).trans
         elif pose_goals and is_revolute3d:
-            ee_goals_points[ee[1]] = graph.robot.get_pose(q_goal, ee[0]).dot(trans_axis(graph.robot.axis_length, "z")).trans
+            ee_goals_points[ee[1]] = (
+                graph.robot.get_pose(q_goal, ee[0])
+                .dot(trans_axis(graph.robot.axis_length, "z"))
+                .trans
+            )
     # Deal with the local graph object (for spherical case)
     if local_graph is None:
         local_graph = graph
@@ -216,10 +213,12 @@ def run_full_experiment(
     else:
         if pose_goals:
             ee_goals_local = {
-                local_graph_map[key]: graph.robot.get_pose(q_goal, key) for key in ee_goals_points
+                local_graph_map[key]: graph.robot.get_pose(q_goal, key)
+                for key in ee_goals_points
             }
             ee_goals_local_eval = {
-                local_graph_map[ee[0]]: graph.robot.get_pose(q_goal, ee[0]) for ee in graph.robot.end_effectors
+                local_graph_map[ee[0]]: graph.robot.get_pose(q_goal, ee[0])
+                for ee in graph.robot.end_effectors
             }
         spherical_to_revolute_case = True
 
@@ -231,7 +230,7 @@ def run_full_experiment(
                 local_graph.robot,
                 ee_goals_local,
                 local_graph.robot.lb.keys(),
-                pose_cost=use_q_in_cost
+                pose_cost=use_q_in_cost,
             )
         elif use_symbolic:
             local_solver.set_symbolic_cost_function(
@@ -244,7 +243,10 @@ def run_full_experiment(
             )
         elif is_planar:
             local_solver.set_procedural_cost_function(
-                local_graph.robot, ee_goals_local, pose_cost=False, do_grad_and_hess=True
+                local_graph.robot,
+                ee_goals_local,
+                pose_cost=False,
+                do_grad_and_hess=True,
             )
         else:
             local_solver.set_procedural_cost_function(
@@ -348,107 +350,27 @@ def run_full_experiment(
 
     # Jacobian-based solver (dls-inverse)
     if do_jacobian:
-        assert False, "ERROR: Deprecated option, set do_jacobian = False for now."
-        # if is_revolute3d:
-        #     solve_fn = run_jacobian_revolute_experiment
-        # elif is_spherical:
-        #     solve_fn = run_jacobian_spherical_experiment
-        # elif is_planar:
-        #     solve_fn = run_jacobian_planar_experiment
-        # local_solver_jac = LocalSolverJac(graph.robot)
-        # res_jacobian = solve_fn(
-        #     graph, local_solver_jac, init[0], q_goal, use_limits=use_limits
-        # )
-        # # if not spherical_to_revolute_case:  # Use the revolute formulation if a revolute equivalent is provided
-        # #     res_jacobian = run_full_jacobian_sweep_experiment(
-        # #         graph, ee_goals, init, q_goal, params=jacobian_params, use_limits=use_limits
-        # #     )
-        # # else:
-        # #     q_goal_revolute = list_to_variable_dict(flatten(q_goal.values()))
-        # #     res_jacobian = run_full_jacobian_sweep_experiment(
-        # #         local_graph, ee_goals_local, init, q_goal_revolute, params=jacobian_params, use_limits=use_limits
-        # #     )
-        # res_jacobian["Solver"] = "Jacobian"
-        # results_list.append(res_jacobian)
-
-    if do_sdp:
-        # Run the SDP as an individual solver (should not do too well)
-        assert is_revolute3d, 'SDP only supports revolute manipulators at the moment'
-        solve_fn = run_sdp_revolute_experiment
-        sdp_init = graph.robot.random_configuration() if sdp_random_init else init[0]
-        res_sdp, q_sdp, P_sdp = solve_fn(graph, sdp_init, q_goal, use_limits=use_limits, force_dense=False)
-        res_sdp["Solver"] = "SDP"
-        results_list.append(res_sdp)
-
-        # Use the SDP solution as an initialization for the local solvers
-        for algorithm in local_algorithms:
-            if is_revolute3d or spherical_to_revolute_case:
-                solve_fn = run_local_revolute_experiment
-            elif is_planar:
-                solve_fn = run_local_planar_experiment
-            local_solver.params["solver"] = algorithm
-            res_df = solve_fn(
-                local_graph,
-                ee_goals_local_eval,
-                local_solver,
-                -1,
-                q_sdp,
-                use_limits=use_limits,
-                use_hess=use_hess,
-                pose_goals=use_q_in_cost,
-            )
-            res_df["Solver"] = algorithm + ' + SDP'
-            results_list.append(res_df)
-
-        # Use the SDP solution as an initialization for the Riemannian solvers
-        for algorithm in riemannian_algorithms:
-            if is_revolute3d:
-                solve_fn = run_riemannian_revolute_experiment
-            elif is_spherical:
-                solve_fn = run_riemannian_spherical_experiment
-            elif is_planar:
-                solve_fn = run_riemannian_planar_experiment
-            # print("Running Riemannian {:} solver...".format(algorithm))
-            riemannian_params["solver"] = algorithm
-            riemannian_solver = RiemannianSolver(graph, riemannian_params)
-
-            res_df = solve_fn(
-                graph,
-                riemannian_solver,
-                -1,
-                D_goal,
-                X_goal,
-                ee_goals,
-                P_sdp,
-                T_goal=T_goal,
-                use_limits=use_limits,
-                verbosity=verbosity,
-                do_bound_smoothing=False,
-            )
-            res_df["Solver"] = "Riemannian " + algorithm + " + SDP"
-            results_list.append(res_df)
-
-            # if do_bound_smoothing:
-            #     # print("Running Riemannian {:} solver with BS...".format(algorithm))
-            #     riemannian_params["solver"] = algorithm
-            #     riemannian_solver = RiemannianSolver(graph, riemannian_params)
-            #
-            #     res_df_bs = solve_fn(
-            #         graph,
-            #         riemannian_solver,
-            #         -1,
-            #         D_goal,
-            #         X_goal,
-            #         ee_goals,
-            #         P_sdp,
-            #         T_goal=T_goal,
-            #         use_limits=use_limits,
-            #         verbosity=verbosity,
-            #         do_bound_smoothing=True,
-            #         pose_goals=use_q_in_cost,
-            #     )
-            #     res_df_bs["Solver"] = "Riemannian " + algorithm + " + BS" + " + SDP"
-            #     results_list.append(res_df_bs)
+        if is_revolute3d:
+            solve_fn = run_jacobian_revolute_experiment
+        elif is_spherical:
+            solve_fn = run_jacobian_spherical_experiment
+        elif is_planar:
+            solve_fn = run_jacobian_planar_experiment
+        local_solver_jac = LocalSolverJac(graph.robot)
+        res_jacobian = solve_fn(
+            graph, local_solver_jac, init[0], q_goal, use_limits=use_limits
+        )
+        # if not spherical_to_revolute_case:  # Use the revolute formulation if a revolute equivalent is provided
+        #     res_jacobian = run_full_jacobian_sweep_experiment(
+        #         graph, ee_goals, init, q_goal, params=jacobian_params, use_limits=use_limits
+        #     )
+        # else:
+        #     q_goal_revolute = list_to_variable_dict(flatten(q_goal.values()))
+        #     res_jacobian = run_full_jacobian_sweep_experiment(
+        #         local_graph, ee_goals_local, init, q_goal_revolute, params=jacobian_params, use_limits=use_limits
+        #     )
+        res_jacobian["Solver"] = "Jacobian"
+        results_list.append(res_jacobian)
 
     # Joint it all together
     results = pd.concat(results_list, sort=True)
@@ -486,7 +408,7 @@ def run_riemannian_revolute_experiment(
     D_goal,
     Y_goal,
     ee_goals: dict,
-    init,
+    Y_init: dict,
     T_goal=None,
     use_limits: bool = False,
     verbosity=2,
@@ -504,7 +426,7 @@ def run_riemannian_revolute_experiment(
     :param init:
     :param use_limits:
     :param verbosity:
-    :param do_bound_smoothing:
+    :param bound_smoothing:
     :return:
     """
 
@@ -526,12 +448,9 @@ def run_riemannian_revolute_experiment(
     # Adjacency matrix
     omega = adjacency_matrix_from_graph(G)
 
-    if type(init) == np.ndarray:
-        Y_init = init
-    else:
-        init_angles = list_to_variable_dict(init)
-        G_init = graph.realization(init_angles)
-        Y_init = pos_from_graph(G_init)
+    init_angles = list_to_variable_dict(Y_init)
+    G_init = graph.realization(init_angles)
+    Y_init = pos_from_graph(G_init)
 
     # Set bounds if using bound smoothing
     bounds = None
@@ -575,7 +494,7 @@ def run_riemannian_revolute_experiment(
                 graph.robot.lb[key] - q_sol[key], q_sol[key] - graph.robot.ub[key]
             )
 
-            if limit_violations[key] > 0.01*graph.robot.ub[key]:
+            if limit_violations[key] > 0.01 * graph.robot.ub[key]:
                 limits_violated = True
 
     # if limits_violated:
@@ -593,11 +512,11 @@ def run_riemannian_revolute_experiment(
     D_sol = graph.distance_matrix_from_joints(q_sol)
     e_D = omega * (np.sqrt(D_sol) - np.sqrt(D_goal))
     max_dist_error = abs(max(e_D.min(), e_D.max(), key=abs))
-    err_pos = 0.
-    err_rot = 0.
+    err_pos = 0.0
+    err_rot = 0.0
     for key in ee_goals:
         T_sol = graph.robot.get_pose(list_to_variable_dict(q_sol), key)
-        T_sol.rot.as_matrix()[0:3,0:2] = ee_goals[key].rot.as_matrix()[0:3,0:2]
+        T_sol.rot.as_matrix()[0:3, 0:2] = ee_goals[key].rot.as_matrix()[0:3, 0:2]
         err_pos += norm(ee_goals[key].trans - T_sol.trans)
         # err_rot += norm((ee_goals[key].rot.dot(T_sol.rot.inv())).log())
         z1 = ee_goals[key].rot.as_matrix()[0:3, -1]
@@ -646,78 +565,6 @@ def run_riemannian_revolute_experiment(
     return results
 
 
-def run_jacobian_revolute_experiment(
-    graph: RobotGraph, solver, init: list, q_goal: dict, use_limits: bool
-) -> pd.DataFrame:
-
-    T_goal = graph.robot.get_pose(q_goal, graph.robot.end_effectors[0][0])
-    sol_info_local = solver.solve(T_goal, init, use_limits=use_limits)
-
-    n = graph.robot.n
-    runtime = sol_info_local["runtime"]
-    num_iters = sol_info_local["niter"]
-    q_local = sol_info_local["x"]
-    T_local = graph.robot.get_pose(list_to_variable_dict(q_local), f"p{n}")
-    T_local.rot.as_matrix()[0:3, 0:2] = T_goal.rot.as_matrix()[0:3, 0:2]
-
-    err_local_pos = norm(T_goal.trans - T_local.trans)
-    err_local_rot = norm((T_goal.rot.dot(T_local.rot.inv())).log())
-    limit_violations = list_to_variable_dict(graph.robot.n * [0])
-
-    q_sol = list_to_variable_dict(q_local)
-    limits_violated = False
-    if use_limits:
-        for key in graph.robot.limited_joints:
-            limit_violations[key] = max(
-                graph.robot.lb[key] - q_sol[key], q_sol[key] - graph.robot.ub[key]
-            )
-            if limit_violations[key] > 0.01*graph.robot.ub[key]:
-                limits_violated = True
-    
-    # if limits_violated:
-    #     print("--------------------------")
-    #     print("Method: Eq. Constraint")
-    #     print(
-    #         "Angle violated! \n Lower bounds: {:} \n Upper bounds: {:}".format(
-    #             graph.robot.lb, graph.robot.ub
-    #         )
-    #     )
-    #     print("q_sol: {:}".format(q_sol))
-    #     print("--------------------------")
-
-    columns = [
-        "Init.",
-        "Goals",
-        "Iterations",
-        "Runtime",
-        "Solution Config",
-        "Pos Error",
-        "Rot Error",
-        "Limit Violations",
-        "Limits Violated",
-    ]
-
-    data = dict(
-        zip(
-            columns,
-            [
-                [init],
-                [T_goal],
-                [num_iters],
-                [runtime],
-                [q_local],
-                [err_local_pos],
-                [err_local_rot],
-                [limit_violations],
-                [limits_violated],
-            ],
-        )
-    )
-
-    results = pd.DataFrame(data)
-    return results
-
-
 def run_local_revolute_experiment(
     graph: RobotGraph,
     ee_goals: dict,
@@ -759,7 +606,7 @@ def run_local_revolute_experiment(
                 graph.robot.lb[key] - q_sol[key], q_sol[key] - graph.robot.ub[key]
             )
 
-            if limit_violations[key] > 0.01*graph.robot.ub[key]:
+            if limit_violations[key] > 0.01 * graph.robot.ub[key]:
                 limits_violated = True
 
     # if limits_violated:
@@ -773,8 +620,8 @@ def run_local_revolute_experiment(
     #     print("q_sol: {:}".format(q_sol))
     #     print("--------------------------")
 
-    err_pos = 0.
-    err_rot = 0.
+    err_pos = 0.0
+    err_rot = 0.0
     for key in ee_goals:
         T_sol = graph.robot.get_pose(list_to_variable_dict(q_sol), key)
         err_pos += norm(ee_goals[key].trans - T_sol.trans)
@@ -804,7 +651,7 @@ def run_local_revolute_experiment(
         "Pos Error",
         "Rot Error",
         "Limit Violations",
-        "Limits Violated"
+        "Limits Violated",
     ]
 
     data = dict(
@@ -852,7 +699,7 @@ def run_riemannian_planar_experiment(
     :param init:
     :param use_limits:
     :param verbosity:
-    :param do_bound_smoothing:
+    :param bound_smoothing:
     :return:
     """
 
@@ -926,21 +773,27 @@ def run_riemannian_planar_experiment(
     for key in ee_goals:
         T_sol = graph.robot.get_pose(list_to_variable_dict(q_sol), key)
         err_pos += norm(ee_goals[key].trans - T_sol.trans)
-        err_rot += safe_arccos((ee_goals[key].rot.dot(T_sol.rot.inv())).as_matrix()[0, 0])
+        err_rot += safe_arccos(
+            (ee_goals[key].rot.dot(T_sol.rot.inv())).as_matrix()[0, 0]
+        )
 
-    data = dict([("Init.", [Y_init]),
-                 ("Goals", [ee_goals]),
-                 ("f(x)", [f_x]),
-                 ("Gradient Norm", [grad_norm]),
-                 ("Iterations", [num_iters]),
-                 ("Runtime", [runtime]),
-                 ("Solution", [Y_opt]),
-                 ("Solution Config", [q_sol]),
-                 ("Pos Error", [err_pos]),
-                 ("Rot Error", [err_rot]),
-                 ("Limit Violations", [limit_violations]),
-                 ("Limits Violated", [limits_violated]),
-                 ("Max Dist Error", [max_dist_error])])
+    data = dict(
+        [
+            ("Init.", [Y_init]),
+            ("Goals", [ee_goals]),
+            ("f(x)", [f_x]),
+            ("Gradient Norm", [grad_norm]),
+            ("Iterations", [num_iters]),
+            ("Runtime", [runtime]),
+            ("Solution", [Y_opt]),
+            ("Solution Config", [q_sol]),
+            ("Pos Error", [err_pos]),
+            ("Rot Error", [err_rot]),
+            ("Limit Violations", [limit_violations]),
+            ("Limits Violated", [limits_violated]),
+            ("Max Dist Error", [max_dist_error]),
+        ]
+    )
 
     results = pd.DataFrame(data)
     results["Bound Smoothing"] = do_bound_smoothing
@@ -972,7 +825,7 @@ def run_riemannian_spherical_experiment(
     :param init:
     :param use_limits:
     :param verbosity:
-    :param do_bound_smoothing:
+    :param bound_smoothing:
     :return:
     """
 
@@ -1049,157 +902,28 @@ def run_riemannian_spherical_experiment(
         z2 = graph.robot.get_pose(q_sol, key).rot.as_matrix()[0:3, -1]
         err_rot += safe_arccos(z1.dot(z2))
 
-    data = dict([("Init.", [Y_init]),
-                 ("Goals", [ee_goals]),
-                 ("f(x)", [f_x]),
-                 ("Gradient Norm", [grad_norm]),
-                 ("Iterations", [num_iters]),
-                 ("Runtime", [runtime]),
-                 ("Solution", [Y_opt]),
-                 ("Solution Config", [q_sol]),
-                 ("Pos Error", [err_pos]),
-                 ("Rot Error", [err_rot]),
-                 ("Limit Violations", [limit_violations]),
-                 ("Limits Violated", [limits_violated]),
-                 ("Max Dist Error", [max_dist_error])])
+    data = dict(
+        [
+            ("Init.", [Y_init]),
+            ("Goals", [ee_goals]),
+            ("f(x)", [f_x]),
+            ("Gradient Norm", [grad_norm]),
+            ("Iterations", [num_iters]),
+            ("Runtime", [runtime]),
+            ("Solution", [Y_opt]),
+            ("Solution Config", [q_sol]),
+            ("Pos Error", [err_pos]),
+            ("Rot Error", [err_rot]),
+            ("Limit Violations", [limit_violations]),
+            ("Limits Violated", [limits_violated]),
+            ("Max Dist Error", [max_dist_error]),
+        ]
+    )
 
     results = pd.DataFrame(data)
     results["Bound Smoothing"] = do_bound_smoothing
     return results
 
-
-def run_jacobian_planar_experiment(
-    graph: RobotGraph, solver, init: list, q_goal: dict, use_limits: bool
-) -> pd.DataFrame:
-
-    ee = (
-        graph.robot.end_effectors[0][0]
-        if "p" in graph.robot.end_effectors[0][0]
-        else graph.robot.end_effectors[0][1]
-    )
-    T_goal = graph.robot.get_pose(q_goal, ee)
-    sol_info_local = solver.solve(T_goal, init, use_limits=use_limits)
-
-    n = graph.robot.n
-    runtime = sol_info_local["runtime"]
-    num_iters = sol_info_local["niter"]
-    q_local = sol_info_local["x"]
-    T_local = graph.robot.get_pose(list_to_variable_dict(q_local), f"p{n}")
-    err_local_pos = norm(T_goal.trans - T_local.trans)
-    err_local_rot = norm((T_goal.rot.dot(T_local.rot.inv())).log())
-    limit_violations = list_to_variable_dict(graph.robot.n * [0])
-
-    q_sol = list_to_variable_dict(q_local)
-    if use_limits:
-        for key in q_sol:
-            limit_violations[key] = max(
-                graph.robot.lb[key] - q_sol[key], q_sol[key] - graph.robot.ub[key]
-            )
-            if limit_violations[key] > 1e-6:
-                print("--------------------------")
-                print(
-                    "Angle violated! \n Lower bounds: {:} \n Upper bounds: {:}".format(
-                        graph.robot.lb, graph.robot.ub
-                    )
-                )
-                print("q_sol: {:}".format(q_sol))
-                print("--------------------------")
-    columns = [
-        "Init.",
-        "Goals",
-        "Iterations",
-        "Runtime",
-        "Solution Config",
-        "Pos Error",
-        "Rot Error",
-        "Limit Violations",
-    ]
-
-    data = dict(
-        zip(
-            columns,
-            [
-                [init],
-                [T_goal],
-                [num_iters],
-                [runtime],
-                [q_local],
-                [err_local_pos],
-                [err_local_rot],
-                [limit_violations],
-            ],
-        )
-    )
-
-    results = pd.DataFrame(data)
-    return results
-
-
-def run_jacobian_spherical_experiment(
-    graph: RobotGraph, solver, init: list, q_goal: dict, use_limits: bool
-) -> pd.DataFrame:
-
-    ee = (
-        graph.robot.end_effectors[0][0]
-        if "p" in graph.robot.end_effectors[0][0]
-        else graph.robot.end_effectors[0][1]
-    )
-    T_goal = graph.robot.get_pose(q_goal, ee)
-    sol_info_local = solver.solve(T_goal, init, use_limits=use_limits)
-
-    n = graph.robot.n
-    runtime = sol_info_local["runtime"]
-    num_iters = sol_info_local["niter"]
-    q_local = sol_info_local["x"]
-    T_local = graph.robot.get_pose(list_to_variable_dict(q_local), f"p{n}")
-    err_local_pos = norm(T_goal.trans - T_local.trans)
-    err_local_rot = norm((T_goal.rot.dot(T_local.rot.inv())).log())
-    limit_violations = list_to_variable_dict(graph.robot.n * [0])
-
-    q_sol = list_to_variable_dict(q_local)
-    if use_limits:
-        for key in q_sol:
-            limit_violations[key] = max(
-                graph.robot.lb[key] - q_sol[key], q_sol[key] - graph.robot.ub[key]
-            )
-            if limit_violations[key] > 1e-6:
-                print("--------------------------")
-                print(
-                    "Angle violated! \n Lower bounds: {:} \n Upper bounds: {:}".format(
-                        graph.robot.lb, graph.robot.ub
-                    )
-                )
-                print("q_sol: {:}".format(q_sol))
-                print("--------------------------")
-    columns = [
-        "Init.",
-        "Goals",
-        "Iterations",
-        "Runtime",
-        "Solution Config",
-        "Pos Error",
-        "Rot Error",
-        "Limit Violations",
-    ]
-
-    data = dict(
-        zip(
-            columns,
-            [
-                [init],
-                [T_goal],
-                [num_iters],
-                [runtime],
-                [q_local],
-                [err_local_pos],
-                [err_local_rot],
-                [limit_violations],
-            ],
-        )
-    )
-
-    results = pd.DataFrame(data)
-    return results
 
 def run_local_planar_experiment(
     graph: RobotGraph,
@@ -1209,7 +933,7 @@ def run_local_planar_experiment(
     init: list,
     use_limits=False,
     use_hess=False,
-    pose_goals=True
+    pose_goals=True,
 ) -> pd.DataFrame:
     """
 
@@ -1240,26 +964,32 @@ def run_local_planar_experiment(
             if limit_violations[key] > 0.01 * graph.robot.ub[key]:
                 limits_violated = True
 
-    err_pos = 0.
-    err_rot = 0.
+    err_pos = 0.0
+    err_rot = 0.0
     for key in ee_goals:
         T_sol = graph.robot.get_pose(q_sol, key)
         err_pos += norm(ee_goals[key].trans - T_sol.trans)
         # Do arccos for an angle instead
-        err_rot += safe_arccos((ee_goals[key].rot.dot(T_sol.rot.inv())).as_matrix()[0, 0])
+        err_rot += safe_arccos(
+            (ee_goals[key].rot.dot(T_sol.rot.inv())).as_matrix()[0, 0]
+        )
 
     runtime = results.runtime
     num_iters = results.nit
 
-    data = dict([("Init.", [init]),
-                 ("Goals", [ee_goals]),
-                 ("Iterations", [num_iters]),
-                 ("Runtime", [runtime]),
-                 ("Solution Config", [q_sol]),
-                 ("Pos Error", [err_pos]),
-                 ("Rot Error", [err_rot]),
-                 ("Limit Violations", [limit_violations]),
-                 ("Limits Violated", [limits_violated])])
+    data = dict(
+        [
+            ("Init.", [init]),
+            ("Goals", [ee_goals]),
+            ("Iterations", [num_iters]),
+            ("Runtime", [runtime]),
+            ("Solution Config", [q_sol]),
+            ("Pos Error", [err_pos]),
+            ("Rot Error", [err_rot]),
+            ("Limit Violations", [limit_violations]),
+            ("Limits Violated", [limits_violated]),
+        ]
+    )
 
     return pd.DataFrame(data)
 
@@ -1294,16 +1024,10 @@ def run_full_fabrik_sweep_experiment(
         for i in range(len(goals)):
             goals[i] = list(goals[i]) + [0]
 
-    # retrieving parents indices in the format of solver_fabrik
-    if (type(robot).__name__ == "Revolute2dTree") or (
-        type(robot).__name__ == "Spherical3dTree"
-    ):
-        parents_index = [-1] * len(robot.parents)
-        for key in list(robot.parents.keys()):
-            for child in robot.parents[key]:
-                parents_index[int(child[1:])] = int(key[1:])
-    else:
-        parents_index = [-1] + list(range(N - 1))
+    parents_index = [-1] * len(list(robot.structure.nodes))
+    for (u, v, w) in robot.structure.edges.data("weight"):
+        if w:
+            parents_index[int(v[1:])] = int(u[1:])
 
     # Retrieving the position for the initial guess
     initial_guess = []
@@ -1396,19 +1120,21 @@ def run_full_fabrik_sweep_experiment(
             P_e = np.insert(P_e, 1, np.eye(2), 0)
         else:
             P_e = np.insert(result["positions"], 1, np.eye(3), 0)
-        G_e = graph_from_pos(P_e, graph.node__ids)
+        G_e = graph_from_pos(P_e, graph.node_ids)
         try:
             q_sol = graph.robot.joint_variables(G_e)
         except np.linalg.LinAlgError:
             print("Breakpoint for lstsq error")
         # Determine rot_error with q_sol
-        err_rot_ind = 0.
-        err_pos_check_ind = 0.
+        err_rot_ind = 0.0
+        err_pos_check_ind = 0.0
         for key in ee_goals:
             T_sol = graph.robot.get_pose(q_sol, key)
             err_pos_check_ind += norm(ee_goals[key].trans - T_sol.trans)
             if dim == 2:
-                err_rot_ind += safe_arccos((ee_goals[key].rot.dot(T_sol.rot.inv())).as_matrix()[0, 0])
+                err_rot_ind += safe_arccos(
+                    (ee_goals[key].rot.dot(T_sol.rot.inv())).as_matrix()[0, 0]
+                )
             else:
                 z1 = ee_goals[key].rot.as_matrix()[0:3, -1]
                 z2 = graph.robot.get_pose(q_sol, key).rot.as_matrix()[0:3, -1]
@@ -1423,7 +1149,8 @@ def run_full_fabrik_sweep_experiment(
                 )
             else:
                 limit_violations_ind[key] = max(
-                    graph.robot.lb[key] - q_sol[key][1], q_sol[key][1] - graph.robot.ub[key]
+                    graph.robot.lb[key] - q_sol[key][1],
+                    q_sol[key][1] - graph.robot.ub[key],
                 )
             if limit_violations_ind[key] > 0.01 * graph.robot.ub[key]:
                 violated_ind = True
@@ -1459,19 +1186,23 @@ def run_full_fabrik_sweep_experiment(
         rot_error += [err_rot_ind]
         pos_error_check += [err_pos_check_ind]
 
-    data = dict([("Init.", initial),
-                 ("Error", final_errors),
-                 ("Runtime", runtimes),
-                 ("Iterations", iterations),
-                 ("Solution", solutions),
-                 ("Success", successes),
-                 ("Status", status),
-                 ("Limit Violations", limit_violations),
-                 ("Max End-Effector Error", max_ee_errors),
-                 ("Limits Violated", limits_violated),
-                 ("Pos Error", pos_error),
-                 ("Pos Error Check", pos_error_check),
-                 ("Rot Error", rot_error)])
+    data = dict(
+        [
+            ("Init.", initial),
+            ("Error", final_errors),
+            ("Runtime", runtimes),
+            ("Iterations", iterations),
+            ("Solution", solutions),
+            ("Success", successes),
+            ("Status", status),
+            ("Limit Violations", limit_violations),
+            ("Max End-Effector Error", max_ee_errors),
+            ("Limits Violated", limits_violated),
+            ("Pos Error", pos_error),
+            ("Pos Error Check", pos_error_check),
+            ("Rot Error", rot_error),
+        ]
+    )
 
     return pd.DataFrame(data)
 
@@ -1757,21 +1488,16 @@ def compute_successes(
     data_alg = data[data["Solver"] == solver]
     if use_limits:
         successes = (
-                (data_alg[attribute1] < tol_ee)
-                & (data_alg[attribute2] < tol_ang)
-                & (data_alg["Limits Violated"] == False)
+            (data_alg[attribute1] < tol_ee)
+            & (data_alg[attribute2] < tol_ang)
+            & (data_alg["Limits Violated"] == False)
         )
     else:
-        successes = ((data_alg[attribute1] < tol_ee) & (data_alg[attribute2] < tol_ang))
-    return successes #data_alg[successes][attribute1].count()
+        successes = (data_alg[attribute1] < tol_ee) & (data_alg[attribute2] < tol_ang)
+    return successes  # data_alg[successes][attribute1].count()
 
 
-def make_latex_results_table_old(
-    data,
-    tol_ee=1e-2,
-    tol_ang=1e-2,
-    use_limits=True
-):
+def make_latex_results_table_old(data, tol_ee=1e-2, tol_ang=1e-2, use_limits=True):
     solvers = list(data["Solver"].unique())
     success_rates = []
     mean_iters = []
@@ -1782,9 +1508,12 @@ def make_latex_results_table_old(
     for solver in solvers:
         data_alg = data[data["Solver"] == solver]
         successes = compute_successes(
-                data, solver, tol_ee=tol_ee, tol_ang=tol_ang, use_limits=use_limits
-            )
-        success_rates.append(data_alg[successes]['Iterations'].count()/ data[data["Solver"] == solver].shape[0])
+            data, solver, tol_ee=tol_ee, tol_ang=tol_ang, use_limits=use_limits
+        )
+        success_rates.append(
+            data_alg[successes]["Iterations"].count()
+            / data[data["Solver"] == solver].shape[0]
+        )
         if "Riemann" in solver:
             mean_iters.append(data_alg["Iterations"].mean() + 1)
         else:
@@ -1802,7 +1531,7 @@ def make_latex_results_table_old(
             "Mean No. of Iterations": mean_iters,
             "Mean Runtime (s)": mean_runtime,
             "Mean Pos. Error (m)": mean_pos_errors,
-            "Mean Rot. Error (rad)": mean_rot_errors
+            "Mean Rot. Error (rad)": mean_rot_errors,
         }
     )
 
@@ -1848,38 +1577,55 @@ def make_latex_results_table_old(
     return table_processed
 
 
-def make_latex_results_table(
-    data,
-    tol_ee=1e-2,
-    tol_ang=1e-2,
-    use_limits=True
-):
+def make_latex_results_table(data, tol_ee=1e-2, tol_ang=1e-2, use_limits=True):
     # solvers_in = list(data["Solver"].unique())
     if use_limits:
-        solvers = ['trust-constr', 'FABRIK', 'Riemannian TrustRegions', 'Riemannian TrustRegions + BS']
+        solvers = [
+            "trust-constr",
+            "FABRIK",
+            "Riemannian TrustRegions",
+            "Riemannian TrustRegions + BS",
+        ]
     else:
-        solvers = ['trust-exact', 'FABRIK', 'Riemannian TrustRegions', 'Riemannian TrustRegions + BS']
+        solvers = [
+            "trust-exact",
+            "FABRIK",
+            "Riemannian TrustRegions",
+            "Riemannian TrustRegions + BS",
+        ]
 
-    output_string = ''
+    output_string = ""
 
     for solver in solvers:
         data_alg = data[data["Solver"] == solver]
         successes = compute_successes(
-                data, solver, tol_ee=tol_ee, tol_ang=tol_ang, use_limits=use_limits
-            )
-        n_successes = data_alg[successes]['Iterations'].count()
+            data, solver, tol_ee=tol_ee, tol_ang=tol_ang, use_limits=use_limits
+        )
+        n_successes = data_alg[successes]["Iterations"].count()
         n = data[data["Solver"] == solver].shape[0]
-        success_rate, success_rad = bernoulli_confidence_jeffreys(n, n_successes, confidence=0.95)
-        success_rate_pct = np.round(success_rate*100)
-        success_rad_pct = success_rad*100
-        output_string += ' & $' + '{:.1f}'.format(success_rate_pct) + ' \pm ' + '{:.1f}'.format(success_rad_pct) + '$'
+        success_rate, success_rad = bernoulli_confidence_jeffreys(
+            n, n_successes, confidence=0.95
+        )
+        success_rate_pct = np.round(success_rate * 100)
+        success_rad_pct = success_rad * 100
+        output_string += (
+            " & $"
+            + "{:.1f}".format(success_rate_pct)
+            + " \pm "
+            + "{:.1f}".format(success_rad_pct)
+            + "$"
+        )
         if "Riemann" in solver:
-            output_string += ' & ' + '{:.0f}'.format(np.round(data_alg["Iterations"].mean() + 1))
+            output_string += " & " + "{:.0f}".format(
+                np.round(data_alg["Iterations"].mean() + 1)
+            )
         else:
-            output_string += ' & ' + '{:.0f}'.format(np.round(data_alg["Iterations"].mean()))
-        output_string += ' ({:.0f})'.format(np.round(data_alg["Iterations"].std()))
+            output_string += " & " + "{:.0f}".format(
+                np.round(data_alg["Iterations"].mean())
+            )
+        output_string += " ({:.0f})".format(np.round(data_alg["Iterations"].std()))
 
-    return output_string + ' \\\\'
+    return output_string + " \\\\"
 
 
 def plot_waterfall_curve(
@@ -1894,7 +1640,7 @@ def plot_waterfall_curve(
     save_file=None,
     plot_y_label=True,
     make_legend=True,
-    plot_confidence=True
+    plot_confidence=True,
 ):
 
     if solver_list is None:
@@ -1926,20 +1672,22 @@ def plot_waterfall_curve(
             for solver in results_by_solver:
                 data_alg = data[data["Solver"] == solver]
                 successes = compute_successes(
-                        data,
-                        solver,
-                        attribute1,
-                        attribute2,
-                        tol_ee=10 ** tol_ee,
-                        tol_ang=tol_ang,
-                        use_limits=use_limits,
+                    data,
+                    solver,
+                    attribute1,
+                    attribute2,
+                    tol_ee=10 ** tol_ee,
+                    tol_ang=tol_ang,
+                    use_limits=use_limits,
                 )
-                n_successes = data_alg[successes]['Pos Error'].count()
-                results_by_solver[solver].append(n_successes/data_alg.shape[0])
+                n_successes = data_alg[successes]["Iterations"].count()
+                results_by_solver[solver].append(n_successes / data_alg.shape[0])
 
                 if plot_confidence:
                     n = data[data["Solver"] == solver].shape[0]
-                    success_rate, success_rad = bernoulli_confidence_jeffreys(n, n_successes, confidence=0.95)
+                    success_rate, success_rad = bernoulli_confidence_jeffreys(
+                        n, n_successes, confidence=0.95
+                    )
                     lower_bounds[solver].append(success_rate - success_rad)
                     upper_bounds[solver].append(success_rate + success_rad)
 
@@ -1976,12 +1724,18 @@ def plot_waterfall_curve(
             marker=marker,
             linestyle=style,
             linewidth=linewidth,
-            markersize=markersize + 2*(marker in ('d', '*')),
+            markersize=markersize + 2 * (marker in ("d", "*")),
             alpha=1.0,
         )
         if plot_confidence:
-            plt.fill_between(x_values, lower_bounds[solver], upper_bounds[solver], facecolor=color,
-                             edgecolor=None, alpha=0.29)
+            plt.fill_between(
+                x_values,
+                lower_bounds[solver],
+                upper_bounds[solver],
+                facecolor=color,
+                edgecolor=None,
+                alpha=0.29,
+            )
 
     plt.xlabel(x_label)
 
@@ -2048,16 +1802,17 @@ def create_box_plot_from_data(
         line_colors_local = line_colors
 
     for p_i in range(len(bp["boxes"])):
+        # print("Box index: {:}".format(p_i))
         bp["boxes"][p_i].set(
-            facecolor=to_rgba(line_colors_local[p_i % len(line_colors_local)], 0.4),
-            edgecolor=line_colors_local[p_i % len(line_colors_local)]
+            facecolor=to_rgba(line_colors_local[p_i], 0.4),
+            edgecolor=line_colors_local[p_i],
         )
-        bp["medians"][p_i].set(color=line_colors_local[p_i % len(line_colors_local)])
-        bp["fliers"][p_i].set(markeredgecolor=line_colors_local[p_i % len(line_colors_local)])
+        bp["medians"][p_i].set(color=line_colors_local[p_i])
+        bp["fliers"][p_i].set(markeredgecolor=line_colors_local[p_i])
 
     for p_i in range(len(bp["whiskers"])):
-        bp["whiskers"][p_i].set(color=line_colors_local[(p_i // 2) % len(line_colors_local)])
-        bp["caps"][p_i].set(color=line_colors_local[(p_i // 2) % len(line_colors_local)])
+        bp["whiskers"][p_i].set(color=line_colors_local[p_i // 2])
+        bp["caps"][p_i].set(color=line_colors_local[p_i // 2])
 
     # axes[a_i].set_yscale('log')
     # axes.set_yticks(np.linspace(-25, 1, 27), minor=True)

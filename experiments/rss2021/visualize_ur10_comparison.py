@@ -6,7 +6,7 @@ from graphik.utils.experiments import make_latex_results_table, plot_waterfall_c
 if __name__ == '__main__':
     # File loading params
     use_limits = False
-    sdp_rand_init = True
+    sdp_rand_init = True  # False for nuclear norm
     tol = 1e-9
     save = True
     n_goals = 3000
