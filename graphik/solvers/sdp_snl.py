@@ -376,7 +376,7 @@ def lme_to_cvxpy_cost(sdp_cost_map: dict, sdp_variable_map: dict):
         C_clique = 0.
         for C in C_list:
             C_clique += C
-        cost += cp.trace(C @ sdp_variable_map[clique])
+        cost += cp.trace(C_clique @ sdp_variable_map[clique])
     return cost
 
 
@@ -403,12 +403,9 @@ if __name__ == '__main__':
     sparse = False  # Whether to exploit chordal sparsity in the SDP formulation
     ee_cost = False  # Whether to treat the end-effectors as variables with targets in the cost.
                      # If False, end-effectors are NOT variables (they are baked in to constraints as parameters)
-
-    # Full UR10 convenience
-    # robot, graph = load_ur10()
-
+    conic_solver = "MOSEK"  # One of "MOSEK", "CVXOPT" for now
     # Truncated UR10 (only the first n joints)
-    n = 6
+    n = 5
     if n == 6:
         robot, graph = load_ur10()
     else:
@@ -438,7 +435,7 @@ if __name__ == '__main__':
     sdp_variable_map_nuclear, sdp_constraints_map_nuclear, sdp_cost_map_nuclear = \
         constraints_and_nearest_points_to_sdp_vars(constraint_clique_dict, nearest_points_nuclear, robot.dim)
     prob_nuclear = form_sdp_problem(constraint_clique_dict, sdp_variable_map_nuclear, sdp_constraints_map_nuclear, sdp_cost_map_nuclear, robot.dim)
-    prob_nuclear.solve(verbose=True, solver='MOSEK')
+    prob_nuclear.solve(verbose=True, solver=conic_solver)
     # Analysis below assumes dense (sparse = False) case
     Z_nuclear = list(sdp_variable_map_nuclear.values())[0].value
     _, s_nuclear, _ = np.linalg.svd(Z_nuclear)
@@ -450,7 +447,7 @@ if __name__ == '__main__':
     sdp_variable_map, sdp_constraints_map, sdp_cost_map = \
         constraints_and_nearest_points_to_sdp_vars(constraint_clique_dict, no_nearest_points, robot.dim)
     prob_feas = form_sdp_problem(constraint_clique_dict, sdp_variable_map, sdp_constraints_map, sdp_cost_map, robot.dim)
-    prob_feas.solve(verbose=True, solver='MOSEK')
+    prob_feas.solve(verbose=True, solver=conic_solver)
     # Analysis below assumes dense (sparse = False) case
     Z = list(sdp_variable_map.values())[0].value
     _, s, _ = np.linalg.svd(Z)
@@ -464,7 +461,7 @@ if __name__ == '__main__':
         constraints_and_nearest_points_to_sdp_vars(constraint_clique_dict, exact_nearest_points, robot.dim)
     prob_exact = form_sdp_problem(constraint_clique_dict, sdp_variable_map_exact, sdp_constraints_map_exact,
                                   sdp_cost_map_exact, robot.dim)
-    prob_exact.solve(verbose=True, solver='MOSEK')
+    prob_exact.solve(verbose=True, solver=conic_solver)
     Z_exact = list(sdp_variable_map_exact.values())[0].value
     _, s_exact, _ = np.linalg.svd(Z_exact)
     solution_rank_exact = np.linalg.matrix_rank(Z_exact, tol=1e-6, hermitian=True)

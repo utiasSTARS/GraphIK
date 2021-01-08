@@ -34,9 +34,9 @@ if __name__ == '__main__':
                         "\\texttt{Riem. TR}", "\\texttt{Riem. TR+BS}", "\\texttt{Riem. TR+SDP}"]
 
     if save:
-        save_waterfall = "results/figs/waterfall_ur10_bounded_{:}.pdf".format(use_limits)
-        save_boxplot = "results/figs/boxplot_ur10_bounded_{:}.pdf".format(use_limits)
-        save_boxplot_rot = "results/figs/boxplot_rot_ur10_bounded_{:}.pdf".format(use_limits)
+        save_waterfall = "results/figs/waterfall_ur10_bounded_{:}._nuclear_{:}pdf".format(use_limits, sdp_rand_init)
+        save_boxplot = "results/figs/boxplot_ur10_bounded_{:}_nuclear_{:}.pdf".format(use_limits, sdp_rand_init)
+        save_boxplot_rot = "results/figs/boxplot_rot_ur10_bounded_{:}_nuclear_{:}.pdf".format(use_limits, sdp_rand_init)
     else:
         save_waterfall = None
         save_boxplot = None
