@@ -16,7 +16,7 @@ if __name__ == "__main__":
     np.random.seed(seed)
     local_algorithms_unbounded = ["trust-exact"]
     local_algorithms_bounded = ["trust-constr"]
-    n_goals = 100  # Number of goals
+    n_goals = 3000  # Number of goals
     n_init = 1  # Number of initializations to try (should be 1 for zero_init = True and for bound_smoothing = True)
     zero_init = True  # True makes the angular solvers MUCH better w
     sdp_random_init = False  # Whether to use a random initialization for the SDP solver (vs. zero_init like the others)

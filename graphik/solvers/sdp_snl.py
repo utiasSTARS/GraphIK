@@ -9,7 +9,7 @@ from graphik.utils.roboturdf import load_ur10, load_truncated_ur10
 from graphik.robots.robot_base import RobotRevolute
 from graphik.graphs.graph_base import RobotRevoluteGraph
 from graphik.solvers.constraints import get_full_revolute_nearest_point
-
+from graphik.solvers.sdp_formulations import SdpSolverParams
 
 def prepare_set_cover_problem(constraint_clique_dict: dict, nearest_points: dict, d: int):
     targets_to_cover = list(nearest_points.keys())
@@ -404,8 +404,9 @@ if __name__ == '__main__':
     ee_cost = False  # Whether to treat the end-effectors as variables with targets in the cost.
                      # If False, end-effectors are NOT variables (they are baked in to constraints as parameters)
     conic_solver = "MOSEK"  # One of "MOSEK", "CVXOPT" for now
+    solver_params = SdpSolverParams()  # Use MOSEK settings that worked well for us before
     # Truncated UR10 (only the first n joints)
-    n = 5
+    n = 6
     if n == 6:
         robot, graph = load_ur10()
     else:
@@ -435,7 +436,7 @@ if __name__ == '__main__':
     sdp_variable_map_nuclear, sdp_constraints_map_nuclear, sdp_cost_map_nuclear = \
         constraints_and_nearest_points_to_sdp_vars(constraint_clique_dict, nearest_points_nuclear, robot.dim)
     prob_nuclear = form_sdp_problem(constraint_clique_dict, sdp_variable_map_nuclear, sdp_constraints_map_nuclear, sdp_cost_map_nuclear, robot.dim)
-    prob_nuclear.solve(verbose=True, solver=conic_solver)
+    prob_nuclear.solve(verbose=True, solver=conic_solver, mosek_params=solver_params.mosek_params)
     # Analysis below assumes dense (sparse = False) case
     Z_nuclear = list(sdp_variable_map_nuclear.values())[0].value
     _, s_nuclear, _ = np.linalg.svd(Z_nuclear)
@@ -447,7 +448,7 @@ if __name__ == '__main__':
     sdp_variable_map, sdp_constraints_map, sdp_cost_map = \
         constraints_and_nearest_points_to_sdp_vars(constraint_clique_dict, no_nearest_points, robot.dim)
     prob_feas = form_sdp_problem(constraint_clique_dict, sdp_variable_map, sdp_constraints_map, sdp_cost_map, robot.dim)
-    prob_feas.solve(verbose=True, solver=conic_solver)
+    prob_feas.solve(verbose=True, solver=conic_solver, mosek_params=solver_params.mosek_params)
     # Analysis below assumes dense (sparse = False) case
     Z = list(sdp_variable_map.values())[0].value
     _, s, _ = np.linalg.svd(Z)
@@ -461,7 +462,7 @@ if __name__ == '__main__':
         constraints_and_nearest_points_to_sdp_vars(constraint_clique_dict, exact_nearest_points, robot.dim)
     prob_exact = form_sdp_problem(constraint_clique_dict, sdp_variable_map_exact, sdp_constraints_map_exact,
                                   sdp_cost_map_exact, robot.dim)
-    prob_exact.solve(verbose=True, solver=conic_solver)
+    prob_exact.solve(verbose=True, solver=conic_solver, mosek_params=solver_params.mosek_params)
     Z_exact = list(sdp_variable_map_exact.values())[0].value
     _, s_exact, _ = np.linalg.svd(Z_exact)
     solution_rank_exact = np.linalg.matrix_rank(Z_exact, tol=1e-6, hermitian=True)

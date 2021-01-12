@@ -9,7 +9,7 @@ if __name__ == '__main__':
     sdp_rand_init = False  # False for nuclear norm
     tol = 1e-9
     save = True
-    n_goals = 100  #3000
+    n_goals = 3000 #3000
     # Visualization params
     tol_ee = 0.01
     tol_ang = 0.01
@@ -34,7 +34,7 @@ if __name__ == '__main__':
                         "\\texttt{Riem. TR}", "\\texttt{Riem. TR+BS}", "\\texttt{Riem. TR+SDP}"]
 
     if save:
-        save_waterfall = "results/figs/waterfall_ur10_bounded_{:}._nuclear_{:}pdf".format(use_limits, sdp_rand_init)
+        save_waterfall = "results/figs/waterfall_ur10_bounded_{:}._nuclear_{:}.pdf".format(use_limits, sdp_rand_init)
         save_boxplot = "results/figs/boxplot_ur10_bounded_{:}_nuclear_{:}.pdf".format(use_limits, sdp_rand_init)
         save_boxplot_rot = "results/figs/boxplot_rot_ur10_bounded_{:}_nuclear_{:}.pdf".format(use_limits, sdp_rand_init)
     else:
