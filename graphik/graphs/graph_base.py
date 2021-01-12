@@ -138,7 +138,7 @@ class RobotGraph(ABC):
         # TODO implement this
         raise NotImplementedError
 
-    def complete_from_pos(self, P: dict) -> nx.DiGraph:
+    def complete_from_pos(self, P: dict, dist=True) -> nx.DiGraph:
         """
         Given a dictionary of node name and position key-value pairs,
         generate a copy of the problem graph and fill the POS attributes of
@@ -154,7 +154,10 @@ class RobotGraph(ABC):
             if name in G.nodes():
                 G.nodes[name][POS] = pos
 
-        return graph_complete_edges(G)
+        if dist:
+            G = graph_complete_edges(G)
+
+        return G
 
     def distance_bound_matrices(self):
         """

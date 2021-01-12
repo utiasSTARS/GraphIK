@@ -83,7 +83,7 @@ def pos_from_graph(G: nx.DiGraph, node_names=None) -> np.ndarray:
     return np.array(X)
 
 
-def graph_from_pos(P: np.ndarray, node_ids: list = None) -> nx.DiGraph:
+def graph_from_pos(P: np.ndarray, node_ids: list = None, dist=True) -> nx.DiGraph:
     """
     Generates an nx.DiGraph object of the subclass type given
     an n x m matrix where n is the number of nodes and m is the dimension.
@@ -97,7 +97,11 @@ def graph_from_pos(P: np.ndarray, node_ids: list = None) -> nx.DiGraph:
     G = nx.empty_graph(node_ids, create_using=nx.DiGraph)
     for idx, name in enumerate(node_ids):
         G.nodes[name][POS] = P[idx, :]
-    return graph_complete_edges(G)
+
+    if dist:
+        graph_complete_edges(G)
+
+    return G
 
 
 def graph_from_pos_dict(P: dict) -> nx.DiGraph:
