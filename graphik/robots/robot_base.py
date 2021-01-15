@@ -908,60 +908,44 @@ class RobotRevolute(Robot):
         of the query_node in the configuration determined by
         node_inputs.
         """
-        aux = False
-        if query_node[0] == "q":
-            query_node = "p" + query_node[1:]
-            aux = True
+        kinematic_map = self.kinematic_map["p0"]["p" + query_node[1:]]
 
-        kinematic_map, parents, T_ref = self.kinematic_map, self.parents, self.T_zero
         T = self.T_base
-        for node in kinematic_map["p0"][query_node][1:]:
-            pred = [u for u in parents.predecessors(node)]
-            T_rel = T_ref[pred[0]].inv().dot(T_ref[node])
-            T = T.dot(rot_axis(joint_angles[node], "z")).dot(T_rel)
 
-        if aux:
+        for idx in range(len(kinematic_map) - 1):
+            pred, cur = kinematic_map[idx], kinematic_map[idx + 1]
+            T_rel = self.T_zero[pred].inv().dot(self.T_zero[cur])
+            T = T.dot(rot_axis(joint_angles[cur], "z")).dot(T_rel)
+
+        if query_node[0] == "q":
             T = T.dot(trans_axis(self.axis_length, "z"))
 
         return T
 
     def generate_structure_graph(self):
-        kinematic_map = self.kinematic_map
-        axis_length = self.axis_length
-        parents = self.parents
+        trans_z = trans_axis(self.axis_length, "z")
         T = self.T_zero
 
         S = nx.empty_graph(create_using=nx.DiGraph)
+
         for ee in self.end_effectors:
-            for node in kinematic_map["p0"][ee[0]]:
-                aux_node = f"q{node[1:]}"
-                node_pos = T[node].trans
-                aux_node_pos = T[node].dot(trans_axis(axis_length, "z")).trans
+            k_map = self.kinematic_map["p0"][ee[0]]
+            for idx in range(len(k_map)):
+                cur, aux_cur = k_map[idx], f"q{k_map[idx][1:]}"
+                cur_pos, aux_cur_pos = T[cur].trans, T[cur].dot(trans_z).trans
+                dist = norm(cur_pos - aux_cur_pos)
 
-                # Generate nodes for joint
-                S.add_nodes_from(
-                    [
-                        (node, {POS: node_pos}),
-                        (
-                            aux_node,
-                            {POS: aux_node_pos},
-                        ),
-                    ]
-                )
+                # Add nodes for joint and edge between them
+                S.add_nodes_from([(cur, {POS: cur_pos}), (aux_cur, {POS: aux_cur_pos})])
+                S.add_edge(cur, aux_cur, **{DIST: dist, LOWER: dist, UPPER: dist})
 
-                # Generate edges
-                S.add_edge(node, aux_node)
-                for pred in parents.predecessors(node):
-                    S.add_edges_from([(pred, node), (pred, aux_node)])
-                    S.add_edges_from(
-                        [(f"q{pred[1:]}", node), (f"q{pred[1:]}", aux_node)]
-                    )
-
-        # Generate all edge weights
-        for u, v in S.edges():
-            S[u][v][DIST] = norm(S.nodes[u][POS] - S.nodes[v][POS])
-            S[u][v][LOWER] = S[u][v][DIST]
-            S[u][v][UPPER] = S[u][v][DIST]
+                # If there exists a preceeding joint, connect it to new
+                if idx != 0:
+                    pred, aux_pred = (k_map[idx - 1], f"q{k_map[idx-1][1:]}")
+                    for u in [pred, aux_pred]:
+                        for v in [cur, aux_cur]:
+                            dist = norm(S.nodes[u][POS] - S.nodes[v][POS])
+                            S.add_edge(u, v, **{DIST: dist, LOWER: dist, UPPER: dist})
 
         # Delete positions used for weights
         for u in S.nodes:
@@ -969,29 +953,9 @@ class RobotRevolute(Robot):
 
         # Set node type to robot
         nx.set_node_attributes(S, "robot", TYPE)
-        self.structure = S
 
-    def euclidean_cost_hessian(self, J: dict, K: dict, r: dict):
-        """
-        Based on 'Solving Inverse Kinematics Using Exact Hessian Matrices', Erleben, 2019
-        :param J: dictionary of linear velocity kinematic Jacobians
-        :param K: dictionary of tensors representing second order derivative information
-        :param r: dictionary where each value for key ee is goal_ee - F_ee(theta)
-        :return:
-        """
-        H = 0
-        for e in J.keys():
-            J_e = J[e]
-            N = J_e.shape[1]
-            H += J_e.T @ J_e
-            # TODO: Try with einsum for speed, maybe?
-            for idx in range(N):
-                for jdx in range(idx, N):
-                    dH = K[e][:, idx, jdx].T @ r[e]
-                    H[idx, jdx] -= dH
-                    if idx != jdx:
-                        H[jdx, idx] -= dH
-        return H
+        # Set structure graph attribute
+        self.structure = S
 
     def max_min_distance(self, T0: SE3, T1: SE3, T2: SE3) -> (float, float, str):
         """
@@ -1047,16 +1011,16 @@ class RobotRevolute(Robot):
         Sets known bounds on the distances between joints.
         This is induced by link length and joint limits.
         """
-        K = self.parents
+        K = self.parents  # do we need parents if we have structure?
         S = self.structure
         T = self.T_zero
         self.limit_edges = []  # edges enforcing joint limits
         self.limited_joints = []  # joint limits that can be enforced
         kinematic_map = self.kinematic_map
         T_axis = trans_axis(self.axis_length, "z")
-        for u in K:
+        for u in K:  # every node
             for v in (des for des in K.successors(u) if des):
-                S[u][v][LOWER] = S[u][v][DIST]
+                S[u][v][LOWER] = S[u][v][DIST]  # NOTE is this redundant code?
                 S[u][v][UPPER] = S[u][v][DIST]
             for v in (des for des in level2_descendants(K, u) if des):
                 names = [
@@ -1203,10 +1167,32 @@ class RobotRevolute(Robot):
         determined by lb and ub.
         """
         q = {}
-        for key in self.parents:
+        for key in self.joint_ids:
             if key != "p0":
                 q[key] = self.lb[key] + (self.ub[key] - self.lb[key]) * np.random.rand()
         return q
+
+    def euclidean_cost_hessian(self, J: dict, K: dict, r: dict):
+        """
+        Based on 'Solving Inverse Kinematics Using Exact Hessian Matrices', Erleben, 2019
+        :param J: dictionary of linear velocity kinematic Jacobians
+        :param K: dictionary of tensors representing second order derivative information
+        :param r: dictionary where each value for key ee is goal_ee - F_ee(theta)
+        :return:
+        """
+        H = 0
+        for e in J.keys():
+            J_e = J[e]
+            N = J_e.shape[1]
+            H += J_e.T @ J_e
+            # TODO: Try with einsum for speed, maybe?
+            for idx in range(N):
+                for jdx in range(idx, N):
+                    dH = K[e][:, idx, jdx].T @ r[e]
+                    H[idx, jdx] -= dH
+                    if idx != jdx:
+                        H[jdx, idx] -= dH
+        return H
 
     def jacobian_linear_symb(
         self, joint_angles: dict, pose_term=False, ee_keys=None

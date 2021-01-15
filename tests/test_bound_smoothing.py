@@ -191,7 +191,15 @@ class TestBoundSmoothing(unittest.TestCase):
 
         dZ = 1
 
-        params = {"a": a, "alpha": al, "d": d, "theta": th, "lb": lb, "ub": ub}
+        params = {
+            "a": a,
+            "alpha": al,
+            "d": d,
+            "theta": th,
+            "modified_dh": False,
+            "lb": lb,
+            "ub": ub,
+        }
         robot = RobotRevolute(params)  # instantiate robot
         graph = RobotRevoluteGraph(robot)  # instantiate graph
 
