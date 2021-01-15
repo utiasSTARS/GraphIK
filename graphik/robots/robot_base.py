@@ -40,7 +40,7 @@ class Robot(ABC):
         raise NotImplementedError
 
     def get_all_poses(self, joint_angles: dict) -> dict:
-        T = {ROOT: SE3.identity()}
+        T = {ROOT: self.T_base}
         for ee in self.end_effectors:
             for node in self.kinematic_map[ROOT][ee[0]][1:]:
                 T[node] = self.get_pose(joint_angles, node)
@@ -82,6 +82,18 @@ class Robot(ABC):
     @dim.setter
     def dim(self, dim: int):
         self._dim = dim
+
+    @property
+    def joint_ids(self):
+        try:
+            return self._joint_ids
+        except AttributeError:
+            self._joint_ids = list(self.kinematic_map.keys())
+            return self._joint_ids
+
+    @joint_ids.setter
+    def joint_ids(self, ids: list):
+        self._joint_ids = ids
 
     @property
     def structure(self) -> nx.DiGraph:
@@ -127,7 +139,7 @@ class Robot(ABC):
     @property
     def T_base(self) -> SEMatrixBase:
         """
-        :return: Transform to robot base frame
+        :return: SE(dim) Transform to robot base frame
         """
         return self._T_base
 
@@ -135,6 +147,9 @@ class Robot(ABC):
     def T_base(self, T_base: SEMatrixBase):
         self._T_base = T_base
 
+    ########################################
+    #         KINEMATIC PARAMETERS
+    ########################################
     @property
     def ub(self) -> dict:
         """
@@ -156,10 +171,6 @@ class Robot(ABC):
     @lb.setter
     def lb(self, lb: dict):
         self._lb = lb if type(lb) is dict else list_to_variable_dict(flatten([lb]))
-
-    ########################################
-    #         KINEMATIC PARAMETERS
-    ########################################
 
     @property
     def d(self) -> dict:
@@ -266,25 +277,24 @@ class Robot(ABC):
 class RobotPlanar(Robot):
     def __init__(self, params):
         self.dim = 2
+        self.T_base = params.get("T_base", SE2.identity())
         self.a = params["a"]
         self.th = params["theta"]
-        self.n = len(self.th)
-        self.ub = (
-            params["joint_limits_upper"]
-            if "joint_limits_upper" in params
-            else list_to_variable_dict(self.n * [pi])
+        self.n = len(self.a)
+        self.joint_ids = [f"p{idx}" for idx in range(self.n)]
+        self.lb = params.get(
+            "joint_limits_lower", dict(zip(self.joint_ids, self.n * [-pi]))
         )
-        self.lb = (
-            params["joint_limits_lower"]
-            if "joint_limits_lower" in params
-            else list_to_variable_dict(self.n * [-pi])
+        self.ub = params.get(
+            "joint_limits_upper", dict(zip(self.joint_ids, self.n * [pi]))
         )
-        if "parents" in params:
-            self.structure = self.tree_graph(params["parents"])
-        else:
-            self.structure = self.chain_graph()
 
-        self.kinematic_map = nx.shortest_path(self.structure)
+        self.parents = params.get(
+            "parents", {f"p{idx}": [f"p{idx+1}"] for idx in range(self.n)}
+        )
+        self.kinematic_map = nx.shortest_path(nx.from_dict_of_lists(self.parents))
+
+        self.generate_structure_graph()
         self.set_limits()
 
         super(RobotPlanar, self).__init__()
@@ -313,6 +323,9 @@ class RobotPlanar(Robot):
         nx.set_node_attributes(tree_graph, "robot", TYPE)
         # nx.set_node_attributes(tree_graph, None, POS)
         return tree_graph
+
+    def generate_structure_graph(self):
+        self.structure = self.tree_graph(self.parents)
 
     @property
     def end_effectors(self) -> list:
@@ -491,19 +504,20 @@ class RobotPlanar(Robot):
 class RobotSpherical(Robot):
     def __init__(self, params):
 
-        if "T_base" in params:
-            self.T_base = params["T_base"]
-        else:
-            self.T_base = SE3.identity()
-
+        self.dim = 3
+        self.T_base = params.get("T_base", SE3.identity())
         self.a = params["a"]
         self.al = params["alpha"]
         self.d = params["d"]
         self.th = params["theta"]
-        self.ub = params["joint_limits_upper"]
-        self.lb = params["joint_limits_lower"]
-        self.n = len(self.th)  # number of links
-        self.dim = 3
+        self.n = len(self.a)  # number of links
+        self.joint_ids = [f"p{idx}" for idx in range(self.n + 1)]
+        self.lb = params.get(
+            "joint_limits_upper", dict(zip(self.joint_ids, self.n * [-pi]))
+        )
+        self.ub = params.get(
+            "joint_limits_lower", dict(zip(self.joint_ids, self.n * [pi]))
+        )
 
         if "parents" in params:
             self.parents = params["parents"]
@@ -804,53 +818,43 @@ class RobotSpherical(Robot):
 
 class RobotRevolute(Robot):
     def __init__(self, params):
-        self.axis_length = 1
         self.dim = 3
+        self.n = params.get("num_joints", len(params["lb"]))  # number of joints
+        self.axis_length = params.get("axis_length", 1)  # distance between p and q
+        self.T_base = params.get("T_base", SE3.identity())  # base frame
+        # self.modified_dh = params.get("modified_dh", False)
 
-        if "T_base" in params:
-            self.T_base = params["T_base"]
-        else:
-            self.T_base = SE3.identity()
-
-        # Use frame poses at zero conf if provided, if not use DH
-        if "T_zero" in params:
-            self.T_zero = params["T_zero"]
-            self.n = len(self.T_zero) - 1  # number of links
-        else:
-            if "modified_dh" in params:
-                self.modified_dh = params["modified_dh"]
-            else:
-                self.modified_dh = False
-
-            if all(k in params for k in ("a", "d", "alpha", "theta")):
-                self.a = params["a"]
-                self.d = params["d"]
-                self.al = params["alpha"]
-                self.th = params["theta"]
-                self.n = len(self.al)  # number of links
-            else:
-                raise Exception("Robot description not provided.")
-
-        # Topological "map" of the robot
+        # Topological "map" of the robot, if not provided assume chain
         if "parents" in params:
             self.parents = nx.DiGraph(params["parents"])
         else:
-            names = [f"p{idx}" for idx in range(self.n + 1)]
-            self.parents = nx.path_graph(names, nx.DiGraph)
+            self.parents = nx.path_graph(
+                [f"p{idx}" for idx in range(self.n + 1)], nx.DiGraph
+            )
 
+        # A dict of shortest paths between joints for forward kinematics
         self.kinematic_map = nx.shortest_path(self.parents)
 
-        # joint limits TODO currently assuming symmetric around 0
-        if "lb" and "ub" in params:
-            self.lb = params["lb"]
-            self.ub = params["ub"]
-        else:
-            self.lb = list_to_variable_dict(self.n * [-pi])
-            self.ub = list_to_variable_dict(self.n * [pi])
+        # joint limits NOTE currently assuming symmetric around 0
+        self.lb = params.get("lb", dict(zip(self.joint_ids, self.n * [-pi])))
+        self.ub = params.get("ub", dict(zip(self.joint_ids, self.n * [pi])))
 
-        self.structure = self.structure_graph()
-        self.limit_edges = []  # edges enforcing joint limits
-        self.limited_joints = []  # joint limits that can be enforced
+        # Use frame poses at zero conf if provided, otherwise construct from DH
+        if "T_zero" in params:
+            self.T_zero = params["T_zero"]
+        else:
+            try:
+                self.a, self.d, self.al, self.th, self.modified_dh = (
+                    params["a"],
+                    params["d"],
+                    params["alpha"],
+                    params["theta"],
+                    params["modified_dh"],
+                )
+            except KeyError:
+                raise Exception("Robot description not provided.")
+
+        self.generate_structure_graph()
         self.set_limits()
         super(RobotRevolute, self).__init__()
 
@@ -910,7 +914,7 @@ class RobotRevolute(Robot):
             aux = True
 
         kinematic_map, parents, T_ref = self.kinematic_map, self.parents, self.T_zero
-        T = T_ref["p0"]
+        T = self.T_base
         for node in kinematic_map["p0"][query_node][1:]:
             pred = [u for u in parents.predecessors(node)]
             T_rel = T_ref[pred[0]].inv().dot(T_ref[node])
@@ -921,7 +925,7 @@ class RobotRevolute(Robot):
 
         return T
 
-    def structure_graph(self) -> nx.DiGraph:
+    def generate_structure_graph(self):
         kinematic_map = self.kinematic_map
         axis_length = self.axis_length
         parents = self.parents
@@ -965,7 +969,7 @@ class RobotRevolute(Robot):
 
         # Set node type to robot
         nx.set_node_attributes(S, "robot", TYPE)
-        return S
+        self.structure = S
 
     def euclidean_cost_hessian(self, J: dict, K: dict, r: dict):
         """
@@ -1046,6 +1050,8 @@ class RobotRevolute(Robot):
         K = self.parents
         S = self.structure
         T = self.T_zero
+        self.limit_edges = []  # edges enforcing joint limits
+        self.limited_joints = []  # joint limits that can be enforced
         kinematic_map = self.kinematic_map
         T_axis = trans_axis(self.axis_length, "z")
         for u in K:

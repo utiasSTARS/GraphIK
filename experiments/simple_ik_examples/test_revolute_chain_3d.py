@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import graphik
 import numpy as np
+from graphik.robots.robot_base import RobotRevolute
 from graphik.graphs.graph_base import RobotGraph, RobotRevoluteGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.dgp import (
@@ -82,13 +83,13 @@ if __name__ == "__main__":
 
     ### UR10 DH
     n = 6
-    # a = [0, -0.612, -0.5723, 0, 0, 0]
-    # d = [0.1273, 0, 0, 0.1639, 0.1157, 0.0922]
-    # al = [pi / 2, 0, 0, pi / 2, -pi / 2, 0]
-    # th = [0, pi, 0, 0, 0, 0]
+    a = [0, -0.612, -0.5723, 0, 0, 0]
+    d = [0.1273, 0, 0, 0.1639, 0.1157, 0.0922]
+    al = [pi / 2, 0, 0, pi / 2, -pi / 2, 0]
+    th = [0, pi, 0, 0, 0, 0]
     ub = (pi) * np.ones(n)
     lb = -ub
-    # modified_dh = False
+    modified_dh = False
 
     ### Schunk Powerball
     # n = 6
@@ -143,17 +144,17 @@ if __name__ == "__main__":
     # lb = -ub
     # modified_dh = True
 
-    # params = {
-    #     "a": a[:n],
-    #     "alpha": al[:n],
-    #     "d": d[:n],
-    #     "theta": th[:n],
-    #     "lb": lb[:n],
-    #     "ub": ub[:n],
-    #     "modified_dh": modified_dh,
-    # }
+    params = {
+        "a": a[:n],
+        "alpha": al[:n],
+        "d": d[:n],
+        "theta": th[:n],
+        "lb": lb[:n],
+        "ub": ub[:n],
+        "modified_dh": modified_dh,
+    }
 
-    # robot = RobotRevolute(params)
+    robot = RobotRevolute(params)
 
     # n = 7
     # ub = (pi) * np.ones(n)
@@ -165,8 +166,9 @@ if __name__ == "__main__":
     # fname = graphik.__path__[0] + "/robots/urdfs/kuka_iiwr.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/kuka_lwr.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/jaco2arm6DOF_no_hand.urdf"
-    urdf_robot = RobotURDF(fname)
-    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
+    #
+    # urdf_robot = RobotURDF(fname)
+    # robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
 
     graph = RobotRevoluteGraph(robot)
     # graph.distance_bounds_from_sampling()

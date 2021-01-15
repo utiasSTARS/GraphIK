@@ -6,7 +6,7 @@ import numpy as np
 from numpy import pi
 from numpy.linalg import norm
 
-from graphik.graphs.graph_base import Graph, RobotRevoluteGraph
+from graphik.graphs.graph_base import RobotGraph, RobotRevoluteGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.dgp import (
     adjacency_matrix_from_graph,
