@@ -6,8 +6,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 from numpy import pi, sqrt
 
-from graphik.graphs.graph_base import Graph, RobotRevoluteGraph
-from graphik.robots.revolute import Revolute3dTree
+from graphik.graphs.graph_base import RobotGraph, RobotRevoluteGraph
+from graphik.robots.robot_base import RobotRevolute
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.geometry import trans_axis
 from graphik.utils.dgp import (
@@ -19,7 +19,7 @@ from graphik.utils.dgp import (
 from graphik.utils.utils import best_fit_transform, list_to_variable_dict, dZ
 
 
-def solve_random_problem(graph: Graph, solver: RiemannianSolver):
+def solve_random_problem(graph: RobotGraph, solver: RiemannianSolver):
     q_goal = graph.robot.random_configuration()
     G_goal = graph.realization(q_goal)
     X_goal = pos_from_graph(G_goal)
@@ -124,11 +124,12 @@ if __name__ == "__main__":
         "alpha": al,
         "d": d,
         "theta": th,
+        "modified_dh": False,
         "lb": lb,
         "ub": ub,
         "parents": parents,
     }
-    robot = Revolute3dTree(params)
+    robot = RobotRevolute(params)
     graph = RobotRevoluteGraph(robot)
     # print(graph.adjacency_matrix())
     solver = RiemannianSolver(graph)

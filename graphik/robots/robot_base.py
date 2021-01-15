@@ -1011,27 +1011,25 @@ class RobotRevolute(Robot):
         Sets known bounds on the distances between joints.
         This is induced by link length and joint limits.
         """
-        K = self.parents  # do we need parents if we have structure?
         S = self.structure
         T = self.T_zero
         self.limit_edges = []  # edges enforcing joint limits
         self.limited_joints = []  # joint limits that can be enforced
         kinematic_map = self.kinematic_map
         T_axis = trans_axis(self.axis_length, "z")
-        for u in K:  # every node
-            for v in (des for des in K.successors(u) if des):
-                S[u][v][LOWER] = S[u][v][DIST]  # NOTE is this redundant code?
-                S[u][v][UPPER] = S[u][v][DIST]
-            for v in (des for des in level2_descendants(K, u) if des):
-                names = [
-                    (f"p{u[1:]}", f"p{v[1:]}"),
-                    (f"p{u[1:]}", f"q{v[1:]}"),
-                    (f"q{u[1:]}", f"p{v[1:]}"),
-                    (f"q{u[1:]}", f"q{v[1:]}"),
-                ]
 
+        for ee in self.end_effectors:
+            k_map = self.kinematic_map["p0"][ee[0]]
+            for idx in range(2, len(k_map)):
+                cur, prev = k_map[idx], k_map[idx - 2]
+                names = [
+                    (f"p{prev[1:]}", f"p{cur[1:]}"),
+                    (f"p{prev[1:]}", f"q{cur[1:]}"),
+                    (f"q{prev[1:]}", f"p{cur[1:]}"),
+                    (f"q{prev[1:]}", f"q{cur[1:]}"),
+                ]
                 for ids in names:
-                    path = kinematic_map[u][v]
+                    path = kinematic_map[prev][cur]
                     T0, T1, T2 = [T[path[0]], T[path[1]], T[path[2]]]
 
                     if "q" in ids[0]:
@@ -1043,7 +1041,7 @@ class RobotRevolute(Robot):
 
                     if limit:
 
-                        rot_limit = rot_axis(self.ub[v], "z")
+                        rot_limit = rot_axis(self.ub[cur], "z")
 
                         T_rel = T1.inv().dot(T2)
 
@@ -1054,7 +1052,7 @@ class RobotRevolute(Robot):
                         else:
                             d_min = d_limit
 
-                        self.limited_joints += [v]
+                        self.limited_joints += [cur]
                         self.limit_edges += [[ids[0], ids[1]]]  # TODO remove/fix
 
                     S.add_edge(ids[0], ids[1])
@@ -1071,31 +1069,29 @@ class RobotRevolute(Robot):
         # TODO: make this more readable
         tol = 1e-10
         q_zero = list_to_variable_dict(self.n * [0])
-        kinematic_map = self.kinematic_map
-        parents = self.parents
         get_pose = self.get_pose
+        axis_length = self.axis_length
 
         T = {}
         T["p0"] = self.T_base
         theta = {}
 
         for ee in self.end_effectors:
-            path = kinematic_map["p0"][ee[0]][1:]
-            axis_length = self.axis_length
-            for node in path:
-                aux_node = f"q{node[1:]}"
-                pred = [u for u in parents.predecessors(node)]
+            k_map = self.kinematic_map["p0"][ee[0]]
+            for idx in range(1, len(k_map)):
+                cur, aux_cur = k_map[idx], f"q{k_map[idx][1:]}"
+                pred, aux_pred = (k_map[idx - 1], f"q{k_map[idx-1][1:]}")
 
-                T_prev = T[pred[0]]
+                T_prev = T[pred]
 
-                T_prev_0 = get_pose(q_zero, pred[0])
-                T_0 = get_pose(q_zero, node)
+                T_prev_0 = get_pose(q_zero, pred)
+                T_0 = get_pose(q_zero, cur)
                 T_rel = T_prev_0.inv().dot(T_0)
-                T_0_q = get_pose(q_zero, node).dot(trans_axis(axis_length, "z"))
+                T_0_q = get_pose(q_zero, cur).dot(trans_axis(axis_length, "z"))
                 T_rel_q = T_prev_0.inv().dot(T_0_q)
 
-                p = G.nodes[node][POS] - T_prev.trans
-                q = G.nodes[aux_node][POS] - T_prev.trans
+                p = G.nodes[cur][POS] - T_prev.trans
+                q = G.nodes[aux_cur][POS] - T_prev.trans
                 ps = T_prev.inv().as_matrix()[:3, :3].dot(p)
                 qs = T_prev.inv().as_matrix()[:3, :3].dot(q)
 
@@ -1125,7 +1121,7 @@ class RobotRevolute(Robot):
                     ]
                 )
                 if all(diff < tol):
-                    theta[node] = 0
+                    theta[cur] = 0
                 else:
                     sols = np.roots(
                         diff
@@ -1145,9 +1141,9 @@ class RobotRevolute(Robot):
                         )
 
                     sol = min(sols, key=error_test)
-                    theta[node] = -2 * arctan2(sol.real, 1)
+                    theta[cur] = -2 * arctan2(sol.real, 1)
 
-                T[node] = (T_prev.dot(rot_axis(theta[node], "z"))).dot(T_rel)
+                T[cur] = (T_prev.dot(rot_axis(theta[cur], "z"))).dot(T_rel)
 
             if T_final is None:
                 return theta
@@ -1156,7 +1152,7 @@ class RobotRevolute(Robot):
                 T_final[ee[0]] is not None
                 and norm(cross(T_rel.trans, np.array([0, 0, 1]))) < tol
             ):
-                T_th = (T[node]).inv().dot(T_final[ee[0]]).as_matrix()
+                T_th = (T[cur]).inv().dot(T_final[ee[0]]).as_matrix()
                 theta[ee[0]] += np.arctan2(T_th[1, 0], T_th[0, 0])
 
         return theta

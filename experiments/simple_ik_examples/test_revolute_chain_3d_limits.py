@@ -124,7 +124,7 @@ if __name__ == "__main__":
     # }
     # robot = RobotRevolute(params)
 
-    n = 7
+    n = 6
     angular_limits = np.minimum(np.random.rand(n) * (pi / 2) + pi / 2, pi)
     ub = angular_limits
     lb = -angular_limits
