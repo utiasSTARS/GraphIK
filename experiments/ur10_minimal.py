@@ -37,11 +37,10 @@ class MinimalUR10Problem:
         S.add_node("q2", **{POS: np.array([0.0, 1.049041, 0.612])})
         # S.add_node("p3", **{POS: array([0.0, 0.049041, 1.1843])})
         # S.add_node("q3", **{POS: array([0.0, 1.049041, 1.1843])})
-        S.add_node(
-            "p3", **{POS: np.array([0.0, 0.163941, 1.1843])}
-        )  # we equate p3 and p4
+        S.add_node("p3", **{POS: np.array([0.0, 0.163941, 1.1843])})  # p3 == p4
         S.add_node("q3", **{POS: np.array([0.0, 1.163941, 1.1843])})
-        S.add_node("q4", **{POS: np.array([1.0, 0.163941, 1.1843])})
+        # S.add_node("q4", **{POS: np.array([1.0, 0.163941, 1.1843])})
+        S.add_node("q4", **{POS: np.array([0.1157, 0.163941, 1.1843])})
         S.add_node("p5", **{POS: np.array([0.1157, 0.256141, 1.1843])})  # actually p6
 
         S.add_edges_from(
@@ -107,10 +106,10 @@ if __name__ == "__main__":
     G = graph.realization(q)
     T_goal_1, T_goal_2 = robot.get_pose(q, f"p6"), robot.get_pose(q, f"p4")
 
-    # p5 is p6 and p3 is p4
+    # p5 is p6 and q4 is p4
     goals = {
         f"p5": T_goal_1.trans,
-        f"p3": T_goal_2.trans,
+        f"q4": T_goal_2.trans,
     }
 
     ur10_min = MinimalUR10Problem()
