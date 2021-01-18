@@ -39,7 +39,7 @@ class MinimalUR10Problem:
         # S.add_node("q3", **{POS: array([0.0, 1.049041, 1.1843])})
         S.add_node("p3", **{POS: np.array([0.0, 0.163941, 1.1843])})  # p3 == p4
         S.add_node("q3", **{POS: np.array([0.0, 1.163941, 1.1843])})
-        # S.add_node("q4", **{POS: np.array([1.0, 0.163941, 1.1843])})
+        # S.add_node("q4", **{POS: np.array([1.0, 0.163941, 1.1843])}) # q4 is where p4 used to be
         S.add_node("q4", **{POS: np.array([0.1157, 0.163941, 1.1843])})
         S.add_node("p5", **{POS: np.array([0.1157, 0.256141, 1.1843])})  # actually p6
 
