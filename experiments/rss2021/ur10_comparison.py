@@ -18,10 +18,11 @@ if __name__ == "__main__":
     local_algorithms_bounded = ["trust-constr"]
     n_goals = 3000  # Number of goals
     n_init = 1  # Number of initializations to try (should be 1 for zero_init = True and for bound_smoothing = True)
-    zero_init = True  # True makes the angular solvers MUCH better w
+    zero_init = True  # True makes the angular solvers MUCH better
     sdp_random_init = False  # Whether to use a random initialization for the SDP solver (vs. zero_init like the others)
     use_limits = False  # Whether to use angular limits for all the solvers
     do_sdp = True
+    do_sdp_rank3 = True
     do_jacobian = False  # Jacobian doesn't work well for zero_init (need a more local starting point)
     do_fabrik = False  # Fabrik not supported for generic revolute solvers
     fabrik_only = (
@@ -119,7 +120,8 @@ if __name__ == "__main__":
         do_fabrik=do_fabrik,
         pose_goals=True,
         do_sdp=do_sdp,
-        sdp_random_init=sdp_random_init
+        sdp_random_init=sdp_random_init,
+        do_sdp_rank3=do_sdp_rank3
     )
     results.robot = robot
     results.seed = seed
