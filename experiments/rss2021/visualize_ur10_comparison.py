@@ -10,7 +10,7 @@ if __name__ == '__main__':
     do_sdp_rank3 = True
     tol = 1e-9
     save = False
-    n_goals = 50 #3000
+    n_goals = 1500 #3000
     # Visualization params
     tol_ee = 0.01
     tol_ang = 0.01

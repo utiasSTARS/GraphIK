@@ -11,6 +11,7 @@ from graphik.graphs.graph_base import RobotRevoluteGraph
 from graphik.solvers.constraints import get_full_revolute_nearest_point
 from graphik.solvers.sdp_formulations import SdpSolverParams
 
+
 def prepare_set_cover_problem(constraint_clique_dict: dict, nearest_points: dict, d: int):
     targets_to_cover = list(nearest_points.keys())
     cliques_remaining = set()
@@ -325,8 +326,42 @@ def constraints_and_nearest_points_to_sdp_vars(constraint_clique_dict: dict, nea
     return sdp_variable_map, sdp_constraints_map, sdp_cost_map
 
 
+def distance_inequality_constraint(constraint_clique_dict: dict, point_pair: frozenset, distance: float,
+                                   upper_bound: bool):
+    """
+    Output a LMI constraint (A_ineq, b) on a pair of points (both variables, not anchors) representing a lower or upper
+    distance bound.
+
+    :param constraint_clique_dict: output of distance_constraints function
+    :param point_pair: frozenset of the pair of points that this inequality constrains (e.g, frozenset(('p1', 'p2')))
+    :param distance: distance (meters) that limits this point
+    :param upper_bound: true if this constraint is an upper bound on distance, false if it's a lower bound
+    """
+    lower = not upper_bound
+    for clique in constraint_clique_dict:
+        A, _, index_mapping, _ = constraint_clique_dict[clique]
+        if point_pair.issubset(clique):
+            u = list(point_pair)[0]
+            v = list(point_pair)[1]
+            A_ineq = linear_matrix_equality(index_mapping[u], index_mapping[v], A[0].shape[0]) * (1 - 2*lower)
+            b = distance**2 * (1 - 2*lower)
+            return clique, (A_ineq, b)
+
+
+def cvxpy_inequality_constraints(sdp_variable_map: dict, inequality_map: dict):
+    """
+
+    """
+    constraints = []
+    for clique in inequality_map:
+        Z_clique = sdp_variable_map[clique]
+        constraints += [cp.trace(A@Z_clique) <= b for (A, b) in inequality_map[clique]]
+
+    return constraints
+
+
 def form_sdp_problem(constraint_clique_dict: dict, sdp_variable_map: dict, sdp_constraints_map:
-                     dict, sdp_cost_map: dict, d: int) -> cp.Problem:
+                     dict, sdp_cost_map: dict, d: int, extra_constraints: list = None) -> cp.Problem:
     constraints = [cons for cons_clique in sdp_constraints_map.values() for cons in cons_clique]
     # Link up the repeated values via equality constraints
     seen_vars = {}
@@ -363,6 +398,8 @@ def form_sdp_problem(constraint_clique_dict: dict, sdp_variable_map: dict, sdp_c
 
     # Convert cost matrices to cvxpy cost function
     cost = lme_to_cvxpy_cost(sdp_cost_map, sdp_variable_map)
+    if extra_constraints is not None:
+        constraints += extra_constraints
     return cp.Problem(cp.Minimize(cost), constraints)
 
 
@@ -399,12 +436,16 @@ def extract_solution(constraint_clique_dict: dict, sdp_variable_map: dict, d: in
 
 
 def solve_nearest_point_sdp(nearest_points: dict, end_effectors: dict, robot, sparse=False, solver_params=None,
-                            verbose=False):
+                            verbose=False, inequality_constraints_map=None):
     constraint_clique_dict = distance_constraints(robot, end_effectors, sparse, ee_cost=False)
     sdp_variable_map, sdp_constraints_map, sdp_cost_map = \
         constraints_and_nearest_points_to_sdp_vars(constraint_clique_dict, nearest_points, robot.dim)
+    if inequality_constraints_map is not None:
+        inequality_constraints = cvxpy_inequality_constraints(sdp_variable_map, inequality_constraints_map)
+    else:
+        inequality_constraints = None
     prob = form_sdp_problem(constraint_clique_dict, sdp_variable_map, sdp_constraints_map,
-                                  sdp_cost_map, robot.dim)
+                                  sdp_cost_map, robot.dim, extra_constraints=inequality_constraints)
     if solver_params is None:
         solver_params = SdpSolverParams()
     prob.solve(verbose=verbose, solver="MOSEK", mosek_params=solver_params.mosek_params)
