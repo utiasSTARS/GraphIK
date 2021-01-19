@@ -398,7 +398,8 @@ def extract_solution(constraint_clique_dict: dict, sdp_variable_map: dict, d: in
     return solution
 
 
-def solve_nearest_point_sdp(nearest_points: dict, end_effectors: dict, robot, sparse=False, solver_params=None):
+def solve_nearest_point_sdp(nearest_points: dict, end_effectors: dict, robot, sparse=False, solver_params=None,
+                            verbose=False):
     constraint_clique_dict = distance_constraints(robot, end_effectors, sparse, ee_cost=False)
     sdp_variable_map, sdp_constraints_map, sdp_cost_map = \
         constraints_and_nearest_points_to_sdp_vars(constraint_clique_dict, nearest_points, robot.dim)
@@ -406,11 +407,11 @@ def solve_nearest_point_sdp(nearest_points: dict, end_effectors: dict, robot, sp
                                   sdp_cost_map, robot.dim)
     if solver_params is None:
         solver_params = SdpSolverParams()
-    prob.solve(verbose=True, solver="MOSEK", mosek_params=solver_params.mosek_params)
+    prob.solve(verbose=verbose, solver="MOSEK", mosek_params=solver_params.mosek_params)
     # Z_exact = list(sdp_variable_map_exact.values())[0].value
     # _, s_exact, _ = np.linalg.svd(Z_exact)
     # solution_rank_exact = np.linalg.matrix_rank(Z_exact, tol=1e-6, hermitian=True)
-    solution = extract_solution(constraint_clique_dict, sdp_variable_map_exact, robot.dim)
+    solution = extract_solution(constraint_clique_dict, sdp_variable_map, robot.dim)
 
     return solution, prob, constraint_clique_dict, sdp_variable_map
 

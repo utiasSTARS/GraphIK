@@ -7,6 +7,7 @@ import pickle
 from graphik.graphs.graph_base import RobotRevoluteGraph
 from graphik.utils.utils import list_to_variable_dict, make_save_string
 from graphik.utils.experiments import run_multiple_experiments, process_experiment
+from graphik.utils.roboturdf import load_ur10
 
 
 if __name__ == "__main__":
@@ -16,7 +17,7 @@ if __name__ == "__main__":
     np.random.seed(seed)
     local_algorithms_unbounded = ["trust-exact"]
     local_algorithms_bounded = ["trust-constr"]
-    n_goals = 3000  # Number of goals
+    n_goals = 50  # Number of goals
     n_init = 1  # Number of initializations to try (should be 1 for zero_init = True and for bound_smoothing = True)
     zero_init = True  # True makes the angular solvers MUCH better
     sdp_random_init = False  # Whether to use a random initialization for the SDP solver (vs. zero_init like the others)
@@ -84,19 +85,12 @@ if __name__ == "__main__":
         ("n_goals", n_goals),
         ("n_init", n_init),
         ("zero_init", zero_init),
-        ("sdp_rand_init", sdp_random_init)
+        ("sdp_rand_init", sdp_random_init),
+        ("do_sdp_rank3", do_sdp_rank3)
     ]
 
-    # ### UR10
-    n = 6
-    ub = np.minimum(np.random.rand(n)*(pi/2) + pi/2, pi)
-    lb = -ub
-    fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
-    urdf_robot = RobotURDF(fname)
-
-    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
-    print(robot.structure.nodes())
-    graph = RobotRevoluteGraph(robot)
+    robot, graph = load_ur10()
+    n = robot.n
 
     save_string = "results/ur10_" + make_save_string(save_string_properties)
 

@@ -34,7 +34,7 @@ from graphik.utils.utils import (
     wraptopi,
     bernoulli_confidence_jeffreys
 )
-from graphik.utils.sdp_experiments import run_sdp_revolute_experiment
+from graphik.utils.sdp_experiments import run_sdp_revolute_experiment, run_sdp_rank3_revolute_experiment
 rc("font", **{"family": "serif", "serif": ["Computer Modern"], "size": 18})
 rc("text", usetex=True)
 
@@ -436,7 +436,8 @@ def run_full_experiment(
         assert is_revolute3d, 'SDP only supports revolute manipulators at the moment'
         solve_fn = run_sdp_rank3_revolute_experiment
         sdp_init = graph.robot.random_configuration() if sdp_random_init else init[0]
-        res_sdp3, q_sdp3, P_sdp3 = solve_fn(graph, sdp_init, q_goal, use_limits=use_limits, force_dense=False)
+        # TODO: change hard-coding of force_dense
+        res_sdp3, q_sdp3, P_sdp3 = solve_fn(graph, sdp_init, q_goal, use_limits=use_limits, force_dense=True)
         res_sdp3["Solver"] = "SDP Rank-3"
         results_list.append(res_sdp3)
 
