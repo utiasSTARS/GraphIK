@@ -16,7 +16,7 @@ def fantope_constraints(n: int , rank: int):
 
 
 def solve_fantope_iterate(G: np.ndarray, Z: cp.Variable, constraints: list, verbose=False, solver_params=None):
-    # TODO: templatize for speed?
+    # TODO: templatize for speed? Ask Filip about that feature, I forget what it's called
     prob = cp.Problem(cp.Minimize(cp.trace(G@Z)), constraints)
     if solver_params is None:
         solver_params = SdpSolverParams()
