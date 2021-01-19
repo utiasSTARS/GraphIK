@@ -103,7 +103,6 @@ if __name__ == "__main__":
     graph = RobotRevoluteGraph(robot)
 
     q = list_to_variable_dict(robot.n * [0])
-    G = graph.realization(q)
     T_goal_1, T_goal_2 = robot.get_pose(q, f"p6"), robot.get_pose(q, f"p4")
 
     # p5 is p6 and q4 is p4
