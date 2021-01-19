@@ -34,7 +34,7 @@ from graphik.utils.utils import (
     wraptopi,
     bernoulli_confidence_jeffreys
 )
-from graphik.utils.sdp_experiments import run_sdp_revolute_experiment
+from graphik.utils.sdp_experiments import run_sdp_revolute_experiment, run_sdp_rank3_revolute_experiment
 rc("font", **{"family": "serif", "serif": ["Computer Modern"], "size": 18})
 rc("text", usetex=True)
 
@@ -77,7 +77,8 @@ def run_multiple_experiments(
     local_graph_map=None,
     pose_goals=False,
     do_sdp=False,
-    sdp_random_init=False
+    sdp_random_init=False,
+    do_sdp_rank3=False
 ):
     results_list = []
 
@@ -115,7 +116,8 @@ def run_multiple_experiments(
             local_graph_map=local_graph_map,
             pose_goals=pose_goals,
             do_sdp=do_sdp,
-            sdp_random_init=sdp_random_init
+            sdp_random_init=sdp_random_init,
+            do_sdp_rank3=do_sdp_rank3
         )
         results_list.append(res)
         bar.next()
@@ -146,7 +148,8 @@ def run_full_experiment(
     local_graph_map=None,
     pose_goals=False,
     do_sdp=False,
-    sdp_random_init=False
+    sdp_random_init=False,
+    do_sdp_rank3=False
 ) -> pd.DataFrame:
     """
     Run an experiment with a variety of solvers for a single goal specified by ee_goals.
@@ -428,29 +431,66 @@ def run_full_experiment(
             res_df["Solver"] = "Riemannian " + algorithm + " + SDP"
             results_list.append(res_df)
 
-            # if do_bound_smoothing:
-            #     # print("Running Riemannian {:} solver with BS...".format(algorithm))
-            #     riemannian_params["solver"] = algorithm
-            #     riemannian_solver = RiemannianSolver(graph, riemannian_params)
-            #
-            #     res_df_bs = solve_fn(
-            #         graph,
-            #         riemannian_solver,
-            #         -1,
-            #         D_goal,
-            #         X_goal,
-            #         ee_goals,
-            #         P_sdp,
-            #         T_goal=T_goal,
-            #         use_limits=use_limits,
-            #         verbosity=verbosity,
-            #         do_bound_smoothing=True,
-            #         pose_goals=use_q_in_cost,
-            #     )
-            #     res_df_bs["Solver"] = "Riemannian " + algorithm + " + BS" + " + SDP"
-            #     results_list.append(res_df_bs)
+    if do_sdp_rank3:
+        # Run the rank-3 SDP as an individual solver (should not do too well)
+        assert is_revolute3d, 'SDP only supports revolute manipulators at the moment'
+        solve_fn = run_sdp_rank3_revolute_experiment
+        sdp_init = graph.robot.random_configuration() if sdp_random_init else init[0]
+        # TODO: change hard-coding of force_dense
+        res_sdp3, q_sdp3, P_sdp3 = solve_fn(graph, sdp_init, q_goal, use_limits=use_limits, force_dense=True)
+        res_sdp3["Solver"] = "SDP Rank-3"
+        results_list.append(res_sdp3)
 
-    # Joint it all together
+        # Use the SDP solution as an initialization for the local solvers
+        for algorithm in local_algorithms:
+            if is_revolute3d or spherical_to_revolute_case:
+                solve_fn = run_local_revolute_experiment
+            elif is_planar:
+                solve_fn = run_local_planar_experiment
+            local_solver.params["solver"] = algorithm
+            res_df = solve_fn(
+                local_graph,
+                ee_goals_local_eval,
+                local_solver,
+                -1,
+                q_sdp3,
+                use_limits=use_limits,
+                use_hess=use_hess,
+                pose_goals=use_q_in_cost,
+            )
+            res_df["Solver"] = algorithm + ' + SDP Rank-3'
+            results_list.append(res_df)
+
+        # Use the SDP solution as an initialization for the Riemannian solvers
+        for algorithm in riemannian_algorithms:
+            if is_revolute3d:
+                solve_fn = run_riemannian_revolute_experiment
+            elif is_spherical:
+                solve_fn = run_riemannian_spherical_experiment
+            elif is_planar:
+                solve_fn = run_riemannian_planar_experiment
+            # print("Running Riemannian {:} solver...".format(algorithm))
+            riemannian_params["solver"] = algorithm
+            riemannian_solver = RiemannianSolver(graph, riemannian_params)
+
+            res_df = solve_fn(
+                graph,
+                riemannian_solver,
+                -1,
+                D_goal,
+                X_goal,
+                ee_goals,
+                P_sdp3,
+                T_goal=T_goal,
+                use_limits=use_limits,
+                verbosity=verbosity,
+                do_bound_smoothing=False,
+            )
+            res_df["Solver"] = "Riemannian " + algorithm + " + SDP Rank-3"
+            results_list.append(res_df)
+
+
+    # Join it all together
     results = pd.concat(results_list, sort=True)
     results["Goal"] = str(q_goal)  # TODO: is there a better way to store the goal?
     return results

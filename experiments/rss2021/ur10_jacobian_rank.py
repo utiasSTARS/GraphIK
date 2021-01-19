@@ -9,9 +9,10 @@ from graphik.utils.utils import list_to_variable_dict, constraint_violations, me
 from graphik.solvers.constraints import constraints_from_graph, nearest_neighbour_cost, get_full_revolute_nearest_point
 from graphik.solvers.sdp_formulations import SdpSolverParams
 from graphik.solvers.solver_generic_sdp import SdpRelaxationSolver
-from graphik.utils.roboturdf import load_ur10
+from graphik.utils.roboturdf import load_ur10, load_truncated_ur10
 from graphik.graphs.graph_base import RobotRevoluteGraph
 from graphik.robots.robot_base import RobotRevolute
+from graphik.utils.dgp import pos_from_graph
 
 from progress.bar import ShadyBar as Bar
 from matplotlib import rc
@@ -20,37 +21,11 @@ rc("text", usetex=True)
 
 
 if __name__ == '__main__':
-    # robot, graph = load_ur10()
-    # n = robot.n
-
-    #  Test partial UR10
-    n = 4
-    dof = n
-    #  TODO: trying exact rational values for M2
-    a_full = [0, -5, -5, 0, 0, 0]  # [0, -0.612, -0.5723, 0, 0, 0]
-    d_full = [1, 0, 0, 1, 1, 1]  # [0.1273, 0, 0, 0.1639, 0.1157, 0.0922]
-    al_full = [np.pi / 2, 0, 0, np.pi / 2, -np.pi / 2, 0]
-    th_full = [0, 0, 0, 0, 0, 0]
-    a = a_full[0:n]
-    d = d_full[0:n]
-    al = al_full[0:n]
-    th = th_full[0:n]
-    ub = (np.pi) * np.ones(n)
-    lb = -ub
-    ub = np.minimum(np.random.rand(n) * (np.pi / 2) + np.pi / 2, np.pi)
-    lb = -ub
-    modified_dh = False
-    params = {
-        "a": a[:n],
-        "alpha": al[:n],
-        "d": d[:n],
-        "theta": th[:n],
-        "lb": lb[:n],
-        "ub": ub[:n],
-        "modified_dh": modified_dh,
-    }
-    robot = RobotRevolute(params)
-    graph = RobotRevoluteGraph(robot)
+    n = 2
+    if n == 6:
+        robot, graph = load_ur10()
+    else:
+        robot, graph = load_truncated_ur10(n)
 
     q = robot.random_configuration()
 
@@ -61,7 +36,7 @@ if __name__ == '__main__':
     # q = list_to_variable_dict(input)
 
     G = graph.realization(q)
-    P = graph.pos_from_graph(G)
+    P = pos_from_graph(G)
     ee_goals = {}
     for pair in graph.robot.end_effectors:
         for ee in pair:

@@ -398,6 +398,40 @@ def extract_solution(constraint_clique_dict: dict, sdp_variable_map: dict, d: in
     return solution
 
 
+def solve_nearest_point_sdp(nearest_points: dict, end_effectors: dict, robot, sparse=False, solver_params=None,
+                            verbose=False):
+    constraint_clique_dict = distance_constraints(robot, end_effectors, sparse, ee_cost=False)
+    sdp_variable_map, sdp_constraints_map, sdp_cost_map = \
+        constraints_and_nearest_points_to_sdp_vars(constraint_clique_dict, nearest_points, robot.dim)
+    prob = form_sdp_problem(constraint_clique_dict, sdp_variable_map, sdp_constraints_map,
+                                  sdp_cost_map, robot.dim)
+    if solver_params is None:
+        solver_params = SdpSolverParams()
+    prob.solve(verbose=verbose, solver="MOSEK", mosek_params=solver_params.mosek_params)
+    # Z_exact = list(sdp_variable_map_exact.values())[0].value
+    # _, s_exact, _ = np.linalg.svd(Z_exact)
+    # solution_rank_exact = np.linalg.matrix_rank(Z_exact, tol=1e-6, hermitian=True)
+    solution = extract_solution(constraint_clique_dict, sdp_variable_map, robot.dim)
+
+    return solution, prob, constraint_clique_dict, sdp_variable_map
+
+
+def sym_vec(A: np.ndarray) -> np.ndarray:
+    vec = []
+    for idx in range(A.shape[0]):
+        vec_idx = A[idx, idx:]
+        vec_idx[1:] = 2.*vec_idx[1:]
+        vec.append(vec_idx)
+    return np.hstack(vec)
+
+
+def constraints_list_to_matrix(A_list: list):
+    a_list = [sym_vec(A) for A in A_list]
+    A_symmetrized = np.vstack(a_list)
+    # TODO: does this capture a meaningful rank of the linear operator? I believe so!
+    return A_symmetrized
+
+
 if __name__ == '__main__':
     # Simple examples
     sparse = False  # Whether to exploit chordal sparsity in the SDP formulation
