@@ -361,11 +361,11 @@ def constraints_and_linear_cost_to_sdp_vars(constraint_clique_dict: dict, C: np.
         C_clique = np.zeros(A[0].shape)
         pairs_to_remove = []  # Don't want to remove from the list while iterating over it
         for idx, jdx in remaining_pairs:
-            u = mapping[canonical_point_order[idx]] if idx < n else None
-            v = mapping[canonical_point_order[jdx]] if jdx < n else None
+            u = mapping[canonical_point_order[idx]] if idx < (n - d) else None
+            v = mapping[canonical_point_order[jdx]] if jdx < (n - d) else None
 
-            u = A.shape[0] - (n - idx) if u is None and is_augmented else u
-            v = A.shape[0] - (n - jdx) if v is None and is_augmented else v
+            u = A[0].shape[0] - (n - idx) if u is None and is_augmented else u
+            v = A[0].shape[0] - (n - jdx) if v is None and is_augmented else v
 
             if u is not None and v is not None:
                 C_clique[u, v] = C[idx, jdx]
@@ -456,7 +456,7 @@ def form_sdp_problem(constraint_clique_dict: dict, sdp_variable_map: dict, sdp_c
     return cp.Problem(cp.Minimize(cost), constraints)
 
 
-def lme_to_cvxpy_cost(sdp_cost_map: dict, sdp_variable_map: dict):
+def lme_to_cvxpy_cost(sdp_cost_map, sdp_variable_map: dict):
     """
     Convert a mapping from cliques to cost matrices and variables to a cvxpy cost function.
     """
@@ -464,8 +464,11 @@ def lme_to_cvxpy_cost(sdp_cost_map: dict, sdp_variable_map: dict):
     for clique in sdp_cost_map:
         C_list = sdp_cost_map[clique]
         C_clique = 0.
-        for C in C_list:
-            C_clique += C
+        if type(C_list) == np.ndarray:
+            C_clique = C_list
+        else:
+            for C in C_list:
+                C_clique += C
         cost += cp.trace(C_clique @ sdp_variable_map[clique])
     return cost
 
@@ -486,6 +489,29 @@ def extract_solution(constraint_clique_dict: dict, sdp_variable_map: dict, d: in
             #     if var in mapping and var not in solution:
             #         solution[var] = clique_sol[:, mapping[var]]
     return solution
+
+
+def extract_full_sdp_solution(constraint_clique_dict, canonical_point_order, sdp_variable_map, n, d):
+    Z = np.zeros((n, n))
+    for clique in constraint_clique_dict:
+        Z_clique = sdp_variable_map[clique].value
+        _, _, mapping, is_augmented = constraint_clique_dict[clique]
+        for var1 in clique:
+            if var1 in mapping.keys():
+                idx = mapping[var1]
+                u = canonical_point_order.index(var1)
+                for var2 in clique:
+                    if var2 in mapping.keys():
+                        jdx = mapping[var2]
+                        v = canonical_point_order.index(var2)
+                        Z[u, v] = Z_clique[idx, jdx]
+                        Z[v, u] = Z_clique[jdx, idx]
+                if is_augmented:
+                    Z[u, -d:] = Z_clique[idx, -d:]
+                    Z[-d:, u] = Z_clique[-d:, idx]
+                    Z[-d:, -d:] = Z_clique[-d:, -d:]  # Only need to do this once, whatever
+
+    return Z
 
 
 def solve_nearest_point_sdp(nearest_points: dict, end_effectors: dict, robot, sparse=False, solver_params=None,
@@ -510,13 +536,13 @@ def solve_nearest_point_sdp(nearest_points: dict, end_effectors: dict, robot, sp
     return solution, prob, constraint_clique_dict, sdp_variable_map
 
 
-def solve_linear_cost_sdp(C: np.ndarray, end_effectors: dict, robot, canonical_point_order: list = None, sparse=False, solver_params=None, verbose=False,
+def solve_linear_cost_sdp(robot, end_effectors: dict, constraint_clique_dict: dict, C: np.ndarray,
+                          canonical_point_order: list = None, solver_params=None, verbose=False,
                           inequality_constraints_map=None):
     if canonical_point_order is None:
-        full_points = [f'p{idx}' for idx in range(0, graph.robot.n + 1)] + \
-                      [f'q{idx}' for idx in range(0, graph.robot.n + 1)]
+        full_points = [f'p{idx}' for idx in range(0, robot.n + 1)] + \
+                      [f'q{idx}' for idx in range(0, robot.n + 1)]
         canonical_point_order = [point for point in full_points if point not in end_effectors.keys()]
-    constraint_clique_dict = distance_constraints(robot, end_effectors, sparse, ee_cost=False)
     sdp_variable_map, sdp_constraints_map, sdp_cost_map = \
         constraints_and_linear_cost_to_sdp_vars(constraint_clique_dict, C, canonical_point_order, robot.dim)
     if inequality_constraints_map is not None:
@@ -533,7 +559,7 @@ def solve_linear_cost_sdp(C: np.ndarray, end_effectors: dict, robot, canonical_p
     # solution_rank_exact = np.linalg.matrix_rank(Z_exact, tol=1e-6, hermitian=True)
     solution = extract_solution(constraint_clique_dict, sdp_variable_map, robot.dim)
 
-    return solution, prob, constraint_clique_dict, sdp_variable_map
+    return solution, prob, sdp_variable_map, canonical_point_order
 
 
 def sym_vec(A: np.ndarray) -> np.ndarray:
