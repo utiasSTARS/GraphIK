@@ -34,7 +34,7 @@ from graphik.utils.utils import (
     wraptopi,
     bernoulli_confidence_jeffreys
 )
-from graphik.utils.sdp_experiments import run_sdp_revolute_experiment, run_sdp_rank3_revolute_experiment
+from graphik.utils.sdp_experiments import run_sdp_revolute_experiment, run_sdp_rank3_revolute_experiment, run_sdp_rank3_convex_iteration_experiment
 rc("font", **{"family": "serif", "serif": ["Computer Modern"], "size": 18})
 rc("text", usetex=True)
 
@@ -78,7 +78,8 @@ def run_multiple_experiments(
     pose_goals=False,
     do_sdp=False,
     sdp_random_init=False,
-    do_sdp_rank3=False
+    do_sdp_rank3=False,
+    do_convex_iteration=False
 ):
     results_list = []
 
@@ -117,7 +118,8 @@ def run_multiple_experiments(
             pose_goals=pose_goals,
             do_sdp=do_sdp,
             sdp_random_init=sdp_random_init,
-            do_sdp_rank3=do_sdp_rank3
+            do_sdp_rank3=do_sdp_rank3,
+            do_convex_iteration=do_convex_iteration
         )
         results_list.append(res)
         bar.next()
@@ -149,7 +151,8 @@ def run_full_experiment(
     pose_goals=False,
     do_sdp=False,
     sdp_random_init=False,
-    do_sdp_rank3=False
+    do_sdp_rank3=False,
+    do_convex_iteration=False
 ) -> pd.DataFrame:
     """
     Run an experiment with a variety of solvers for a single goal specified by ee_goals.
@@ -434,7 +437,11 @@ def run_full_experiment(
     if do_sdp_rank3:
         # Run the rank-3 SDP as an individual solver (should not do too well)
         assert is_revolute3d, 'SDP only supports revolute manipulators at the moment'
-        solve_fn = run_sdp_rank3_revolute_experiment
+
+        if do_convex_iteration:
+            solve_fn = run_sdp_rank3_convex_iteration_experiment
+        else:
+            solve_fn = run_sdp_rank3_revolute_experiment
         sdp_init = graph.robot.random_configuration() if sdp_random_init else init[0]
         # TODO: change hard-coding of force_dense
         res_sdp3, q_sdp3, P_sdp3 = solve_fn(graph, sdp_init, q_goal, use_limits=use_limits, force_dense=True)

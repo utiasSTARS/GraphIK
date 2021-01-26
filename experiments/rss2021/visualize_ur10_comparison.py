@@ -8,9 +8,10 @@ if __name__ == '__main__':
     use_limits = False
     sdp_rand_init = False  # False for nuclear norm
     do_sdp_rank3 = True
+    do_convex_iteration = False
     tol = 1e-9
     save = False
-    n_goals = 1500 #3000
+    n_goals = 50 #3000
     # Visualization params
     tol_ee = 0.01
     tol_ang = 0.01
@@ -18,7 +19,7 @@ if __name__ == '__main__':
 
     ur10_file = "results/ur10_bounded_" + str(use_limits) + "_tol_" + str(tol) + "_maxiter_2000_n_goals_" + str(n_goals) + \
                 "_n_init_1_zero_init_True_sdp_rand_init_" + str(sdp_rand_init) \
-                + "_do_sdp_rank3_" + str(do_sdp_rank3) + "_full_results.p"
+                + "_do_sdp_rank3_" + str(do_sdp_rank3) + "_do_convex_iteration_" + str(do_convex_iteration) + "_full_results.p"
 
     data = pickle.load(open(ur10_file, "rb"))
     table = make_latex_results_table(data, tol_ee=tol_ee, tol_ang=tol_ang, use_limits=use_limits)
@@ -30,12 +31,18 @@ if __name__ == '__main__':
         solver_names = ["\\texttt{SDP}", "\\texttt{trust-constr}", "\\texttt{trust-constr+SDP}",
                         "\\texttt{Riem. TR}", "\\texttt{Riem. TR+BS}", "\\texttt{Riem. TR+SDP}"]
     else:
-        solver_list = ["SDP", "SDP Rank-3", "trust-exact", "trust-exact + SDP", "trust-exact + SDP Rank-3",
-                       "Riemannian TrustRegions", "Riemannian TrustRegions + BS", "Riemannian TrustRegions + SDP",
+        # solver_list = ["SDP", "SDP Rank-3", "trust-exact", "trust-exact + SDP", "trust-exact + SDP Rank-3",
+        #                "Riemannian TrustRegions", "Riemannian TrustRegions + BS", "Riemannian TrustRegions + SDP",
+        #                "Riemannian TrustRegions + SDP Rank-3"]
+        # solver_names = ["\\texttt{SDP}", "\\texttt{SDP Rank-3}", "\\texttt{trust-exact}", "\\texttt{trust-exact+SDP}",
+        #                 "\\texttt{trust-exact+SDP Rank-3}", "\\texttt{Riem. TR}", "\\texttt{Riem. TR+BS}",
+        #                 "\\texttt{Riem. TR+SDP}", "\\texttt{Riem. TR+SDP Rank-3}"]
+        solver_list = ["SDP Rank-3", "trust-exact", "trust-exact + SDP Rank-3",
+                       "Riemannian TrustRegions", "Riemannian TrustRegions + BS",
                        "Riemannian TrustRegions + SDP Rank-3"]
-        solver_names = ["\\texttt{SDP}", "\\texttt{SDP Rank-3}", "\\texttt{trust-exact}", "\\texttt{trust-exact+SDP}",
+        solver_names = ["\\texttt{SDP Rank-3}", "\\texttt{trust-exact}",
                         "\\texttt{trust-exact+SDP Rank-3}", "\\texttt{Riem. TR}", "\\texttt{Riem. TR+BS}",
-                        "\\texttt{Riem. TR+SDP}", "\\texttt{Riem. TR+SDP Rank-3}"]
+                        "\\texttt{Riem. TR+SDP Rank-3}"]
 
     if save:
         save_waterfall = "results/figs/waterfall_ur10_bounded_{:}._nuclear_{:}.pdf".format(use_limits, sdp_rand_init)

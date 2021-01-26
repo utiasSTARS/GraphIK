@@ -9,7 +9,8 @@ import networkx as nx
 from graphik.graphs.graph_base import RobotRevoluteGraph, RobotGraph
 from graphik.solvers.sdp_formulations import SdpSolverParams
 from graphik.solvers.solver_generic_sdp import SdpRelaxationSolver
-from graphik.solvers.sdp_snl import solve_nearest_point_sdp
+from graphik.solvers.sdp_snl import solve_nearest_point_sdp, extract_solution
+from graphik.solvers.convex_iteration import convex_iterate_sdp_snl
 from graphik.solvers.constraints import get_full_revolute_nearest_points_pose, nearest_neighbour_cost, constraints_from_graph
 from graphik.utils.utils import list_to_variable_dict, constraint_violations, safe_arccos
 from graphik.utils.dgp import pos_from_graph, graph_from_pos
@@ -77,6 +78,98 @@ def sdp_rank3_constraint_violations(constraint_clique_dict, graph, solution_dict
     return residuals
 
 
+def run_sdp_rank3_convex_iteration_experiment(graph: RobotGraph, init, q_goal: dict, use_limits: bool,
+                                              force_dense=True) -> pd.DataFrame:
+    # Form the solver - TODO: check pose formulation
+    G = graph.realization(q_goal)
+    P = pos_from_graph(G)
+    ee_goals = {}
+    for pair in graph.robot.end_effectors:
+        for ee in pair:
+            if 'p' in ee:
+                ee_goals[ee] = graph.robot.get_pose(q_goal, ee).trans
+            else:
+                for idx, key in enumerate(graph.node_ids):
+                    if key == ee:
+                        ee_goals[ee] = P[idx, :]
+
+    ee_goals['p0'] = np.array([0., 0., 0.])
+    ee_goals['q0'] = np.array([0., 0., 1.])
+
+    solver_failures = 0
+    solver_success = False
+    sparse = not force_dense
+
+    while not solver_success:
+        try:
+            _, constraint_clique_dict, sdp_variable_map, canonical_point_order, eig_value_sum_vs_iterations, prob = \
+                convex_iterate_sdp_snl(graph.robot, ee_goals, max_iters=10, sparse=sparse, verbose=False)
+            solver_success = True
+            solution_dict = extract_solution(constraint_clique_dict, sdp_variable_map, graph.robot.dim)
+        except cp.error.SolverError as e:
+            # TODO: don't really have a plan here yet
+            solver_failures += 1
+            q_nearest = list_to_variable_dict(graph.robot.random_configuration())
+            nearest_points = get_full_revolute_nearest_points_pose(graph, q_nearest)
+
+    runtime = prob.solver_stats.solve_time
+    num_iters = prob.solver_stats.num_iters
+    Z = prob.variables()[0].value
+    Z_eigvals = np.linalg.eigvalsh(Z)
+    second_eigval_mag = np.abs(Z_eigvals[-2])
+    eigval_ratio = np.abs(Z_eigvals[-1] / Z_eigvals[-2])
+    eig_value_sum = eig_value_sum_vs_iterations[-1]
+    # Compute relaxation gap
+    sdp_cost = prob.value
+    primal_cost = -1.0  # Doesn't mean anything here
+    gap = primal_cost - sdp_cost
+    # Compute max constraint violation
+    constraint_violations = sdp_rank3_constraint_violations(constraint_clique_dict, graph, solution_dict,
+                                                            end_effectors=ee_goals)
+    eq_resid_max = np.max(np.abs(constraint_violations))
+
+    # Get points in form needed for initialization of Riemannian solver
+    P_e = sdp_sol_to_point_matrix(graph, solution_dict, ee_goals)
+    G_e = graph_from_pos(P_e.T, graph.node_ids)
+    T_goal = {ee[0]: graph.robot.get_pose(q_goal, ee[0]) for ee in graph.robot.end_effectors}
+    q_sdp = graph.robot.joint_variables(G_e, T_goal)
+
+    err_pos = 0.
+    err_rot = 0.
+    pose_goals = {ee[0]: graph.robot.get_pose(q_goal, ee[0]) for ee in graph.robot.end_effectors}
+    for key in pose_goals:
+        T_sol = graph.robot.get_pose(list_to_variable_dict(q_sdp), key)
+        err_pos += norm(pose_goals[key].trans - T_sol.trans)
+        z1 = pose_goals[key].rot.as_matrix()[0:3, -1]
+        z2 = T_sol.rot.as_matrix()[0:3, -1]
+        err_rot += safe_arccos(z1.dot(z2))
+
+    limit_violations = list_to_variable_dict(graph.robot.n * [0])
+    limits_violated = False
+
+    data = dict(
+        [
+            ("Init.", [init]),
+            ("Goals", [ee_goals]),
+            ("Iterations", [num_iters]),
+            ("Runtime", [runtime]),
+            ("Solution Config", [q_sdp]),
+            ("Pos Error", [err_pos]),
+            ("Rot Error", [err_rot]),
+            ("Limit Violations", [limit_violations]),
+            ("Limits Violated", [limits_violated]),
+            ("Solver Failures", [solver_failures]),
+            ("Second Eigenvalue Magnitude", [second_eigval_mag]),
+            ("Eigenvalue Ratio", [eigval_ratio]),
+            ("SDP Cost", [sdp_cost]),
+            ("Relaxation Gap", [gap]),
+            ("Max Constraint Violation", [eq_resid_max]),
+            ("Eigenvalue Sum", eig_value_sum)
+        ])
+    results = pd.DataFrame(data)
+    return results, q_sdp, P_e.T
+
+
 def run_sdp_rank3_revolute_experiment(graph: RobotGraph, init, q_goal: dict, use_limits: bool,
                                 force_dense=False) -> pd.DataFrame:
     # Form the solver - TODO: check pose formulation
@@ -91,6 +184,8 @@ def run_sdp_rank3_revolute_experiment(graph: RobotGraph, init, q_goal: dict, use
                 for idx, key in enumerate(graph.node_ids):
                     if key == ee:
                         ee_goals[ee] = P[idx, :]
+    ee_goals['p0'] = np.array([0., 0., 0.])
+    ee_goals['q0'] = np.array([0., 0., 1.])
 
     q_nearest = list_to_variable_dict(init)
     nearest_points = get_full_revolute_nearest_points_pose(graph, q_nearest)

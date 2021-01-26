@@ -17,13 +17,14 @@ if __name__ == "__main__":
     np.random.seed(seed)
     local_algorithms_unbounded = ["trust-exact"]
     local_algorithms_bounded = ["trust-constr"]
-    n_goals = 1500  # Number of goals
+    n_goals = 50  # Number of goals
     n_init = 1  # Number of initializations to try (should be 1 for zero_init = True and for bound_smoothing = True)
     zero_init = True  # True makes the angular solvers MUCH better
     sdp_random_init = False  # Whether to use a random initialization for the SDP solver (vs. zero_init like the others)
     use_limits = False  # Whether to use angular limits for all the solvers
-    do_sdp = True
+    do_sdp = False
     do_sdp_rank3 = True
+    do_convex_iteration = False
     do_jacobian = False  # Jacobian doesn't work well for zero_init (need a more local starting point)
     do_fabrik = False  # Fabrik not supported for generic revolute solvers
     fabrik_only = (
@@ -86,7 +87,8 @@ if __name__ == "__main__":
         ("n_init", n_init),
         ("zero_init", zero_init),
         ("sdp_rand_init", sdp_random_init),
-        ("do_sdp_rank3", do_sdp_rank3)
+        ("do_sdp_rank3", do_sdp_rank3),
+        ("do_convex_iteration", do_convex_iteration)
     ]
 
     robot, graph = load_ur10()
@@ -115,7 +117,8 @@ if __name__ == "__main__":
         pose_goals=True,
         do_sdp=do_sdp,
         sdp_random_init=sdp_random_init,
-        do_sdp_rank3=do_sdp_rank3
+        do_sdp_rank3=do_sdp_rank3,
+        do_convex_iteration=do_convex_iteration
     )
     results.robot = robot
     results.seed = seed
