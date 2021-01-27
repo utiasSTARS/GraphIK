@@ -110,6 +110,7 @@ def run_sdp_rank3_convex_iteration_experiment(graph: RobotGraph, init, q_goal: d
             # TODO: don't really have a plan here yet
             solver_failures += 1
             q_nearest = list_to_variable_dict(graph.robot.random_configuration())
+            print("Solver error in convex iteration.")
             nearest_points = get_full_revolute_nearest_points_pose(graph, q_nearest)
 
     runtime = prob.solver_stats.solve_time
