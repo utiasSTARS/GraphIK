@@ -110,7 +110,9 @@ def constraints_from_graph(
                     else G.nodes[v]["sym"]
                 )
                 equality = sp.Eq(norm_sq(p_u - p_v), weight ** 2)
-                if type(equality) == sp.Equality:  # This will be a boolean expression if both values are set
+                if (
+                    type(equality) == sp.Equality
+                ):  # This will be a boolean expression if both values are set
                     constraints.append(equality)
 
     return constraints
@@ -214,8 +216,9 @@ def nearest_neighbour_cost(
 
 
 def get_full_revolute_nearest_points_pose(graph, q):
-    full_points = [f'p{idx}' for idx in range(1, graph.robot.n)] + \
-                  [f'q{idx}' for idx in range(1, graph.robot.n)]
+    full_points = [f"p{idx}" for idx in range(1, graph.robot.n)] + [
+        f"q{idx}" for idx in range(1, graph.robot.n)
+    ]
     return get_full_revolute_nearest_point(graph, q, full_points)
 
 
@@ -223,8 +226,9 @@ def get_full_revolute_nearest_point(graph, q, full_points=None):
     nearest_points = {}
     if full_points is None:
         # Assume only x, y, p0, q0, and the final p (p{n+1}) is constrained
-        full_points = [f'p{idx}' for idx in range(1, graph.robot.n)] + \
-                      [f'q{idx}' for idx in range(1, graph.robot.n + 1)]
+        full_points = [f"p{idx}" for idx in range(1, graph.robot.n)] + [
+            f"q{idx}" for idx in range(1, graph.robot.n + 1)
+        ]
     G = graph.realization(q)
     P = pos_from_graph(G)
     for idx, key in enumerate(graph.node_ids):
