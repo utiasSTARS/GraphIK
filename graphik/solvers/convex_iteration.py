@@ -126,7 +126,8 @@ def convex_iterate_sdp_snl(
 
     if random_W_init:
         P = np.random.rand(N, N)
-        W = P@P.T/np.linalg.norm(W, ord='fro')  # Choose a random PSD matrix
+        W = P@P.T  # Choose a random PSD matrix
+        W = W/np.linalg.norm(W, ord='fro')
     else:
         W = np.eye(N)
     Z, ft_constraints = fantope_constraints(N, d)
