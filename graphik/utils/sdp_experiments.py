@@ -100,10 +100,12 @@ def run_sdp_rank3_convex_iteration_experiment(graph: RobotGraph, init, q_goal: d
     solver_success = False
     sparse = not force_dense
 
+    random_W_init = False
     while not solver_success:
         try:
             _, constraint_clique_dict, sdp_variable_map, canonical_point_order, eig_value_sum_vs_iterations, prob = \
-                convex_iterate_sdp_snl(graph.robot, ee_goals, max_iters=10, sparse=sparse, verbose=False)
+                convex_iterate_sdp_snl(graph.robot, ee_goals, max_iters=10, sparse=sparse, verbose=False,
+                                       random_W_init=random_W_init)
             solver_success = True
             solution_dict = extract_solution(constraint_clique_dict, sdp_variable_map, graph.robot.dim)
         except cp.error.SolverError as e:
@@ -111,7 +113,7 @@ def run_sdp_rank3_convex_iteration_experiment(graph: RobotGraph, init, q_goal: d
             solver_failures += 1
             q_nearest = list_to_variable_dict(graph.robot.random_configuration())
             print("Solver error in convex iteration.")
-            nearest_points = get_full_revolute_nearest_points_pose(graph, q_nearest)
+            random_W_init = True
 
     runtime = prob.solver_stats.solve_time
     num_iters = prob.solver_stats.num_iters

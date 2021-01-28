@@ -20,11 +20,11 @@ if __name__ == "__main__":
     n_goals = 1000  # Number of goals
     n_init = 1  # Number of initializations to try (should be 1 for zero_init = True and for bound_smoothing = True)
     zero_init = True  # True makes the angular solvers MUCH better
-    sdp_random_init = False  # Whether to use a random initialization for the SDP solver (vs. zero_init like the others)
+    sdp_random_init = True  # Whether to use a random initialization for the SDP solver (vs. zero_init like the others)
     use_limits = False  # Whether to use angular limits for all the solvers
     do_sdp = False
     do_sdp_rank3 = True
-    do_convex_iteration = True
+    do_convex_iteration = False
 
     do_jacobian = False  # Jacobian doesn't work well for zero_init (need a more local starting point)
     do_fabrik = False  # Fabrik not supported for generic revolute solvers

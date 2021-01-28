@@ -28,7 +28,7 @@ def solve_fantope_iterate(G: np.ndarray, Z: cp.Variable, constraints: list, verb
     return prob
 
 
-def convex_iterate_sdp_snl(robot, end_effectors, max_iters=10, sparse=False, verbose=False):
+def convex_iterate_sdp_snl(robot, end_effectors, max_iters=10, sparse=False, verbose=False, random_W_init=False):
     d = robot.dim
     # TODO: add more logging
     eig_value_sum_vs_iterations = []
@@ -38,19 +38,25 @@ def convex_iterate_sdp_snl(robot, end_effectors, max_iters=10, sparse=False, ver
     constraint_clique_dict = distance_constraints(robot, end_effectors, sparse, ee_cost=False)
     n = len(canonical_point_order)
     N = n + d
-    C = np.eye(N)
+    if random_W_init:
+        # Use a full-rank PSD matrix
+        P_rand = np.random.rand(N, N)
+        W = P_rand.T@P_rand
+        W = W/np.linalg.norm(W, ord='fro')
+    else:
+        W = np.eye(N)
     Z, ft_constraints = fantope_constraints(N, d)
     for iter in range(max_iters):
-        solution, prob, sdp_variable_map, _ = solve_linear_cost_sdp(robot, end_effectors, constraint_clique_dict, C,
+        solution, prob, sdp_variable_map, _ = solve_linear_cost_sdp(robot, end_effectors, constraint_clique_dict, W,
                                                                     canonical_point_order, verbose=False,
                                                                     inequality_constraints_map=None)
         G = extract_full_sdp_solution(constraint_clique_dict, canonical_point_order, sdp_variable_map, N, d)
         eigvals_G = np.linalg.eigvalsh(G)  # Returns in ascending order (according to docs)
         eig_value_sum_vs_iterations.append(np.sum(eigvals_G[0:n]))
         _ = solve_fantope_iterate(G, Z, ft_constraints, verbose=verbose)
-        C = Z.value
+        W = Z.value
 
-    return C, constraint_clique_dict, sdp_variable_map, canonical_point_order, eig_value_sum_vs_iterations, prob
+    return W, constraint_clique_dict, sdp_variable_map, canonical_point_order, eig_value_sum_vs_iterations, prob
 
 
 if __name__ == '__main__':
