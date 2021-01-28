@@ -8,6 +8,7 @@ import cvxpy as cp
 from graphik.utils.roboturdf import load_ur10, load_truncated_ur10
 from graphik.utils.constants import *
 from graphik.robots.robot_base import RobotRevolute
+from graphik.graphs.graph_base import RobotGraph
 from graphik.solvers.constraints import get_full_revolute_nearest_point
 from graphik.solvers.sdp_formulations import SdpSolverParams
 
@@ -264,6 +265,36 @@ def distance_clique_linear_map(
     return A, b, index_mapping, d > 0
 
 
+def distance_constraints_graph(
+    G: nx.Graph, anchors: dict = {}, sparse: bool = False, ee_cost=None
+) -> dict:
+
+    G = G.copy()
+    # remove the edges that don't have distances defined
+    edges = []
+    for u, v, data in G.edges(data=True):
+        if not data.get(DIST, False):
+            edges += [(u, v)]
+    G.remove_edges_from(edges)
+
+    undirected = nx.Graph(G)
+    equality_cliques = nx.chordal_graph_cliques(
+        undirected
+    )  # Returns maximal cliques (in spite of name)
+
+    if not sparse:
+        full_set = frozenset()
+        for clique in equality_cliques:
+            full_set = full_set.union(clique)
+        equality_cliques = [full_set]
+    clique_dict = {}
+    for clique in equality_cliques:
+        clique_dict[clique] = distance_clique_linear_map(
+            undirected, clique, anchors, ee_cost
+        )
+    return clique_dict
+
+
 def distance_constraints(
     robot: RobotRevolute,
     end_effectors: dict,
@@ -304,13 +335,13 @@ def distance_constraints(
 
 
 def distance_range_constraints(
-    G: nx.Graph, constraint_clique_dict: dict, end_effectors: dict
+    G: nx.Graph, constraint_clique_dict: dict, anchors: dict
 ):
     pairs = []
     dists = []
     upper = []
     for u, v, data in G.edges(data=True):
-        if u not in end_effectors.keys() and v not in end_effectors.keys():
+        if u not in anchors.keys() and v not in anchors.keys():
             if data.get(BOUNDED, False):
                 if "below" in data[BOUNDED]:
                     pairs += [frozenset((u, v))]

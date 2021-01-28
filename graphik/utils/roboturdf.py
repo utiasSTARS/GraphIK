@@ -441,12 +441,16 @@ def normalize(x):
     return x / np.linalg.norm(x)
 
 
-def load_ur10():
+def load_ur10(limits=None):
     fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
     urdf_robot = RobotURDF(fname)
     n = 6
-    ub = np.ones(n) * np.pi
-    lb = -ub
+    if limits is None:
+        ub = np.ones(n) * np.pi
+        lb = -ub
+    else:
+        lb = limits[0]
+        ub = limits[1]
     robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
     # print(robot.structure.nodes())
     graph = RobotRevoluteGraph(robot)
