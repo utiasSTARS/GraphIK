@@ -4,8 +4,7 @@ import time
 from numpy.linalg.linalg import norm
 from numpy import pi
 from graphik.solvers.convex_iteration import (
-    convex_iterate_sdp_snl,
-    convex_iterate_sdp_snl_ineq,
+    convex_iterate_sdp_snl_graph,
 )
 from graphik.graphs.graph_base import RobotRevoluteGraph
 from graphik.utils.utils import safe_arccos
@@ -32,7 +31,7 @@ def solve_random_problem(graph: RobotRevoluteGraph):
     ]
 
     input_vals = get_full_revolute_nearest_point(graph, q_goal, full_points)
-    end_effectors = {key: input_vals[key] for key in ["p0", "q0", f"p{n}", f"q{n}"]}
+    anchors = {key: input_vals[key] for key in ["p0", "q0", f"p{n}", f"q{n}"]}
 
     t_sol = time.perf_counter()
     (
@@ -42,7 +41,7 @@ def solve_random_problem(graph: RobotRevoluteGraph):
         _,
         _,
         _,
-    ) = convex_iterate_sdp_snl_ineq(robot, end_effectors)
+    ) = convex_iterate_sdp_snl_graph(graph, anchors, ranges=True)
     t_sol = time.perf_counter() - t_sol
 
     solution = extract_solution(constraint_clique_dict, sdp_variable_map, robot.dim)

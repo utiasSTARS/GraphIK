@@ -2,16 +2,13 @@ import numpy as np
 import time
 
 from numpy.linalg.linalg import norm
-from graphik.solvers.convex_iteration import convex_iterate_sdp_snl
+from graphik.solvers.convex_iteration import convex_iterate_sdp_snl_graph
 from graphik.solvers.sdp_formulations import SdpSolverParams
 from graphik.graphs.graph_base import RobotRevoluteGraph
 from graphik.utils.utils import safe_arccos
 from graphik.utils.dgp import graph_from_pos_dict, pos_from_graph, graph_from_pos
 from graphik.utils.constants import *
 from graphik.solvers.sdp_snl import (
-    solve_linear_cost_sdp,
-    distance_constraints,
-    extract_full_sdp_solution,
     extract_solution,
 )
 from graphik.solvers.constraints import get_full_revolute_nearest_point
@@ -33,11 +30,7 @@ def solve_random_problem(graph: RobotRevoluteGraph):
     ]
 
     input_vals = get_full_revolute_nearest_point(graph, q_goal, full_points)
-    end_effectors = {key: input_vals[key] for key in ["p0", "q0", f"p{n}", f"q{n}"]}
-
-    canonical_point_order = [
-        point for point in full_points if point not in end_effectors.keys()
-    ]
+    anchors = {key: input_vals[key] for key in ["p0", "q0", f"p{n}", f"q{n}"]}
 
     t_sol = time.perf_counter()
     (
@@ -47,7 +40,7 @@ def solve_random_problem(graph: RobotRevoluteGraph):
         canonical_point_order,
         eig_value_sum_vs_iterations,
         prob,
-    ) = convex_iterate_sdp_snl(robot, end_effectors)
+    ) = convex_iterate_sdp_snl_graph(graph, anchors, ranges=False)
     t_sol = time.perf_counter() - t_sol
 
     solution = extract_solution(constraint_clique_dict, sdp_variable_map, robot.dim)
