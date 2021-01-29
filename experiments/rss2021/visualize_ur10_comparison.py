@@ -8,9 +8,9 @@ if __name__ == '__main__':
     use_limits = False
     sdp_rand_init = False  # False for nuclear norm
     do_sdp_rank3 = True
-    do_convex_iteration = False
+    do_convex_iteration = True
     tol = 1e-9
-    save = False
+    save = True
     n_goals = 1000 #3000
     # Visualization params
     tol_ee = 0.01
@@ -45,9 +45,12 @@ if __name__ == '__main__':
                         "\\texttt{Riem. TR+SDP Rank-3}"]
 
     if save:
-        save_waterfall = "results/figs/waterfall_ur10_bounded_{:}._nuclear_{:}.pdf".format(use_limits, sdp_rand_init)
-        save_boxplot = "results/figs/boxplot_ur10_bounded_{:}_nuclear_{:}.pdf".format(use_limits, sdp_rand_init)
-        save_boxplot_rot = "results/figs/boxplot_rot_ur10_bounded_{:}_nuclear_{:}.pdf".format(use_limits, sdp_rand_init)
+        save_waterfall = "results/figs/waterfall_ur10_bounded_{:}._nuclear_{:}_convex_iteration_{:}.pdf".format(
+            use_limits, not sdp_rand_init, do_convex_iteration)
+        save_boxplot = "results/figs/boxplot_ur10_bounded_{:}_nuclear_{:}_convex_iteration_{:}.pdf".format(
+            use_limits, not sdp_rand_init, do_convex_iteration)
+        save_boxplot_rot = "results/figs/boxplot_rot_ur10_bounded_{:}_nuclear_{:}_convex_iteration_{:}.pdf".format(
+            use_limits, not sdp_rand_init, do_convex_iteration)
     else:
         save_waterfall = None
         save_boxplot = None
