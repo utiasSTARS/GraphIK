@@ -6,7 +6,7 @@ import numpy as np
 from numpy import pi
 from numpy.linalg import norm
 
-from graphik.graphs.graph_base import Graph, RobotRevoluteGraph
+from graphik.graphs.graph_base import RobotGraph, RobotRevoluteGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.dgp import (
     adjacency_matrix_from_graph,
@@ -124,7 +124,7 @@ if __name__ == "__main__":
     # }
     # robot = RobotRevolute(params)
 
-    n = 7
+    n = 6
     angular_limits = np.minimum(np.random.rand(n) * (pi / 2) + pi / 2, pi)
     ub = angular_limits
     lb = -angular_limits

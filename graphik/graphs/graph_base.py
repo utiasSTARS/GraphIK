@@ -1,19 +1,15 @@
-import networkx as nx
-
-import numpy as np
-import numpy.linalg as la
-from numpy import cos, pi, sin, sqrt, arctan2
-
-from liegroups.numpy import SE3
 from abc import ABC, abstractmethod
 
+import networkx as nx
+import numpy as np
+import numpy.linalg as la
 from graphik.robots.robot_base import Robot, RobotPlanar, RobotRevolute
 from graphik.utils.constants import *
-from graphik.utils.geometry import trans_axis, rot_axis
-from graphik.utils.dgp import pos_from_graph, graph_from_pos, graph_complete_edges
-from graphik.utils.utils import (
-    list_to_variable_dict,
-)
+from graphik.utils.dgp import graph_complete_edges, graph_from_pos, pos_from_graph
+from graphik.utils.geometry import rot_axis, trans_axis
+from graphik.utils.utils import list_to_variable_dict
+from liegroups.numpy import SE3
+from numpy import cos, pi, sqrt
 
 
 class RobotGraph(ABC):
@@ -50,6 +46,14 @@ class RobotGraph(ABC):
     @directed.setter
     def directed(self, G: nx.DiGraph):
         self._directed = G
+
+    @property
+    def base(self) -> nx.DiGraph:
+        return self._base
+
+    @base.setter
+    def base(self, G: nx.DiGraph):
+        self._base = G
 
     @property
     def dim(self) -> int:
@@ -134,12 +138,12 @@ class RobotGraph(ABC):
         # TODO implement this
         raise NotImplementedError
 
-    def complete_from_pos(self, P: dict) -> nx.DiGraph:
+    def complete_from_pos(self, P: dict, dist=True) -> nx.DiGraph:
         """
         Given a dictionary of node name and position key-value pairs,
         generate a copy of the problem graph and fill the POS attributes of
         nodes corresponding to keys with assigned values.
-        Then, populate all edges between nodes with assinged POS attributes,
+        If dist is True, populate all edges between nodes with assinged POS attributes,
         and return the new graph.
         :param P: a dictionary of node name position pairs
         :returns: graph with connected nodes with POS attribute
@@ -150,7 +154,10 @@ class RobotGraph(ABC):
             if name in G.nodes():
                 G.nodes[name][POS] = pos
 
-        return graph_complete_edges(G)
+        if dist:
+            G = graph_complete_edges(G)
+
+        return G
 
     def distance_bound_matrices(self):
         """
@@ -159,16 +166,44 @@ class RobotGraph(ABC):
         L = np.zeros([self.n_nodes, self.n_nodes])  # fake distance matrix
         U = np.zeros([self.n_nodes, self.n_nodes])  # fake distance matrix
         G = self.directed
-        for val in self.robot.limit_edges:
-            udx = self.node_ids.index(val[0])
-            vdx = self.node_ids.index(val[1])
-            if "below" in G[val[0]][val[1]][BOUNDED]:
-                L[udx, vdx] = G[val[0]][val[1]][LOWER] ** 2
-                L[vdx, udx] = L[udx, vdx]
-            if "above" in G[val[0]][val[1]][BOUNDED]:
-                U[udx, vdx] = G[val[0]][val[1]][UPPER] ** 2
-                U[vdx, udx] = U[udx, vdx]
+        for e1, e2, data in G.edges(data=True):
+            if BOUNDED in data:
+                # print(e1, e2, data)
+                udx = self.node_ids.index(e1)
+                vdx = self.node_ids.index(e2)
+                if "below" in data[BOUNDED]:
+                    L[udx, vdx] = data[LOWER] ** 2
+                    L[vdx, udx] = L[udx, vdx]
+                if "above" in data[BOUNDED]:
+                    U[udx, vdx] = data[UPPER] ** 2
+                    U[vdx, udx] = U[udx, vdx]
         return L, U
+
+    def add_fixed_node(self, name: str, data: dict):
+        if POS not in data:
+            raise KeyError("Node needs to gave a position to be added.")
+
+        self.directed.add_nodes_from([(name, data)])
+        for nname, ndata in self.directed.nodes(data=True):
+            if POS in ndata and nname != name:
+                self.directed.add_edge(nname, name)
+                self.directed[nname][name][DIST] = la.norm(ndata[POS] - data[POS])
+                self.directed[nname][name][LOWER] = la.norm(ndata[POS] - data[POS])
+                self.directed[nname][name][UPPER] = la.norm(ndata[POS] - data[POS])
+                self.directed[nname][name][BOUNDED] = []
+
+    def add_spherical_obstacle(self, name: str, position: np.ndarray, radius: float):
+
+        # Add a fixed node representing the obstacle to the graph
+        self.add_fixed_node(name, {POS: position, TYPE: "obstacle"})
+
+        # Set lower (and upper) distance limits to robot nodes
+        for node, node_type in self.directed.nodes(data=TYPE):
+            if node_type == "robot":
+                self.directed.add_edge(node, name)
+                self.directed[node][name][BOUNDED] = ["below"]
+                self.directed[node][name][LOWER] = radius
+                self.directed[node][name][UPPER] = 100
 
 
 class RobotPlanarGraph(RobotGraph):
@@ -178,7 +213,8 @@ class RobotPlanarGraph(RobotGraph):
         self.structure = robot.structure
         self.base = self.base_subgraph()
         self.directed = nx.compose(self.base, self.structure)
-        self.directed = nx.freeze(self.root_angle_limits(self.directed))
+        # self.directed = nx.freeze(self.root_angle_limits(self.directed))
+        self.directed = self.root_angle_limits(self.directed)
         super(RobotPlanarGraph, self).__init__()
 
     @staticmethod
@@ -189,9 +225,8 @@ class RobotPlanarGraph(RobotGraph):
         base.add_nodes_from(
             [
                 ("p0", {POS: np.array([0, 0])}),
-                # ("x", {POS: np.array([1, 0])}),
-                ("x", {POS: np.array([-1, 0])}),
-                ("y", {POS: np.array([0, 1])}),
+                ("x", {POS: np.array([-1, 0]), TYPE: "base"}),
+                ("y", {POS: np.array([0, 1]), TYPE: "base"}),
             ]
         )
 
@@ -260,7 +295,8 @@ class RobotSphericalGraph(RobotGraph):
         self.structure = robot.structure
         self.base = self.base_subgraph()
         self.directed = nx.compose(self.base, self.structure)
-        self.directed = nx.freeze(self.root_angle_limits(self.directed))
+        # self.directed = nx.freeze(self.root_angle_limits(self.directed))
+        self.directed = self.root_angle_limits(self.directed)
         super(RobotSphericalGraph, self).__init__()
 
     def root_angle_limits(self, G: nx.DiGraph) -> nx.DiGraph:
@@ -281,7 +317,7 @@ class RobotSphericalGraph(RobotGraph):
                 G[ax][node][LOWER] = sqrt(
                     l1 ** 2 + l2 ** 2 - 2 * l1 * l2 * cos(pi - lim)
                 )
-                G[ax][node][BOUNDED] = "below"
+                G[ax][node][BOUNDED] = ["below"]
                 self.robot.limit_edges.append([ax, node])
 
         return G
@@ -301,10 +337,10 @@ class RobotSphericalGraph(RobotGraph):
         base.add_nodes_from(
             [
                 ("p0", {POS: np.array([0, 0, 0])}),
-                ("x", {POS: np.array([1, 0, 0])}),
-                ("y", {POS: np.array([0, 1, 0])}),
+                ("x", {POS: np.array([1, 0, 0]), TYPE: "base"}),
+                ("y", {POS: np.array([0, 1, 0]), TYPE: "base"}),
                 # ("z", {POS: np.array([0, 0, 1])}),
-                ("z", {POS: np.array([0, 0, -1])}),
+                ("z", {POS: np.array([0, 0, -1]), TYPE: "base"}),
             ]
         )
         for u, v in base.edges():
@@ -391,13 +427,12 @@ class RobotRevoluteGraph(RobotGraph):
                     self.robot.limit_edges += [[base_node, node]]  # TODO remove/fix
 
                 G.add_edge(base_node, node)
-
                 if d_max == d_min:
                     G[base_node][node][DIST] = d_max
-
+                G[base_node][node][BOUNDED] = [limit]
                 G[base_node][node][UPPER] = d_max
                 G[base_node][node][LOWER] = d_min
-                G[base_node][node][BOUNDED] = limit
+
         return G
 
     def base_subgraph(self) -> nx.DiGraph:
@@ -415,8 +450,8 @@ class RobotRevoluteGraph(RobotGraph):
         base.add_nodes_from(
             [
                 ("p0", {POS: np.array([0, 0, 0])}),
-                ("x", {POS: np.array([axis_length, 0, 0])}),
-                ("y", {POS: np.array([0, -axis_length, 0])}),
+                ("x", {POS: np.array([axis_length, 0, 0]), TYPE: "base"}),
+                ("y", {POS: np.array([0, -axis_length, 0]), TYPE: "base"}),
                 ("q0", {POS: np.array([0, 0, axis_length])}),
             ]
         )

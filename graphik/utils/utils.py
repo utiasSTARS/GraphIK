@@ -100,8 +100,8 @@ def best_fit_transform(A: np.ndarray, B: np.ndarray) -> (np.ndarray, np.ndarray)
     # special reflection case
     # if np.linalg.det(R) < 0:
     #     print("det(R) < R, reflection detected!, correcting for it ...\n")
-    #     Vt[2, :] *= -1
-    #     R = np.dot(Vt.T, U.T)
+    # Vt[2, :] *= -1
+    # R = np.dot(Vt.T, U.T)
 
     t = centroid_B.T - np.dot(R, centroid_A.T)
     return R, t

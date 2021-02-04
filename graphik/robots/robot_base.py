@@ -1,38 +1,22 @@
 from abc import ABC, abstractmethod
+
+import networkx as nx
 import numpy as np
 import sympy as sp
-import networkx as nx
-from numpy import sqrt, sin, cos, pi, arctan2, cross
-from numpy.linalg import norm
-from liegroups.numpy._base import SEMatrixBase
-from liegroups.numpy import SO2, SO3, SE2, SE3
+from graphik.utils.geometry import cross_symb, rot_axis, roty, skew, trans_axis
+from graphik.utils.kinematics import fk_2d, fk_3d, fk_3d_sph, modified_fk_3d
 from graphik.utils.utils import (
     flatten,
     level2_descendants,
-    wraptopi,
     list_to_variable_dict,
     spherical_angle_bounds_to_revolute,
+    wraptopi,
 )
-from graphik.utils.geometry import (
-    skew,
-    cross_symb,
-    roty,
-    trans_axis,
-    rot_axis,
-)
-from graphik.utils.kinematics import (
-    fk_2d,
-    fk_3d,
-    modified_fk_3d,
-    fk_3d_sph,
-)
-
-LOWER = "lower_limit"
-UPPER = "upper_limit"
-BOUNDED = "bounded"
-DIST = "weight"
-POS = "pos"
-ROOT = "p0"
+from graphik.utils.constants import *
+from liegroups.numpy import SE2, SE3, SO2, SO3
+from liegroups.numpy._base import SEMatrixBase
+from numpy import arctan2, cos, cross, pi, sin, sqrt
+from numpy.linalg import norm
 
 
 class Robot(ABC):
@@ -56,7 +40,7 @@ class Robot(ABC):
         raise NotImplementedError
 
     def get_all_poses(self, joint_angles: dict) -> dict:
-        T = {ROOT: SE3.identity()}
+        T = {ROOT: self.T_base}
         for ee in self.end_effectors:
             for node in self.kinematic_map[ROOT][ee[0]][1:]:
                 T[node] = self.get_pose(joint_angles, node)
@@ -69,6 +53,24 @@ class Robot(ABC):
         determined by lb and ub.
         """
         raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def end_effectors(self) -> list:
+        """
+        :return: all end-effector nodes
+        """
+        raise NotImplementedError
+
+    def end_effector_pos(self, q: dict) -> dict:
+        """
+        Gets the positions of all end-effector nodes in a dictionary.
+        """
+        goals = {}
+        for ee in self.end_effectors:
+            for node in ee:
+                goals[node] = self.get_pose(q, node).trans
+        return goals
 
     @property
     def n(self) -> int:
@@ -93,6 +95,18 @@ class Robot(ABC):
         self._dim = dim
 
     @property
+    def joint_ids(self):
+        try:
+            return self._joint_ids
+        except AttributeError:
+            self._joint_ids = list(self.kinematic_map.keys())
+            return self._joint_ids
+
+    @joint_ids.setter
+    def joint_ids(self, ids: list):
+        self._joint_ids = ids
+
+    @property
     def structure(self) -> nx.DiGraph:
         """
         :return: graph representing the robot's structure
@@ -115,14 +129,6 @@ class Robot(ABC):
         self._kinematic_map = kinematic_map
 
     @property
-    @abstractmethod
-    def end_effectors(self) -> list:
-        """
-        :return: all end-effector nodes
-        """
-        raise NotImplementedError
-
-    @property
     def limit_edges(self) -> list:
         """
         :return: list of limited edges
@@ -136,7 +142,7 @@ class Robot(ABC):
     @property
     def T_base(self) -> SEMatrixBase:
         """
-        :return: Transform to robot base frame
+        :return: SE(dim) Transform to robot base frame
         """
         return self._T_base
 
@@ -144,6 +150,9 @@ class Robot(ABC):
     def T_base(self, T_base: SEMatrixBase):
         self._T_base = T_base
 
+    ########################################
+    #         KINEMATIC PARAMETERS
+    ########################################
     @property
     def ub(self) -> dict:
         """
@@ -165,10 +174,6 @@ class Robot(ABC):
     @lb.setter
     def lb(self, lb: dict):
         self._lb = lb if type(lb) is dict else list_to_variable_dict(flatten([lb]))
-
-    ########################################
-    #         KINEMATIC PARAMETERS
-    ########################################
 
     @property
     def d(self) -> dict:
@@ -275,25 +280,24 @@ class Robot(ABC):
 class RobotPlanar(Robot):
     def __init__(self, params):
         self.dim = 2
+        self.T_base = params.get("T_base", SE2.identity())
         self.a = params["a"]
         self.th = params["theta"]
-        self.n = len(self.th)
-        self.ub = (
-            params["joint_limits_upper"]
-            if "joint_limits_upper" in params
-            else list_to_variable_dict(self.n * [pi])
+        self.n = len(self.a)
+        self.joint_ids = [f"p{idx}" for idx in range(self.n)]
+        self.lb = params.get(
+            "joint_limits_lower", dict(zip(self.joint_ids, self.n * [-pi]))
         )
-        self.lb = (
-            params["joint_limits_lower"]
-            if "joint_limits_lower" in params
-            else list_to_variable_dict(self.n * [-pi])
+        self.ub = params.get(
+            "joint_limits_upper", dict(zip(self.joint_ids, self.n * [pi]))
         )
-        if "parents" in params:
-            self.structure = self.tree_graph(params["parents"])
-        else:
-            self.structure = self.chain_graph()
 
-        self.kinematic_map = nx.shortest_path(self.structure)
+        self.parents = params.get(
+            "parents", {f"p{idx}": [f"p{idx+1}"] for idx in range(self.n)}
+        )
+        self.kinematic_map = nx.shortest_path(nx.from_dict_of_lists(self.parents))
+
+        self.generate_structure_graph()
         self.set_limits()
 
         super(RobotPlanar, self).__init__()
@@ -307,6 +311,8 @@ class RobotPlanar(Robot):
         ]
         chain_graph = nx.DiGraph()
         chain_graph.add_weighted_edges_from(edg_lst)
+        nx.set_node_attributes(chain_graph, "robot", TYPE)
+        # nx.set_node_attributes(chain_graph, None, POS)
         return chain_graph
 
     def tree_graph(self, parents: dict) -> nx.DiGraph:
@@ -316,8 +322,13 @@ class RobotPlanar(Robot):
         """
         tree_graph = nx.DiGraph(parents)
         for parent, child in tree_graph.edges():
-            tree_graph.edges[parent, child]["weight"] = self.a[child]
+            tree_graph.edges[parent, child][DIST] = self.a[child]
+        nx.set_node_attributes(tree_graph, "robot", TYPE)
+        # nx.set_node_attributes(tree_graph, None, POS)
         return tree_graph
+
+    def generate_structure_graph(self):
+        self.structure = self.tree_graph(self.parents)
 
     @property
     def end_effectors(self) -> list:
@@ -496,19 +507,20 @@ class RobotPlanar(Robot):
 class RobotSpherical(Robot):
     def __init__(self, params):
 
-        if "T_base" in params:
-            self.T_base = params["T_base"]
-        else:
-            self.T_base = SE3.identity()
-
+        self.dim = 3
+        self.T_base = params.get("T_base", SE3.identity())
         self.a = params["a"]
         self.al = params["alpha"]
         self.d = params["d"]
         self.th = params["theta"]
-        self.ub = params["joint_limits_upper"]
-        self.lb = params["joint_limits_lower"]
-        self.n = len(self.th)  # number of links
-        self.dim = 3
+        self.n = len(self.a)  # number of links
+        self.joint_ids = [f"p{idx}" for idx in range(self.n + 1)]
+        self.lb = params.get(
+            "joint_limits_upper", dict(zip(self.joint_ids, self.n * [-pi]))
+        )
+        self.ub = params.get(
+            "joint_limits_lower", dict(zip(self.joint_ids, self.n * [pi]))
+        )
 
         if "parents" in params:
             self.parents = params["parents"]
@@ -534,6 +546,7 @@ class RobotSpherical(Robot):
         ]
         chain_graph = nx.DiGraph()
         chain_graph.add_weighted_edges_from(edg_lst)
+        nx.set_node_attributes(chain_graph, "robot", TYPE)
         return chain_graph
 
     def tree_graph(self) -> nx.DiGraph:
@@ -543,7 +556,8 @@ class RobotSpherical(Robot):
         """
         tree_graph = nx.DiGraph(self.parents)
         for parent, child in tree_graph.edges():
-            tree_graph.edges[parent, child]["weight"] = self.d[child]
+            tree_graph.edges[parent, child][DIST] = self.d[child]
+        nx.set_node_attributes(tree_graph, "robot", TYPE)
         return tree_graph
 
     @property
@@ -581,13 +595,6 @@ class RobotSpherical(Robot):
         d = np.array([self.d[node] for node in path_nodes])
 
         return fk_3d_sph(a, alpha, d, q)
-
-    # def get_all_poses(self, joint_angles: dict) -> dict:
-    #     T = {"p0": SE3.identity()}
-    #     for ee in self.end_effectors:
-    #         for node in self.kinematic_map["p0"][ee[0]][1:]:
-    #             T[node] = self.get_pose(joint_angles, node)
-    #     return T
 
     def joint_variables(self, G: nx.Graph, T_final: dict = None) -> np.ndarray:
         """
@@ -814,53 +821,43 @@ class RobotSpherical(Robot):
 
 class RobotRevolute(Robot):
     def __init__(self, params):
-        self.axis_length = 1
         self.dim = 3
+        self.n = params.get("num_joints", len(params["lb"]))  # number of joints
+        self.axis_length = params.get("axis_length", 1)  # distance between p and q
+        self.T_base = params.get("T_base", SE3.identity())  # base frame
+        # self.modified_dh = params.get("modified_dh", False)
 
-        if "T_base" in params:
-            self.T_base = params["T_base"]
-        else:
-            self.T_base = SE3.identity()
-
-        # Use frame poses at zero conf if provided, if not use DH
-        if "T_zero" in params:
-            self.T_zero = params["T_zero"]
-            self.n = len(self.T_zero) - 1  # number of links
-        else:
-            if "modified_dh" in params:
-                self.modified_dh = params["modified_dh"]
-            else:
-                self.modified_dh = False
-
-            if all(k in params for k in ("a", "d", "alpha", "theta")):
-                self.a = params["a"]
-                self.d = params["d"]
-                self.al = params["alpha"]
-                self.th = params["theta"]
-                self.n = len(self.al)  # number of links
-            else:
-                raise Exception("Robot description not provided.")
-
-        # Topological "map" of the robot
+        # Topological "map" of the robot, if not provided assume chain
         if "parents" in params:
             self.parents = nx.DiGraph(params["parents"])
         else:
-            names = [f"p{idx}" for idx in range(self.n + 1)]
-            self.parents = nx.path_graph(names, nx.DiGraph)
+            self.parents = nx.path_graph(
+                [f"p{idx}" for idx in range(self.n + 1)], nx.DiGraph
+            )
 
+        # A dict of shortest paths between joints for forward kinematics
         self.kinematic_map = nx.shortest_path(self.parents)
 
-        # joint limits TODO currently assuming symmetric around 0
-        if "lb" and "ub" in params:
-            self.lb = params["lb"]
-            self.ub = params["ub"]
-        else:
-            self.lb = list_to_variable_dict(self.n * [-pi])
-            self.ub = list_to_variable_dict(self.n * [pi])
+        # joint limits NOTE currently assuming symmetric around 0
+        self.lb = params.get("lb", dict(zip(self.joint_ids, self.n * [-pi])))
+        self.ub = params.get("ub", dict(zip(self.joint_ids, self.n * [pi])))
 
-        self.structure = self.structure_graph()
-        self.limit_edges = []  # edges enforcing joint limits
-        self.limited_joints = []  # joint limits that can be enforced
+        # Use frame poses at zero conf if provided, otherwise construct from DH
+        if "T_zero" in params:
+            self.T_zero = params["T_zero"]
+        else:
+            try:
+                self.a, self.d, self.al, self.th, self.modified_dh = (
+                    params["a"],
+                    params["d"],
+                    params["alpha"],
+                    params["theta"],
+                    params["modified_dh"],
+                )
+            except KeyError:
+                raise Exception("Robot description not provided.")
+
+        self.generate_structure_graph()
         self.set_limits()
         super(RobotRevolute, self).__init__()
 
@@ -914,80 +911,54 @@ class RobotRevolute(Robot):
         of the query_node in the configuration determined by
         node_inputs.
         """
-        kinematic_map = self.kinematic_map
-        parents = self.parents
-        T_ref = self.T_zero
-        T = T_ref["p0"]
-        for node in kinematic_map["p0"][query_node][1:]:
-            pred = [u for u in parents.predecessors(node)]
-            T_rel = T_ref[pred[0]].inv().dot(T_ref[node])
-            T = T.dot(rot_axis(joint_angles[node], "z")).dot(T_rel)
+        kinematic_map = self.kinematic_map["p0"]["p" + query_node[1:]]
+
+        T = self.T_base
+
+        for idx in range(len(kinematic_map) - 1):
+            pred, cur = kinematic_map[idx], kinematic_map[idx + 1]
+            T_rel = self.T_zero[pred].inv().dot(self.T_zero[cur])
+            T = T.dot(rot_axis(joint_angles[cur], "z")).dot(T_rel)
+
+        if query_node[0] == "q":
+            T = T.dot(trans_axis(self.axis_length, "z"))
+
         return T
 
-    def structure_graph(self) -> nx.DiGraph:
-        kinematic_map = self.kinematic_map
-        axis_length = self.axis_length
-        parents = self.parents
+    def generate_structure_graph(self):
+        trans_z = trans_axis(self.axis_length, "z")
         T = self.T_zero
 
         S = nx.empty_graph(create_using=nx.DiGraph)
+
         for ee in self.end_effectors:
-            for node in kinematic_map["p0"][ee[0]]:
-                aux_node = f"q{node[1:]}"
-                node_pos = T[node].trans
-                aux_node_pos = T[node].dot(trans_axis(axis_length, "z")).trans
+            k_map = self.kinematic_map["p0"][ee[0]]
+            for idx in range(len(k_map)):
+                cur, aux_cur = k_map[idx], f"q{k_map[idx][1:]}"
+                cur_pos, aux_cur_pos = T[cur].trans, T[cur].dot(trans_z).trans
+                dist = norm(cur_pos - aux_cur_pos)
 
-                # Generate nodes for joint
-                S.add_nodes_from(
-                    [
-                        (node, {POS: node_pos}),
-                        (
-                            aux_node,
-                            {POS: aux_node_pos},
-                        ),
-                    ]
-                )
+                # Add nodes for joint and edge between them
+                S.add_nodes_from([(cur, {POS: cur_pos}), (aux_cur, {POS: aux_cur_pos})])
+                S.add_edge(cur, aux_cur, **{DIST: dist, LOWER: dist, UPPER: dist})
 
-                # Generate edges
-                S.add_edge(node, aux_node)
-                for pred in parents.predecessors(node):
-                    S.add_edges_from([(pred, node), (pred, aux_node)])
-                    S.add_edges_from(
-                        [(f"q{pred[1:]}", node), (f"q{pred[1:]}", aux_node)]
-                    )
-
-        # Generate all edge weights
-        for u, v in S.edges():
-            S[u][v][DIST] = norm(S.nodes[u][POS] - S.nodes[v][POS])
-            S[u][v][LOWER] = S[u][v][DIST]
-            S[u][v][UPPER] = S[u][v][DIST]
+                # If there exists a preceeding joint, connect it to new
+                if idx != 0:
+                    pred, aux_pred = (k_map[idx - 1], f"q{k_map[idx-1][1:]}")
+                    for u in [pred, aux_pred]:
+                        for v in [cur, aux_cur]:
+                            dist = norm(S.nodes[u][POS] - S.nodes[v][POS])
+                            S.add_edge(u, v, **{DIST: dist, LOWER: dist, UPPER: dist})
 
         # Delete positions used for weights
         for u in S.nodes:
             del S.nodes[u][POS]
-        return S
 
-    def euclidean_cost_hessian(self, J: dict, K: dict, r: dict):
-        """
-        Based on 'Solving Inverse Kinematics Using Exact Hessian Matrices', Erleben, 2019
-        :param J: dictionary of linear velocity kinematic Jacobians
-        :param K: dictionary of tensors representing second order derivative information
-        :param r: dictionary where each value for key ee is goal_ee - F_ee(theta)
-        :return:
-        """
-        H = 0
-        for e in J.keys():
-            J_e = J[e]
-            N = J_e.shape[1]
-            H += J_e.T @ J_e
-            # TODO: Try with einsum for speed, maybe?
-            for idx in range(N):
-                for jdx in range(idx, N):
-                    dH = K[e][:, idx, jdx].T @ r[e]
-                    H[idx, jdx] -= dH
-                    if idx != jdx:
-                        H[jdx, idx] -= dH
-        return H
+        # Set node type to robot
+        nx.set_node_attributes(S, "robot", TYPE)
+
+        # Set structure graph attribute
+        self.structure = S
 
     def max_min_distance(self, T0: SE3, T1: SE3, T2: SE3) -> (float, float, str):
         """
@@ -1043,25 +1014,25 @@ class RobotRevolute(Robot):
         Sets known bounds on the distances between joints.
         This is induced by link length and joint limits.
         """
-        K = self.parents
         S = self.structure
         T = self.T_zero
+        self.limit_edges = []  # edges enforcing joint limits
+        self.limited_joints = []  # joint limits that can be enforced
         kinematic_map = self.kinematic_map
         T_axis = trans_axis(self.axis_length, "z")
-        for u in K:
-            for v in (des for des in K.successors(u) if des):
-                S[u][v][LOWER] = S[u][v][DIST]
-                S[u][v][UPPER] = S[u][v][DIST]
-            for v in (des for des in level2_descendants(K, u) if des):
-                names = [
-                    (f"p{u[1:]}", f"p{v[1:]}"),
-                    (f"p{u[1:]}", f"q{v[1:]}"),
-                    (f"q{u[1:]}", f"p{v[1:]}"),
-                    (f"q{u[1:]}", f"q{v[1:]}"),
-                ]
 
+        for ee in self.end_effectors:
+            k_map = self.kinematic_map["p0"][ee[0]]
+            for idx in range(2, len(k_map)):
+                cur, prev = k_map[idx], k_map[idx - 2]
+                names = [
+                    (f"p{prev[1:]}", f"p{cur[1:]}"),
+                    (f"p{prev[1:]}", f"q{cur[1:]}"),
+                    (f"q{prev[1:]}", f"p{cur[1:]}"),
+                    (f"q{prev[1:]}", f"q{cur[1:]}"),
+                ]
                 for ids in names:
-                    path = kinematic_map[u][v]
+                    path = kinematic_map[prev][cur]
                     T0, T1, T2 = [T[path[0]], T[path[1]], T[path[2]]]
 
                     if "q" in ids[0]:
@@ -1073,7 +1044,7 @@ class RobotRevolute(Robot):
 
                     if limit:
 
-                        rot_limit = rot_axis(self.ub[v], "z")
+                        rot_limit = rot_axis(self.ub[cur], "z")
 
                         T_rel = T1.inv().dot(T2)
 
@@ -1084,15 +1055,15 @@ class RobotRevolute(Robot):
                         else:
                             d_min = d_limit
 
-                        self.limited_joints += [v]
+                        self.limited_joints += [cur]
                         self.limit_edges += [[ids[0], ids[1]]]  # TODO remove/fix
 
                     S.add_edge(ids[0], ids[1])
                     if d_max == d_min:
                         S[ids[0]][ids[1]][DIST] = d_max
+                    S[ids[0]][ids[1]][BOUNDED] = [limit]
                     S[ids[0]][ids[1]][UPPER] = d_max
                     S[ids[0]][ids[1]][LOWER] = d_min
-                    S[ids[0]][ids[1]][BOUNDED] = limit
 
     def joint_variables(self, G: nx.Graph, T_final: dict = None) -> np.ndarray:
         """
@@ -1101,31 +1072,29 @@ class RobotRevolute(Robot):
         # TODO: make this more readable
         tol = 1e-10
         q_zero = list_to_variable_dict(self.n * [0])
-        kinematic_map = self.kinematic_map
-        parents = self.parents
         get_pose = self.get_pose
+        axis_length = self.axis_length
 
         T = {}
         T["p0"] = self.T_base
         theta = {}
 
         for ee in self.end_effectors:
-            path = kinematic_map["p0"][ee[0]][1:]
-            axis_length = self.axis_length
-            for node in path:
-                aux_node = f"q{node[1:]}"
-                pred = [u for u in parents.predecessors(node)]
+            k_map = self.kinematic_map["p0"][ee[0]]
+            for idx in range(1, len(k_map)):
+                cur, aux_cur = k_map[idx], f"q{k_map[idx][1:]}"
+                pred, aux_pred = (k_map[idx - 1], f"q{k_map[idx-1][1:]}")
 
-                T_prev = T[pred[0]]
+                T_prev = T[pred]
 
-                T_prev_0 = get_pose(q_zero, pred[0])
-                T_0 = get_pose(q_zero, node)
+                T_prev_0 = get_pose(q_zero, pred)
+                T_0 = get_pose(q_zero, cur)
                 T_rel = T_prev_0.inv().dot(T_0)
-                T_0_q = get_pose(q_zero, node).dot(trans_axis(axis_length, "z"))
+                T_0_q = get_pose(q_zero, cur).dot(trans_axis(axis_length, "z"))
                 T_rel_q = T_prev_0.inv().dot(T_0_q)
 
-                p = G.nodes[node][POS] - T_prev.trans
-                q = G.nodes[aux_node][POS] - T_prev.trans
+                p = G.nodes[cur][POS] - T_prev.trans
+                q = G.nodes[aux_cur][POS] - T_prev.trans
                 ps = T_prev.inv().as_matrix()[:3, :3].dot(p)
                 qs = T_prev.inv().as_matrix()[:3, :3].dot(q)
 
@@ -1155,7 +1124,7 @@ class RobotRevolute(Robot):
                     ]
                 )
                 if all(diff < tol):
-                    theta[node] = 0
+                    theta[cur] = 0
                 else:
                     sols = np.roots(
                         diff
@@ -1175,9 +1144,9 @@ class RobotRevolute(Robot):
                         )
 
                     sol = min(sols, key=error_test)
-                    theta[node] = -2 * arctan2(sol.real, 1)
+                    theta[cur] = -2 * arctan2(sol.real, 1)
 
-                T[node] = (T_prev.dot(rot_axis(theta[node], "z"))).dot(T_rel)
+                T[cur] = (T_prev.dot(rot_axis(theta[cur], "z"))).dot(T_rel)
 
             if T_final is None:
                 return theta
@@ -1186,7 +1155,7 @@ class RobotRevolute(Robot):
                 T_final[ee[0]] is not None
                 and norm(cross(T_rel.trans, np.array([0, 0, 1]))) < tol
             ):
-                T_th = (T[node]).inv().dot(T_final[ee[0]]).as_matrix()
+                T_th = (T[cur]).inv().dot(T_final[ee[0]]).as_matrix()
                 theta[ee[0]] += np.arctan2(T_th[1, 0], T_th[0, 0])
 
         return theta
@@ -1197,10 +1166,32 @@ class RobotRevolute(Robot):
         determined by lb and ub.
         """
         q = {}
-        for key in self.parents:
+        for key in self.joint_ids:
             if key != "p0":
                 q[key] = self.lb[key] + (self.ub[key] - self.lb[key]) * np.random.rand()
         return q
+
+    def euclidean_cost_hessian(self, J: dict, K: dict, r: dict):
+        """
+        Based on 'Solving Inverse Kinematics Using Exact Hessian Matrices', Erleben, 2019
+        :param J: dictionary of linear velocity kinematic Jacobians
+        :param K: dictionary of tensors representing second order derivative information
+        :param r: dictionary where each value for key ee is goal_ee - F_ee(theta)
+        :return:
+        """
+        H = 0
+        for e in J.keys():
+            J_e = J[e]
+            N = J_e.shape[1]
+            H += J_e.T @ J_e
+            # TODO: Try with einsum for speed, maybe?
+            for idx in range(N):
+                for jdx in range(idx, N):
+                    dH = K[e][:, idx, jdx].T @ r[e]
+                    H[idx, jdx] -= dH
+                    if idx != jdx:
+                        H[jdx, idx] -= dH
+        return H
 
     def jacobian_linear_symb(
         self, joint_angles: dict, pose_term=False, ee_keys=None

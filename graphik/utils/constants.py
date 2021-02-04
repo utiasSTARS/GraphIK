@@ -1,6 +1,8 @@
 LOWER = "lower_limit"
 UPPER = "upper_limit"
 BOUNDED = "bounded"
+TYPE = "type"
+RADIUS = "radius"
 DIST = "weight"
 POS = "pos"
 ROOT = "p0"

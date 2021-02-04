@@ -20,6 +20,8 @@ from numba import njit
 from pymanopt.manifolds.manifold import Manifold
 
 sfunction = lambda x: None
+
+
 def lyap(a, q):
     """
     Solves the continuous Lyapunov equation :math:`AX + XA^H = Q`.
@@ -48,15 +50,14 @@ def lyap(a, q):
 
     # Compute the Schur decomposition form of a
     # r, u = schur(a, output="real", check_finite=False, overwrite_a=True)
-    gees, = get_lapack_funcs(('gees',), (a,))
+    (gees,) = get_lapack_funcs(("gees",), (a,))
     # t = time.time()
     # result = gees(lambda x: None, a, lwork=-1)
     # print(time.time() - t)
     # lwork = result[-2][0].real.astype(np.int_)
     # result = gees(sfunction, a, lwork=lwork, overwrite_a=True,
     #               sort_t=0)
-    result = gees(sfunction, a, overwrite_a=True,
-                  sort_t=0)
+    result = gees(sfunction, a, overwrite_a=True, sort_t=0)
     r = result[0]
     u = result[-3]
     # Construct f = u'*q*u
@@ -132,7 +133,7 @@ class PSDFixedRank(Manifold):
 
     def norm(self, Y, U):
         # return la.norm(U, "fro")
-        return np.sqrt(np.einsum("ij,ij->", U, U)) 
+        return np.sqrt(np.einsum("ij,ij->", U, U))
 
     def dist(self, U, V):
         raise NotImplementedError

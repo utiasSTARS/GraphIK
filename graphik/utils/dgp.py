@@ -2,14 +2,25 @@
 import numpy as np
 import networkx as nx
 import math
+from graphik.utils.constants import *
+from graphik.utils.utils import best_fit_transform
 
-LOWER = "lower_limit"
-UPPER = "upper_limit"
-BOUNDED = "bounded"
-DIST = "weight"
-POS = "pos"
-ROOT = "p0"
-UNDEFINED = None
+
+def orthogonal_procrustes(G1: nx.DiGraph, G2: nx.DiGraph) -> nx.DiGraph:
+    """
+    Aligns two point clouds represented by graphs by aligning nodes with
+    matching labels and returns a graph representing the aligned points.
+
+    Keyword Arguments:
+    G1: nx.DiGraph -- Graph representing the point set to align with.
+    G2: nx.DiGraph -- Graph representing the point set to be aligned.
+    """
+    Y = pos_from_graph(G1, node_names=list(G1))
+    X = pos_from_graph(G2, node_names=list(G1))
+    R, t = best_fit_transform(X, Y)
+    X = pos_from_graph(G2)
+    P_e = (R @ X.T + t.reshape(len(t), 1)).T
+    return graph_from_pos(P_e, list(G2))  # not really order-dependent
 
 
 def dist_to_gram(D):
@@ -40,7 +51,7 @@ def distance_matrix_from_graph(G: nx.DiGraph) -> np.ndarray:
     )
 
 
-def adjacency_matrix_from_graph(G: nx.DiGraph) -> np.ndarray:
+def adjacency_matrix_from_graph(G: nx.DiGraph, label: str = DIST) -> np.ndarray:
     """
     Returns the adjacency matrix representing the edges that are known,
     given the kinematic and base structure, as well as the end-effector targets.
@@ -49,13 +60,13 @@ def adjacency_matrix_from_graph(G: nx.DiGraph) -> np.ndarray:
     if not isinstance(G, nx.DiGraph):
         raise TypeError("Input must a DiGraph.")
 
-    selected_edges = [(u, v) for u, v, d in G.edges(data=True) if DIST in d]
+    selected_edges = [(u, v) for u, v, d in G.edges(data=True) if label in d]
     return nx.to_numpy_array(
         nx.to_undirected(G.edge_subgraph(selected_edges)), weight=""
     )
 
 
-def pos_from_graph(G: nx.DiGraph) -> np.ndarray:
+def pos_from_graph(G: nx.DiGraph, node_names=None) -> np.ndarray:
     """
     Returns an n x m matrix of node positions from a given graph,
     where n is the number of nodes and m is the point dimension.
@@ -64,13 +75,15 @@ def pos_from_graph(G: nx.DiGraph) -> np.ndarray:
     """
     # TODO add check to see if all POS defined
     # X = np.zeros([len(G), self.dim])  # matrix of vertex positions
+    if not node_names:
+        node_names = list(G)
     X = []
-    for idx, name in enumerate(G):
+    for idx, name in enumerate(node_names):
         X += [list(G.nodes[name][POS])]
     return np.array(X)
 
 
-def graph_from_pos(P: np.ndarray, node_ids: list = None) -> nx.DiGraph:
+def graph_from_pos(P: np.ndarray, node_ids: list = None, dist=True) -> nx.DiGraph:
     """
     Generates an nx.DiGraph object of the subclass type given
     an n x m matrix where n is the number of nodes and m is the dimension.
@@ -84,7 +97,11 @@ def graph_from_pos(P: np.ndarray, node_ids: list = None) -> nx.DiGraph:
     G = nx.empty_graph(node_ids, create_using=nx.DiGraph)
     for idx, name in enumerate(node_ids):
         G.nodes[name][POS] = P[idx, :]
-    return graph_complete_edges(G)
+
+    if dist:
+        graph_complete_edges(G)
+
+    return G
 
 
 def graph_from_pos_dict(P: dict) -> nx.DiGraph:
@@ -116,6 +133,11 @@ def graph_complete_edges(G: nx.DiGraph) -> nx.DiGraph:
         for jdx, v in enumerate(G.nodes()):
             # if both nodes have known positions
             if (POS in G.nodes[u]) and (POS in G.nodes[v]) and jdx > idx:
+                # if (
+                #     (G.nodes[u][POS] is not None)
+                #     and (G.nodes[v][POS] is not None)
+                #     and jdx > idx
+                # ):
                 # if a distance edge exists already in the other direction
                 if G.has_edge(v, u):
                     if DIST in G[v][u]:
@@ -129,6 +151,25 @@ def graph_complete_edges(G: nx.DiGraph) -> nx.DiGraph:
                     ]
                 )
 
+    # TODO get back to pre-setting all node positions to None
+    # for u, pos_u in G.nodes(data=POS):
+    #     for v, pos_v in G.nodes(data=POS):
+    #         # if both nodes have known positions
+    #         if (pos_u is not None) and (pos_v is not None) and u != v:
+    #             # if a distance edge exists already in the other direction
+    #             if G.has_edge(v, u):
+    #                 if DIST in G[v][u]:
+    #                     continue
+    #             else:
+    #                 d = np.linalg.norm(pos_u - pos_v)
+    #                 G.add_edges_from(
+    #                     [
+    #                         (u, v, {DIST: d}),
+    #                         (u, v, {LOWER: d}),
+    #                         (u, v, {UPPER: d}),
+    #                     ]
+    #                 )
+    # print(distance_matrix_from_graph(G))
     return G
 
 
