@@ -228,7 +228,7 @@ if __name__ == "__main__":
         f"q{idx}" for idx in range(0, graph.robot.n + 1)
     ]
 
-    n_runs = 1
+    n_runs = 10
     final_eigvalue_sum_list = []
     for idx in range(n_runs):
         # Generate a random feasible target

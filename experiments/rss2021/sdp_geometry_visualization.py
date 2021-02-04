@@ -21,6 +21,10 @@ if __name__ == '__main__':
     lin_constraints = [sp.Equality(s2, 1), sp.Equality(x2 + y2, 1), sp.Equality(x2 - 2*(x + y) + y2, -1)]
     constraints = lin_constraints + [sp.Equality(sdp_boundary, 0)]
 
+    # Unit circle obstacle at [1, 0]
+    obstacle_constraint_expression = x2 - 2*x + y2
+    obstacle_constraint_converted = sp.GreaterThan(y, 0.5)  # Use this manually in the plotting, later: cuts out solution at the origin
+
     # Solve the system
     # solution = sp.solve_poly_system(lin_constraints + [sp.det(Z)], x2, xy, y2, x, y, s2)
 
@@ -31,58 +35,57 @@ if __name__ == '__main__':
     boundary_curve = boundary_curve.simplify()
 
     # Plot the boundary
-    n = 30
-    xy_domain = np.linspace(-1., 1., n)
+    n = 50
+    xy_domain = np.linspace(0., 1., n)
     y_domain = xy_domain
-    y2_domain = np.linspace(0., 2., n)
+    y2_domain = np.linspace(0., 1., n)
 
-    boundary_tol = 1e-2
-    interior_xy = []
-    interior_y = []
-    interior_y2 = []
-    determinant_values = []
+    eig1 = []
+    eig2 = []
+    eig3 = []
+    full_points = []
     for xy_val in xy_domain:
         for y_val in y_domain:
             for y2_val in y2_domain:
-                # if np.abs(boundary_curve.subs(xy, xy_val).subs(y, y_val).subs(y2, y2_val)) <= boundary_tol:
-                det_val = boundary_curve.subs(xy, xy_val).subs(y, y_val).subs(y2, y2_val)
-                determinant_values.append(det_val)
-                if det_val > 0.:
-                    interior_xy.append(xy_val)
-                    interior_y.append(y_val)
-                    interior_y2.append(y2_val)
+                Z_val = np.array([[1.-y2_val, xy_val, 1. - y_val],
+                                  [xy_val, y2_val, y_val],
+                                  [1. - y_val, y_val, 1.]])
+                eig_vals = np.linalg.eigvalsh(Z_val)
+                eig1.append(eig_vals[0])
+                eig2.append(eig_vals[1])
+                eig3.append(eig_vals[2])
+                full_points.append(np.array([xy_val, y_val, y2_val]))
+    rank_tol = 1e-2
+    rank_approx = [np.sum([eig1[idx] > rank_tol, eig2[idx] > rank_tol, eig3[idx] > rank_tol]) for idx in range(len(eig1))]
+
+    psd_set = [idx for idx in range(len(eig1)) if eig1[idx] >= 0. and eig2[idx] >= 0. and eig3[idx] >= 0.]
+    psd_set_x = [full_points[idx][0] for idx in psd_set]
+    psd_set_y = [full_points[idx][1] for idx in psd_set]
+    psd_set_z = [full_points[idx][2] for idx in psd_set]
+
+    rank1_set_x = [full_points[idx][0] for idx in range(len(eig1)) if rank_approx[idx] == 1 and idx in psd_set]
+    rank1_set_y = [full_points[idx][1] for idx in range(len(eig1)) if rank_approx[idx] == 1 and idx in psd_set]
+    rank1_set_z = [full_points[idx][2] for idx in range(len(eig1)) if rank_approx[idx] == 1 and idx in psd_set]
+
+    rank2_set_x = [full_points[idx][0] for idx in range(len(eig1)) if rank_approx[idx] == 2 and idx in psd_set]
+    rank2_set_y = [full_points[idx][1] for idx in range(len(eig1)) if rank_approx[idx] == 2 and idx in psd_set]
+    rank2_set_z = [full_points[idx][2] for idx in range(len(eig1)) if rank_approx[idx] == 2 and idx in psd_set]
+
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    # ax.scatter(psd_set_x, psd_set_y, psd_set_z, c='g', marker='.', s=10)
+    ax.scatter(rank1_set_x, rank1_set_y, rank1_set_z, c='r', marker='o', s=15)
+    ax.scatter(rank2_set_x, rank2_set_y, rank2_set_z, c='b', marker='.', s=10)
+    plt.xlabel('$xy$')
+    plt.ylabel('$y$')
+    # ax.zlabel('$y2$')
+    plt.grid()
+    plt.show()
+
+    # Surface
+    ax.plot_surface(np.array(rank2_set_x), np.array(rank2_set_y), np.array(rank2_set_z))
 
     # TODO: add obstacle, do heatmap, plot actual solutions, and use SDP constraint, NOT determinant!
-    # TODO: eventually, add convex iteration procedure, see how it does on this toy problem (nuclear norm prob. solves) 
-
-    # fig = plt.figure()
-    # ax = fig.gca(projection='3d')
-    # ax.scatter(interior_xy, interior_y, interior_y2)
-    # plt.xlabel('$xy$')
-    # plt.ylabel('$y$')
-    # # ax.zlabel('$y2$')
-    # plt.grid()
-    # plt.show()
-
-    # Plot a heatmap
-
-    # Plot the boundary curve
-    # y2_solve = [sp.solve_poly_system([sp.Equality(boundary_curve.subs(xy, xy_domain[idx]).subs(y, y_domain[idx]), 0)], y2) for idx in range(len(xy_domain))]
-    #
-    # curve1 = [val[0][0].as_real_imag()[0] for val in y2_solve] # Take only the real part
-    # curve2 = [val[1][0].as_real_imag()[0] for val in y2_solve]
-    #
-    # true_sols_xy = [0., 0.]
-    # true_sols_y  = [0., 1.]
-    # true_sols_y2 = [0., 1.]
-    #
-    # fig = plt.figure()
-    # ax = fig.gca(projection='3d')
-    # plt.plot(xy_domain, y_domain, curve1, 'r-')
-    # plt.plot(xy_domain, y_domain, curve2, 'b--')
-    # plt.scatter(true_sols_xy, true_sols_y, true_sols_y2)
-    # plt.xlabel('$xy$')
-    # plt.ylabel('$y$')
-    # plt.xlabel('$xy$')
-    # plt.grid()
-    # plt.show()
+    # TODO: to check the SDP constraint, simply construct the whole matrix and check its eigenvalues
+    # TODO: have colours specifying the rank of the points on the boundary on the heatmap (simple function of eigs)
+    # TODO: eventually, add convex iteration procedure, see how it does on this toy problem (nuclear norm prob. solves)
