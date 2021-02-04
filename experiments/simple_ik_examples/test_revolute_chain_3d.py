@@ -144,31 +144,31 @@ if __name__ == "__main__":
     # lb = -ub
     # modified_dh = True
 
-    params = {
-        "a": a[:n],
-        "alpha": al[:n],
-        "d": d[:n],
-        "theta": th[:n],
-        "lb": lb[:n],
-        "ub": ub[:n],
-        "modified_dh": modified_dh,
-    }
+    # params = {
+    #     "a": a[:n],
+    #     "alpha": al[:n],
+    #     "d": d[:n],
+    #     "theta": th[:n],
+    #     "lb": lb[:n],
+    #     "ub": ub[:n],
+    #     "modified_dh": modified_dh,
+    # }
 
-    robot = RobotRevolute(params)
+    # robot = RobotRevolute(params)
 
     # n = 7
     # ub = (pi) * np.ones(n)
     # lb = -ub
-    # fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
-    fname = graphik.__path__[0] + "/robots/urdfs/lwa4p.urdf"
+    fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
+    # fname = graphik.__path__[0] + "/robots/urdfs/lwa4p.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/lwa4d.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/panda_arm.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/kuka_iiwr.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/kuka_lwr.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/jaco2arm6DOF_no_hand.urdf"
     #
-    # urdf_robot = RobotURDF(fname)
-    # robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
+    urdf_robot = RobotURDF(fname)
+    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
 
     graph = RobotRevoluteGraph(robot)
     # graph.distance_bounds_from_sampling()

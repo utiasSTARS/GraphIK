@@ -5,7 +5,12 @@ import numpy as np
 import numpy.linalg as la
 from graphik.robots.robot_base import Robot, RobotPlanar, RobotRevolute
 from graphik.utils.constants import *
-from graphik.utils.dgp import graph_complete_edges, graph_from_pos, pos_from_graph
+from graphik.utils.dgp import (
+    graph_complete_edges,
+    graph_from_pos,
+    pos_from_graph,
+    distance_matrix_from_graph,
+)
 from graphik.utils.geometry import rot_axis, trans_axis
 from graphik.utils.utils import list_to_variable_dict
 from liegroups.numpy import SE3
@@ -95,15 +100,7 @@ class RobotGraph(ABC):
         Returns a partial distance matrix of known distances in the problem graph.
         :returns: Distance matrix
         """
-        # TODO check handling of unknown distances
-        G = self.directed
-        selected_edges = [(u, v) for u, v, d in G.edges(data=True) if DIST in d]
-        return (
-            nx.to_numpy_array(
-                nx.to_undirected(G.edge_subgraph(selected_edges)), weight=DIST
-            )
-            ** 2
-        )
+        return distance_matrix_from_graph(self.directed)
 
     def distance_matrix_from_joints(self, joint_angles: np.ndarray) -> np.ndarray:
         """
@@ -112,8 +109,7 @@ class RobotGraph(ABC):
         :param x: Decision variables (revolute joints, prismatic joints)
         :returns: Matrix of squared distances
         """
-        D = nx.to_numpy_array(self.realization(joint_angles)) ** 2
-        return D + D.T
+        return distance_matrix_from_graph(self.realization(joint_angles))
 
     def adjacency_matrix(self) -> np.ndarray:
         """
@@ -126,17 +122,6 @@ class RobotGraph(ABC):
         return nx.to_numpy_array(
             nx.to_undirected(G.edge_subgraph(selected_edges)), weight=""
         )
-
-    def known_positions(self) -> np.ndarray:
-        """
-        Returns an n x m matrix of a priori defined node positions in this graph,
-        where n is the number of nodes and m is the point dimension.
-        If a node position is unknown, the point will be returned as None.
-        :param G: graph where all nodes have a populated POS field
-        :returns: n x m matrix of node positions
-        """
-        # TODO implement this
-        raise NotImplementedError
 
     def complete_from_pos(self, P: dict, dist=True) -> nx.DiGraph:
         """
@@ -151,13 +136,39 @@ class RobotGraph(ABC):
         G = self.directed.copy()  # copy of the original object
 
         for name, pos in P.items():
-            if name in G.nodes():
+            if name in self.node_ids:
                 G.nodes[name][POS] = pos
 
         if dist:
             G = graph_complete_edges(G)
 
         return G
+
+    def add_anchor_node(self, name: str, data: dict):
+        if POS not in data:
+            raise KeyError("Node needs to gave a position to be added.")
+
+        self.directed.add_nodes_from([(name, data)])
+        for nname, ndata in self.directed.nodes(data=True):
+            if POS in ndata and nname != name:
+                self.directed.add_edge(nname, name)
+                self.directed[nname][name][DIST] = la.norm(ndata[POS] - data[POS])
+                self.directed[nname][name][LOWER] = la.norm(ndata[POS] - data[POS])
+                self.directed[nname][name][UPPER] = la.norm(ndata[POS] - data[POS])
+                self.directed[nname][name][BOUNDED] = []
+
+    def add_spherical_obstacle(self, name: str, position: np.ndarray, radius: float):
+
+        # Add a fixed node representing the obstacle to the graph
+        self.add_anchor_node(name, {POS: position, TYPE: "obstacle"})
+
+        # Set lower (and upper) distance limits to robot nodes
+        for node, node_type in self.directed.nodes(data=TYPE):
+            if node_type == "robot":
+                self.directed.add_edge(node, name)
+                self.directed[node][name][BOUNDED] = ["below"]
+                self.directed[node][name][LOWER] = radius
+                self.directed[node][name][UPPER] = 100
 
     def distance_bound_matrices(self):
         """
@@ -178,32 +189,6 @@ class RobotGraph(ABC):
                     U[udx, vdx] = data[UPPER] ** 2
                     U[vdx, udx] = U[udx, vdx]
         return L, U
-
-    def add_fixed_node(self, name: str, data: dict):
-        if POS not in data:
-            raise KeyError("Node needs to gave a position to be added.")
-
-        self.directed.add_nodes_from([(name, data)])
-        for nname, ndata in self.directed.nodes(data=True):
-            if POS in ndata and nname != name:
-                self.directed.add_edge(nname, name)
-                self.directed[nname][name][DIST] = la.norm(ndata[POS] - data[POS])
-                self.directed[nname][name][LOWER] = la.norm(ndata[POS] - data[POS])
-                self.directed[nname][name][UPPER] = la.norm(ndata[POS] - data[POS])
-                self.directed[nname][name][BOUNDED] = []
-
-    def add_spherical_obstacle(self, name: str, position: np.ndarray, radius: float):
-
-        # Add a fixed node representing the obstacle to the graph
-        self.add_fixed_node(name, {POS: position, TYPE: "obstacle"})
-
-        # Set lower (and upper) distance limits to robot nodes
-        for node, node_type in self.directed.nodes(data=TYPE):
-            if node_type == "robot":
-                self.directed.add_edge(node, name)
-                self.directed[node][name][BOUNDED] = ["below"]
-                self.directed[node][name][LOWER] = radius
-                self.directed[node][name][UPPER] = 100
 
 
 class RobotPlanarGraph(RobotGraph):
@@ -461,7 +446,7 @@ class RobotRevoluteGraph(RobotGraph):
             base[u][v][UPPER] = base[u][v][DIST]
         return base
 
-    def realization(self, x: np.ndarray) -> np.ndarray:
+    def realization(self, x: np.ndarray) -> nx.DiGraph:
         """
         Given a dictionary of joint variables generate a representative graph.
         This graph will be fully conncected.
