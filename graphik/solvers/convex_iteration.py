@@ -47,7 +47,7 @@ def convex_iterate_sdp_snl_graph(
     sparse=False,
     verbose=False,
 ):
-    # TODO: add more logging
+    # get a copy of the current robot + environment graph
     G = graph.directed.copy()
 
     # remove base nodes and all adjacent edges
@@ -58,7 +58,7 @@ def convex_iterate_sdp_snl_graph(
     d = robot.dim
     eig_value_sum_vs_iterations = []
 
-    # the "anchors" variable needs to be set up from the graph
+    # If a position is pre-defined for a node, set to anchor
     for node, data in G.nodes(data=True):
         if data.get(POS, None) is not None:
             anchors[node] = data[POS]
@@ -126,8 +126,8 @@ def convex_iterate_sdp_snl(
 
     if random_W_init:
         P = np.random.rand(N, N)
-        W = P@P.T  # Choose a random PSD matrix
-        W = W/np.linalg.norm(W, ord='fro')
+        W = P @ P.T  # Choose a random PSD matrix
+        W = W / np.linalg.norm(W, ord="fro")
     else:
         W = np.eye(N)
     Z, ft_constraints = fantope_constraints(N, d)

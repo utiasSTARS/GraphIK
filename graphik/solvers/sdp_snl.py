@@ -277,6 +277,7 @@ def distance_constraints_graph(
             edges += [(u, v)]
     G.remove_edges_from(edges)
 
+    # undirected = G.to_undirected()
     undirected = nx.Graph(G)
     equality_cliques = nx.chordal_graph_cliques(
         undirected
@@ -314,7 +315,7 @@ def distance_constraints(
     :return: mapping from cliques to LMEs
     """
     undirected = nx.Graph(
-        robot.structure_graph()
+        robot.generate_structure_graph()
     )  # This graph must be chordal # NOTE creates a new structure graph?
     equality_cliques = nx.chordal_graph_cliques(
         undirected

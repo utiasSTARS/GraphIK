@@ -959,6 +959,7 @@ class RobotRevolute(Robot):
 
         # Set structure graph attribute
         self.structure = S
+        return S
 
     def max_min_distance(self, T0: SE3, T1: SE3, T2: SE3) -> (float, float, str):
         """
