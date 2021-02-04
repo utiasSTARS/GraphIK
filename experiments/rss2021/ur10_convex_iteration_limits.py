@@ -79,6 +79,7 @@ def solve_random_problem(graph: RobotRevoluteGraph):
 
 
 if __name__ == "__main__":
+    np.random.seed(21)
     ub = np.minimum(np.random.rand(6) * (pi / 2) + pi / 2, pi)
     lb = -ub
     limits = (lb, ub)

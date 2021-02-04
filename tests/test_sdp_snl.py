@@ -4,34 +4,58 @@ import networkx as nx
 from numpy.testing import assert_allclose
 from graphik.graphs.graph_base import RobotRevoluteGraph
 
-from graphik.robots.robot_base import RobotRevolute
+from graphik.robots.robot_base import Robot, RobotRevolute
 from graphik.solvers.constraints import get_full_revolute_nearest_point
 from graphik.solvers.sdp_snl import (
     distance_constraints,
+    distance_constraints_graph,
     evaluate_linear_map,
     constraints_and_nearest_points_to_sdp_vars,
     evaluate_cost,
 )
+from graphik.utils.constants import *
 from graphik.utils.roboturdf import load_ur10
 
 
-def run_constraint_test(test_case, graph, sparse=False, ee_cost=False):
-    undirected = nx.Graph(graph.robot.generate_structure_graph())
-    q = graph.robot.random_configuration()
-    full_points = [f"p{idx}" for idx in range(0, graph.robot.n + 1)] + [
-        f"q{idx}" for idx in range(0, graph.robot.n + 1)
+def run_constraint_test(test_case, graph: Robot, sparse=False, ee_cost=False):
+    robot = graph.robot
+    n = robot.n
+
+    # get a copy of the current robot + environment graph
+    G = graph.directed.copy()
+
+    # remove base nodes and all adjacent edges
+    G.remove_node("x")
+    G.remove_node("y")
+
+    q = robot.random_configuration()
+
+    full_points = [f"p{idx}" for idx in range(0, n + 1)] + [
+        f"q{idx}" for idx in range(0, n + 1)
     ]
+
     true_input_vals = get_full_revolute_nearest_point(graph, q, full_points)
     random_input_vals = {
         key: np.random.rand(graph.robot.dim) for key in true_input_vals
     }
-    end_effectors = {
-        key: true_input_vals[key]
-        for key in ["p0", "q0", f"p{graph.robot.n}", f"q{graph.robot.n}"]
-    }
-    constraint_clique_dict = distance_constraints(
-        graph.robot, end_effectors, sparse, ee_cost
+
+    anchors = {key: true_input_vals[key] for key in ["p0", "q0", f"p{n}", f"q{n}"]}
+
+    # If a position is pre-defined for a node, set to anchor
+    for node, data in G.nodes(data=True):
+        if data.get(POS, None) is not None:
+            anchors[node] = data[POS]
+
+    constraint_clique_dict = distance_constraints_graph(
+        G, anchors, sparse, ee_cost=False
     )
+    # remove the edges that don't have distances defined
+    edges = []
+    for u, v, data in G.edges(data=True):
+        if not data.get(DIST, False):
+            edges += [(u, v)]
+    G.remove_edges_from(edges)
+    undirected = G.to_undirected()
 
     for clique in constraint_clique_dict:
         A_clique, b_clique, mapping, _ = constraint_clique_dict[clique]
@@ -53,13 +77,13 @@ def run_constraint_test(test_case, graph, sparse=False, ee_cost=False):
                     idx = mapping[frozenset((u, v))]
                     sdp_residual = random_evaluations[idx]
                     u_val = (
-                        end_effectors[u]
-                        if u in end_effectors and not ee_cost
+                        anchors[u]
+                        if u in anchors and not ee_cost
                         else random_input_vals[u]
                     )
                     v_val = (
-                        end_effectors[v]
-                        if v in end_effectors and not ee_cost
+                        anchors[v]
+                        if v in anchors and not ee_cost
                         else random_input_vals[v]
                     )
                     true_residual = (
