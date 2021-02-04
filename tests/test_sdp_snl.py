@@ -46,9 +46,8 @@ def run_constraint_test(test_case, graph: Robot, sparse=False, ee_cost=False):
         if data.get(POS, None) is not None:
             anchors[node] = data[POS]
 
-    constraint_clique_dict = distance_constraints_graph(
-        G, anchors, sparse, ee_cost=False
-    )
+    constraint_clique_dict = distance_constraints_graph(G, anchors, sparse, ee_cost)
+
     # remove the edges that don't have distances defined
     edges = []
     for u, v, data in G.edges(data=True):
@@ -63,10 +62,8 @@ def run_constraint_test(test_case, graph: Robot, sparse=False, ee_cost=False):
             clique, A_clique, b_clique, mapping, true_input_vals
         )
         for true_eval in true_evaluations:
-            # try:
             test_case.assertAlmostEqual(true_eval, 0.0)
-            # except AssertionError:
-            #     pass
+
         random_evaluations = evaluate_linear_map(
             clique, A_clique, b_clique, mapping, random_input_vals
         )
@@ -87,13 +84,10 @@ def run_constraint_test(test_case, graph: Robot, sparse=False, ee_cost=False):
                         else random_input_vals[v]
                     )
                     true_residual = (
-                        np.linalg.norm(u_val - v_val) ** 2
-                        - undirected[u][v]["weight"] ** 2
+                        np.linalg.norm(u_val - v_val) ** 2 - undirected[u][v][DIST] ** 2
                     )
-                    try:
-                        test_case.assertAlmostEqual(sdp_residual, true_residual)
-                    except AssertionError:
-                        pass
+
+                    test_case.assertAlmostEqual(sdp_residual, true_residual)
 
 
 def run_cost_test(test_case, robot, graph, sparse=False, ee_cost=False):
@@ -161,19 +155,31 @@ class TestUR10(unittest.TestCase):
                     full_points = [f"p{idx}" for idx in range(0, self.robot.n + 1)] + [
                         f"q{idx}" for idx in range(0, self.robot.n + 1)
                     ]
+
                     input_vals = get_full_revolute_nearest_point(
                         self.graph, q, full_points
                     )
-                    end_effectors = {
+                    random_input_vals = {key: np.random.rand(3) for key in input_vals}
+
+                    # Copy of the current robot + environment graph
+                    G = self.graph.directed.copy()
+                    G.remove_node("x")
+                    G.remove_node("y")
+
+                    anchors = {
                         key: input_vals[key]
                         for key in ["p0", "q0", f"p{self.robot.n}", f"q{self.robot.n}"]
                     }
 
-                    constraint_clique_dict = distance_constraints(
-                        self.robot, end_effectors, sparse, ee_cost
+                    # If a position is pre-defined for a node, set to anchor
+                    for node, data in G.nodes(data=True):
+                        if data.get(POS, None) is not None:
+                            anchors[node] = data[POS]
+
+                    constraint_clique_dict = distance_constraints_graph(
+                        G, anchors, sparse, ee_cost=ee_cost
                     )
 
-                    random_input_vals = {key: np.random.rand(3) for key in input_vals}
                     for clique in constraint_clique_dict:
                         A, b, mapping, _ = constraint_clique_dict[clique]
                         evaluations = evaluate_linear_map(
