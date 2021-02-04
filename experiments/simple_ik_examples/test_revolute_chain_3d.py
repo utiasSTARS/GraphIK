@@ -173,7 +173,7 @@ if __name__ == "__main__":
     graph = RobotRevoluteGraph(robot)
     # graph.distance_bounds_from_sampling()
     solver = RiemannianSolver(graph)
-    num_tests = 20
+    num_tests = 100
     e_pos = []
     e_rot = []
     t = []

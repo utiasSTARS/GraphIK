@@ -51,7 +51,7 @@ def distance_matrix_from_graph(G: nx.DiGraph) -> np.ndarray:
     )
 
 
-def adjacency_matrix_from_graph(G: nx.DiGraph) -> np.ndarray:
+def adjacency_matrix_from_graph(G: nx.DiGraph, label: str = DIST) -> np.ndarray:
     """
     Returns the adjacency matrix representing the edges that are known,
     given the kinematic and base structure, as well as the end-effector targets.
@@ -60,7 +60,7 @@ def adjacency_matrix_from_graph(G: nx.DiGraph) -> np.ndarray:
     if not isinstance(G, nx.DiGraph):
         raise TypeError("Input must a DiGraph.")
 
-    selected_edges = [(u, v) for u, v, d in G.edges(data=True) if DIST in d]
+    selected_edges = [(u, v) for u, v, d in G.edges(data=True) if label in d]
     return nx.to_numpy_array(
         nx.to_undirected(G.edge_subgraph(selected_edges)), weight=""
     )

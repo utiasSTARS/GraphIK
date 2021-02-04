@@ -143,7 +143,7 @@ class RobotGraph(ABC):
         Given a dictionary of node name and position key-value pairs,
         generate a copy of the problem graph and fill the POS attributes of
         nodes corresponding to keys with assigned values.
-        Then, populate all edges between nodes with assinged POS attributes,
+        If dist is True, populate all edges between nodes with assinged POS attributes,
         and return the new graph.
         :param P: a dictionary of node name position pairs
         :returns: graph with connected nodes with POS attribute

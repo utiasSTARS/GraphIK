@@ -54,11 +54,22 @@ class Robot(ABC):
         """
         raise NotImplementedError
 
+    @property
+    @abstractmethod
+    def end_effectors(self) -> list:
+        """
+        :return: all end-effector nodes
+        """
+        raise NotImplementedError
+
     def end_effector_pos(self, q: dict) -> dict:
+        """
+        Gets the positions of all end-effector nodes in a dictionary.
+        """
         goals = {}
         for ee in self.end_effectors:
-            goals[ee[0]] = self.get_pose(q, ee[0]).trans
-            goals[ee[1]] = self.get_pose(q, ee[1]).trans
+            for node in ee:
+                goals[node] = self.get_pose(q, node).trans
         return goals
 
     @property
@@ -116,14 +127,6 @@ class Robot(ABC):
     @kinematic_map.setter
     def kinematic_map(self, kinematic_map: dict):
         self._kinematic_map = kinematic_map
-
-    @property
-    @abstractmethod
-    def end_effectors(self) -> list:
-        """
-        :return: all end-effector nodes
-        """
-        raise NotImplementedError
 
     @property
     def limit_edges(self) -> list:
