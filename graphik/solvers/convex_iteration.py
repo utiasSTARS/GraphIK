@@ -69,8 +69,7 @@ def convex_iterate_sdp_snl_graph(
         G, anchors, sparse, ee_cost=False
     )
 
-    if ranges:
-        inequality_map = distance_range_constraints(G, constraint_clique_dict, anchors)
+    inequality_map = distance_range_constraints(G, constraint_clique_dict, anchors) if ranges else None
 
     n = len(canonical_point_order)
     N = n + d
@@ -84,7 +83,7 @@ def convex_iterate_sdp_snl_graph(
             C,
             canonical_point_order,
             verbose=False,
-            inequality_constraints_map=None,
+            inequality_constraints_map=inequality_map,
         )
         G = extract_full_sdp_solution(
             constraint_clique_dict, canonical_point_order, sdp_variable_map, N, d
@@ -161,66 +160,9 @@ def convex_iterate_sdp_snl(
     )
 
 
-def convex_iterate_sdp_snl_ineq(
-    robot, end_effectors, max_iters=10, sparse=False, verbose=False
-):
-    d = robot.dim
-    # TODO: add more logging
-    eig_value_sum_vs_iterations = []
-    full_points = [f"p{idx}" for idx in range(0, robot.n + 1)] + [
-        f"q{idx}" for idx in range(0, robot.n + 1)
-    ]
-    canonical_point_order = [
-        point for point in full_points if point not in end_effectors.keys()
-    ]
-    constraint_clique_dict = distance_constraints(
-        robot, end_effectors, sparse, ee_cost=False
-    )
-    inequality_map = distance_range_constraints(
-        robot.structure, constraint_clique_dict, end_effectors
-    )  # this will only add joint limits
-    n = len(canonical_point_order)
-    N = n + d
-    C = np.eye(N)
-    Z, ft_constraints = fantope_constraints(N, d)
-    for iter in range(max_iters):
-        solution, prob, sdp_variable_map, _ = solve_linear_cost_sdp(
-            robot,
-            end_effectors,
-            constraint_clique_dict,
-            C,
-            canonical_point_order,
-            verbose=False,
-            inequality_constraints_map=inequality_map,
-        )
-        G = extract_full_sdp_solution(
-            constraint_clique_dict, canonical_point_order, sdp_variable_map, N, d
-        )
-        eigvals_G = np.linalg.eigvalsh(
-            G
-        )  # Returns in ascending order (according to docs)
-        eig_value_sum_vs_iterations.append(np.sum(eigvals_G[0:n]))
-        _ = solve_fantope_iterate(G, Z, ft_constraints, verbose=verbose)
-        C = Z.value
-
-    return (
-        C,
-        constraint_clique_dict,
-        sdp_variable_map,
-        canonical_point_order,
-        eig_value_sum_vs_iterations,
-        prob,
-    )
-
-
 if __name__ == "__main__":
 
-    # # Simple test
-    # Z, constraints = fantope_constraints(2, 1)
-    # G = np.array([[1., 0.],
-    #               [0., 2.]])
-    # prob = solve_fantope_iterate(G, Z, constraints)
-
+    # TODO: use the graph convex iteration from above and deprecate the old one
     # UR10 Test
     robot, graph = load_ur10()
     d = robot.dim

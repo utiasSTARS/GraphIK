@@ -11,7 +11,7 @@ if __name__ == '__main__':
     do_convex_iteration = True
     tol = 1e-9
     save = True
-    n_goals = 1000 #3000
+    n_goals = 1000  # 3000
     # Visualization params
     tol_ee = 0.01
     tol_ang = 0.01
