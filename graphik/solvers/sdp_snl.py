@@ -277,8 +277,8 @@ def distance_constraints_graph(
             edges += [(u, v)]
     G.remove_edges_from(edges)
 
-    # undirected = G.to_undirected()
-    undirected = nx.Graph(G)
+    undirected = G.to_undirected()
+    # undirected = nx.Graph(G)
     equality_cliques = nx.chordal_graph_cliques(
         undirected
     )  # Returns maximal cliques (in spite of name)
