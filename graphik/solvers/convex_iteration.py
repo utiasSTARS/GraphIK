@@ -43,7 +43,7 @@ def solve_fantope_closed_form(G: np.ndarray, d:int):
     """
     _, Q = np.linalg.eigh(G)
     Q = np.flip(Q, 1)
-    U = Q[:, d+1:]
+    U = Q[:, d:]
     return U@U.T
 
 
@@ -54,10 +54,18 @@ def solve_fantope_sdp(G: np.ndarray, d: int):
     return Z.value
 
 
-def fantope_constraints(n: int, rank: int):
+def fantope_constraints(n: int, rank: int, sparsity_pattern: set = None):
     assert rank < n, "Needs a desired rank less than the problem dimension."
     Z = cp.Variable((n, n), PSD=True)
     constraints = [cp.trace(Z) == float(n - rank), np.eye(Z.shape[0]) - Z >> 0]
+
+    if sparsity_pattern is not None:
+        for idx in range(n):
+            for jdx in range(idx, n):
+                if (idx, jdx) not in sparsity_pattern:
+                    constraints += [Z[idx, jdx] == 0.]
+                    if idx != jdx:
+                        constraints += [Z[jdx, idx] == 0.]
 
     return Z, constraints
 
@@ -71,6 +79,25 @@ def solve_fantope_iterate(
         solver_params = SdpSolverParams()
     prob.solve(verbose=verbose, solver="MOSEK", mosek_params=solver_params.mosek_params)
     return prob
+
+
+def get_sparsity_pattern(G, canonical_point_order: list) -> set:
+    sparsity_pattern = set()
+    G = G.copy()
+    # remove the edges that don't have distances defined
+    edges = []
+    for u, v, data in G.edges(data=True):
+        if not data.get(DIST, False):
+            edges += [(u, v)]
+    G.remove_edges_from(edges)
+    undirected = G.to_undirected()
+    for idx, point_idx in enumerate(canonical_point_order):
+        for jdx in range(idx, len(canonical_point_order)):
+            point_jdx = canonical_point_order[jdx]
+            if undirected.has_edge(point_idx, point_jdx):
+                sparsity_pattern.add((idx, jdx))
+
+    return sparsity_pattern
 
 
 def convex_iterate_sdp_snl_graph(
@@ -109,7 +136,14 @@ def convex_iterate_sdp_snl_graph(
     n = len(canonical_point_order)
     N = n + d
     C = np.eye(N) if W_init is None else W_init
-    Z, ft_constraints = fantope_constraints(N, d)
+
+    if sparse:
+        sparsity_pattern = get_sparsity_pattern(G, canonical_point_order)
+    else:
+        sparsity_pattern = None
+
+    Z, ft_constraints = fantope_constraints(N, d, sparsity_pattern=sparsity_pattern)
+
     for iter in range(max_iters):
         solution, prob, sdp_variable_map, _ = solve_linear_cost_sdp(
             robot,
@@ -127,8 +161,12 @@ def convex_iterate_sdp_snl_graph(
             G
         )  # Returns in ascending order (according to docs)
         eig_value_sum_vs_iterations.append(np.sum(eigvals_G[0:n]))
-        _ = solve_fantope_iterate(G, Z, ft_constraints, verbose=verbose)
-        C = Z.value
+
+        #
+        # _ = solve_fantope_iterate(G, Z, ft_constraints, verbose=verbose)
+        # C = Z.value
+
+        C = solve_fantope_closed_form(G, robot.dim)
 
     return (
         C,
@@ -172,7 +210,7 @@ if __name__ == "__main__":
             eig_value_sum_vs_iterations,
             prob,
         ) = convex_iterate_sdp_snl_graph(graph, anchors=end_effectors, ranges=False, max_iters=10,
-                                         sparse=True, verbose=False)
+                                         sparse=False, verbose=False)
 
         # solution = extract_solution(constraint_clique_dict, sdp_variable_map, d)
         print(eig_value_sum_vs_iterations)
