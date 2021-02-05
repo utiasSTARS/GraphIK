@@ -20,6 +20,21 @@ from graphik.utils.constants import *
 from graphik.graphs.graph_base import RobotGraph
 
 
+def random_psd_matrix(N: int, d: int = None, normalize: bool = True) -> np.ndarray:
+    """
+    Return a random PSD matrix.
+
+    :param N: size of the matrix (NxN)
+    :param d: rank of the matrix (full rank if not specified)
+    """
+    d = N if d is None else d
+    P = np.random.rand(N, d)
+    W = P @ P.T
+    if normalize:
+        W = W / np.linalg.norm(W, ord="fro")
+    return W
+
+
 def fantope_constraints(n: int, rank: int):
     assert rank < n, "Needs a desired rank less than the problem dimension."
     Z = cp.Variable((n, n), PSD=True)
@@ -46,6 +61,7 @@ def convex_iterate_sdp_snl_graph(
     max_iters=10,
     sparse=False,
     verbose=False,
+    W_init=None
 ):
     # get a copy of the current robot + environment graph
     G = graph.directed.copy()
@@ -73,7 +89,7 @@ def convex_iterate_sdp_snl_graph(
 
     n = len(canonical_point_order)
     N = n + d
-    C = np.eye(N)
+    C = np.eye(N) if W_init is None else W_init
     Z, ft_constraints = fantope_constraints(N, d)
     for iter in range(max_iters):
         solution, prob, sdp_variable_map, _ = solve_linear_cost_sdp(
@@ -105,61 +121,6 @@ def convex_iterate_sdp_snl_graph(
     )
 
 
-def convex_iterate_sdp_snl(
-    robot, end_effectors, max_iters=10, sparse=False, verbose=False, random_W_init=False
-):
-    d = robot.dim
-    # TODO: add more logging
-    eig_value_sum_vs_iterations = []
-    full_points = [f"p{idx}" for idx in range(0, robot.n + 1)] + [
-        f"q{idx}" for idx in range(0, robot.n + 1)
-    ]
-    canonical_point_order = [
-        point for point in full_points if point not in end_effectors.keys()
-    ]
-    constraint_clique_dict = distance_constraints(
-        robot, end_effectors, sparse, ee_cost=False
-    )
-    n = len(canonical_point_order)
-    N = n + d
-
-    if random_W_init:
-        P = np.random.rand(N, N)
-        W = P @ P.T  # Choose a random PSD matrix
-        W = W / np.linalg.norm(W, ord="fro")
-    else:
-        W = np.eye(N)
-    Z, ft_constraints = fantope_constraints(N, d)
-    for iter in range(max_iters):
-        solution, prob, sdp_variable_map, _ = solve_linear_cost_sdp(
-            robot,
-            end_effectors,
-            constraint_clique_dict,
-            W,
-            canonical_point_order,
-            verbose=False,
-            inequality_constraints_map=None,
-        )
-        G = extract_full_sdp_solution(
-            constraint_clique_dict, canonical_point_order, sdp_variable_map, N, d
-        )
-        eigvals_G = np.linalg.eigvalsh(
-            G
-        )  # Returns in ascending order (according to docs)
-        eig_value_sum_vs_iterations.append(np.sum(eigvals_G[0:n]))
-        _ = solve_fantope_iterate(G, Z, ft_constraints, verbose=verbose)
-        W = Z.value
-
-    return (
-        W,
-        constraint_clique_dict,
-        sdp_variable_map,
-        canonical_point_order,
-        eig_value_sum_vs_iterations,
-        prob,
-    )
-
-
 if __name__ == "__main__":
 
     # TODO: use the graph convex iteration from above and deprecate the old one
@@ -179,7 +140,7 @@ if __name__ == "__main__":
 
         # End-effectors are 'generalized' to include the base pair ('p0', 'q0')
         end_effectors = {
-            key: input_vals[key] for key in ["p0", "q0", f"p{robot.n}", f"q{robot.n}"]
+            key: input_vals[key] for key in [f"p{robot.n}", f"q{robot.n}"]
         }
         canonical_point_order = [
             point for point in full_points if point not in end_effectors.keys()
@@ -191,7 +152,8 @@ if __name__ == "__main__":
             canonical_point_order,
             eig_value_sum_vs_iterations,
             prob,
-        ) = convex_iterate_sdp_snl(robot, end_effectors)
+        ) = convex_iterate_sdp_snl_graph(graph, anchors=end_effectors, ranges=False, max_iters=10,
+                                         sparse=False, verbose=False)
 
         # solution = extract_solution(constraint_clique_dict, sdp_variable_map, d)
         print(eig_value_sum_vs_iterations)
