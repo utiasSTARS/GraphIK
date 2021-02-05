@@ -10,7 +10,7 @@ from graphik.graphs.graph_base import RobotRevoluteGraph, RobotGraph
 from graphik.solvers.sdp_formulations import SdpSolverParams
 from graphik.solvers.solver_generic_sdp import SdpRelaxationSolver
 from graphik.solvers.sdp_snl import solve_nearest_point_sdp, extract_solution
-from graphik.solvers.convex_iteration import convex_iterate_sdp_snl
+from graphik.solvers.convex_iteration import convex_iterate_sdp_snl_graph, random_psd_matrix
 from graphik.solvers.constraints import (
     get_full_revolute_nearest_points_pose,
     nearest_neighbour_cost,
@@ -115,14 +115,11 @@ def run_sdp_rank3_convex_iteration_experiment(
                     if key == ee:
                         ee_goals[ee] = P[idx, :]
 
-    ee_goals["p0"] = np.array([0.0, 0.0, 0.0])
-    ee_goals["q0"] = np.array([0.0, 0.0, 1.0])
-
     solver_failures = 0
     solver_success = False
     sparse = not force_dense
 
-    random_W_init = False
+    W_init = np.eye()
     while not solver_success:
         try:
             (
@@ -132,14 +129,9 @@ def run_sdp_rank3_convex_iteration_experiment(
                 canonical_point_order,
                 eig_value_sum_vs_iterations,
                 prob,
-            ) = convex_iterate_sdp_snl(
-                graph.robot,
-                ee_goals,
-                max_iters=10,
-                sparse=sparse,
-                verbose=False,
-                random_W_init=random_W_init,
-            )
+            ) = convex_iterate_sdp_snl_graph(graph, anchors=ee_goals, ranges=False, max_iters=10,
+                                         sparse=sparse, verbose=False, W_init=W_init)
+
             solver_success = True
             solution_dict = extract_solution(
                 constraint_clique_dict, sdp_variable_map, graph.robot.dim
@@ -149,7 +141,7 @@ def run_sdp_rank3_convex_iteration_experiment(
             solver_failures += 1
             q_nearest = list_to_variable_dict(graph.robot.random_configuration())
             print("Solver error in convex iteration.")
-            random_W_init = True
+            W_init = random_psd_matrix(2*graph.robot.n + graph.robot.dim)
 
     runtime = prob.solver_stats.solve_time
     num_iters = prob.solver_stats.num_iters
