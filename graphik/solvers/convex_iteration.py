@@ -157,13 +157,13 @@ if __name__ == "__main__":
         q = robot.random_configuration()
         input_vals = get_full_revolute_nearest_point(graph, q, full_points)
 
-        # End-effectors are 'generalized' to include the base pair ('p0', 'q0')
+        # End-effectors don't include the base pair at this step, that's inside of convex_iterate_sdp_snl_graph()
         end_effectors = {
             key: input_vals[key] for key in [f"p{robot.n}", f"q{robot.n}"]
         }
-        canonical_point_order = [
-            point for point in full_points if point not in end_effectors.keys()
-        ]
+        # canonical_point_order = [
+        #     point for point in full_points if point not in end_effectors.keys()
+        # ]
         (
             C,
             constraint_clique_dict,
@@ -172,7 +172,7 @@ if __name__ == "__main__":
             eig_value_sum_vs_iterations,
             prob,
         ) = convex_iterate_sdp_snl_graph(graph, anchors=end_effectors, ranges=False, max_iters=10,
-                                         sparse=False, verbose=False)
+                                         sparse=True, verbose=False)
 
         # solution = extract_solution(constraint_clique_dict, sdp_variable_map, d)
         print(eig_value_sum_vs_iterations)

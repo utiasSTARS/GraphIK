@@ -13,3 +13,5 @@ if __name__ == '__main__':
     # Two solution methods
     C_closed = solve_fantope_closed_form(G, d)
     C_sdp = solve_fantope_sdp(G, d)
+
+    # TODO: investigate

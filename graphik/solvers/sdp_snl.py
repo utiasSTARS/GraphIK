@@ -497,16 +497,19 @@ def constraints_and_linear_cost_to_sdp_vars(
             []
         )  # Don't want to remove from the list while iterating over it
         for idx, jdx in remaining_pairs:
-            u = mapping[canonical_point_order[idx]] if idx < (n - d) else None
-            v = mapping[canonical_point_order[jdx]] if jdx < (n - d) else None
+            idx_is_var = idx < (n - d)
+            jdx_is_var = jdx < (n - d)
+            if (not idx_is_var or canonical_point_order[idx] in mapping) and (not jdx_is_var or canonical_point_order[jdx] in mapping):
+                u = mapping[canonical_point_order[idx]] if idx < (n - d) else None
+                v = mapping[canonical_point_order[jdx]] if jdx < (n - d) else None
 
-            u = A[0].shape[0] - (n - idx) if u is None and is_augmented else u
-            v = A[0].shape[0] - (n - jdx) if v is None and is_augmented else v
+                u = A[0].shape[0] - (n - idx) if u is None and is_augmented else u
+                v = A[0].shape[0] - (n - jdx) if v is None and is_augmented else v
 
-            if u is not None and v is not None:
-                C_clique[u, v] = C[idx, jdx]
-                C_clique[v, u] = C[jdx, idx]
-                pairs_to_remove.append((idx, jdx))
+                if u is not None and v is not None:
+                    C_clique[u, v] = C[idx, jdx]
+                    C_clique[v, u] = C[jdx, idx]
+                    pairs_to_remove.append((idx, jdx))
         for pair in pairs_to_remove:
             remaining_pairs.remove(pair)
         sdp_cost_map[clique] = C_clique
@@ -578,9 +581,9 @@ def form_sdp_problem(
         overlapping_vars_cliques = [
             seen_vars[var] for var in overlapping_vars
         ]  # Cliques of seen_vars that overlap
-        assert (
-            len(np.unique(overlapping_vars_cliques)) <= 1
-        )  # Assert that 1 or 0 cliques exist
+        # assert (
+        #     len(np.unique(overlapping_vars_cliques)) <= 1
+        # )  # Assert that 1 or 0 cliques exist that overlap with the current one (WHY?)
         if len(np.unique(overlapping_vars_cliques)) == 1:
             assert len(constraint_clique_dict) != 1, "Dense case entered sparse code!!"
             # Add the linking equalities
