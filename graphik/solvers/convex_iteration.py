@@ -35,6 +35,25 @@ def random_psd_matrix(N: int, d: int = None, normalize: bool = True) -> np.ndarr
     return W
 
 
+def solve_fantope_closed_form(G: np.ndarray, d:int):
+    """
+
+    :param G:
+    :param d:
+    """
+    _, Q = np.linalg.eigh(G)
+    Q = np.flip(Q, 1)
+    U = Q[:, d+1:]
+    return U@U.T
+
+
+def solve_fantope_sdp(G: np.ndarray, d: int):
+    n = G.shape[0]
+    Z, cons = fantope_constraints(n, d)
+    solve_fantope_iterate(G, Z, cons)
+    return Z.value
+
+
 def fantope_constraints(n: int, rank: int):
     assert rank < n, "Needs a desired rank less than the problem dimension."
     Z = cp.Variable((n, n), PSD=True)
