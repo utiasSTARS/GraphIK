@@ -81,6 +81,22 @@ def solve_fantope_iterate(
     return prob
 
 
+def solve_fantope_sparse(sdp_variable_map: dict, d: int):
+    C_mapping = {}
+    for clique in sdp_variable_map:
+        G_clique = sdp_variable_map[clique].value  # Assumes it's been solved by cvxpy
+        C_mapping[clique] = solve_fantope_closed_form(G_clique, d)
+    return C_mapping
+
+
+def sparse_eigenvalue_sum(sdp_variable_map: dict, d: int):
+    running_eigenvalue_sum = 0.
+    for clique in sdp_variable_map:
+        Z_clique = sdp_variable_map[clique].value
+        running_eigenvalue_sum += np.sum(np.linalg.eigvalsh(Z_clique)[:-d])
+    return running_eigenvalue_sum
+
+
 def get_sparsity_pattern(G, canonical_point_order: list) -> set:
     sparsity_pattern = set()
     G = G.copy()
@@ -135,38 +151,26 @@ def convex_iterate_sdp_snl_graph(
 
     n = len(canonical_point_order)
     N = n + d
-    C = np.eye(N) if W_init is None else W_init
-
-    if sparse:
-        sparsity_pattern = get_sparsity_pattern(G, canonical_point_order)
-    else:
-        sparsity_pattern = None
-
-    Z, ft_constraints = fantope_constraints(N, d, sparsity_pattern=sparsity_pattern)
-
+    C = np.eye(N) if W_init is None else W_init  # Identity satisfies any sparsity pattern by default
     for iter in range(max_iters):
         solution, prob, sdp_variable_map, _ = solve_linear_cost_sdp(
             robot,
             anchors,
             constraint_clique_dict,
-            C,
+            C,  # TODO: add dictionary interpretation as well!
             canonical_point_order,
             verbose=False,
             inequality_constraints_map=inequality_map,
         )
-        G = extract_full_sdp_solution(
-            constraint_clique_dict, canonical_point_order, sdp_variable_map, N, d
-        )
-        eigvals_G = np.linalg.eigvalsh(
-            G
-        )  # Returns in ascending order (according to docs)
-        eig_value_sum_vs_iterations.append(np.sum(eigvals_G[0:n]))
+        if not sparse:
+            G = extract_full_sdp_solution(constraint_clique_dict, canonical_point_order, sdp_variable_map, N, d)
+            eigvals_G = np.linalg.eigvalsh(G )  # Returns in ascending order (according to docs)
+            eig_value_sum_vs_iterations.append(np.sum(eigvals_G[0:n]))
+            C = solve_fantope_closed_form(G, robot.dim)
 
-        #
-        # _ = solve_fantope_iterate(G, Z, ft_constraints, verbose=verbose)
-        # C = Z.value
-
-        C = solve_fantope_closed_form(G, robot.dim)
+        else:
+            C = solve_fantope_sparse(sdp_variable_map, d)
+            eig_value_sum_vs_iterations.append(sparse_eigenvalue_sum(sdp_variable_map, d))
 
     return (
         C,
@@ -188,7 +192,7 @@ if __name__ == "__main__":
         f"q{idx}" for idx in range(0, graph.robot.n + 1)
     ]
 
-    n_runs = 10
+    n_runs = 100
     final_eigvalue_sum_list = []
     for idx in range(n_runs):
         # Generate a random feasible target
@@ -210,7 +214,7 @@ if __name__ == "__main__":
             eig_value_sum_vs_iterations,
             prob,
         ) = convex_iterate_sdp_snl_graph(graph, anchors=end_effectors, ranges=False, max_iters=10,
-                                         sparse=False, verbose=False)
+                                         sparse=True, verbose=False)
 
         # solution = extract_solution(constraint_clique_dict, sdp_variable_map, d)
         print(eig_value_sum_vs_iterations)

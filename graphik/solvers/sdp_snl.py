@@ -518,6 +518,38 @@ def constraints_and_linear_cost_to_sdp_vars(
     return sdp_variable_map, sdp_constraints_map, sdp_cost_map
 
 
+def constraints_and_sparse_linear_cost_to_sdp_vars(
+    constraint_clique_dict: dict, C: dict, canonical_point_order: list, d: int
+):
+    """
+    Takes in a dictionary of clique-indexed constraints and a sparse linear cost function and produces SDP variables
+    (cvxpy) that correspond to the constraint LMEs as well as LM cost expressions.
+
+    :param constraints_clique_dict: output of distance_constraints function
+    :param C: a clique-indexed dictionary that defines the cost function
+    :param canonical_point_order: defines the order of points used to define the cost function in C
+    :param d: int representing the dimension of the point variables (2 or 3 for IK)
+    :return:
+    """
+    # Construct the cost and SDP variables
+    sdp_variable_map = {}
+    sdp_constraints_map = {}
+
+    for clique in constraint_clique_dict:
+        A, b, mapping, is_augmented = constraint_clique_dict[clique]
+        # Construct the SDP variable and constraints
+        Z_clique = cp.Variable(A[0].shape, PSD=True)
+        sdp_variable_map[clique] = Z_clique
+        constraints_clique = [
+            cp.trace(A[idx] @ Z_clique) == b[idx] for idx in range(len(A))
+        ]
+        if is_augmented:
+            constraints_clique += [Z_clique[-d:, -d:] == np.eye(d)]
+        sdp_constraints_map[clique] = constraints_clique
+
+    return sdp_variable_map, sdp_constraints_map, C
+
+
 def distance_inequality_constraint(
     constraint_clique_dict: dict,
     point_pair: frozenset,
@@ -738,7 +770,7 @@ def solve_linear_cost_sdp(
     robot,
     end_effectors: dict,
     constraint_clique_dict: dict,
-    C: np.ndarray,
+    C,
     canonical_point_order: list = None,
     solver_params=None,
     verbose=False,
@@ -751,13 +783,19 @@ def solve_linear_cost_sdp(
         canonical_point_order = [
             point for point in full_points if point not in end_effectors.keys()
         ]
-    (
-        sdp_variable_map,
-        sdp_constraints_map,
-        sdp_cost_map,
-    ) = constraints_and_linear_cost_to_sdp_vars(
-        constraint_clique_dict, C, canonical_point_order, robot.dim
-    )
+
+    if type(C) == dict:
+        sdp_variable_map, sdp_constraints_map, sdp_cost_map = \
+            constraints_and_sparse_linear_cost_to_sdp_vars(constraint_clique_dict, C, canonical_point_order, robot.dim)
+    else:
+        (
+            sdp_variable_map,
+            sdp_constraints_map,
+            sdp_cost_map,
+        ) = constraints_and_linear_cost_to_sdp_vars(
+            constraint_clique_dict, C, canonical_point_order, robot.dim
+        )
+
     if inequality_constraints_map is not None:
         inequality_constraints = cvxpy_inequality_constraints(
             sdp_variable_map, inequality_constraints_map
