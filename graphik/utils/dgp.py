@@ -139,8 +139,8 @@ def graph_complete_edges(G: nx.DiGraph) -> nx.DiGraph:
     pos = nx.get_node_attributes(G, POS)  # known positions
     dst = nx.get_edge_attributes(G, DIST)  # known distances
 
-    for idx, u in enumerate(pos.keys()):
-        for jdx, v in enumerate(pos.keys()):
+    for idx, u in enumerate(list(G)):
+        for jdx, v in enumerate(list(G)):
             if jdx > idx and (v, u) not in dst:
                 d = np.linalg.norm(pos[u] - pos[v])
                 G.add_edges_from(

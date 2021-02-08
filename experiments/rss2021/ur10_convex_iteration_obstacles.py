@@ -1,3 +1,4 @@
+from networkx.generators.classic import complete_graph
 import numpy as np
 import networkx as nx
 import time
@@ -12,7 +13,7 @@ from mpl_toolkits import mplot3d
 
 from graphik.graphs.graph_base import RobotRevoluteGraph
 from graphik.utils.utils import safe_arccos
-from graphik.utils.dgp import graph_from_pos_dict, pos_from_graph
+from graphik.utils.dgp import graph_complete_edges, graph_from_pos_dict, pos_from_graph
 from graphik.utils.constants import *
 from graphik.solvers.sdp_snl import (
     extract_solution,
@@ -111,11 +112,10 @@ def solve_random_problem(graph: RobotRevoluteGraph):
         if node not in solution.keys():
             solution[node] = G_goal.nodes[node][POS]
 
-    G_sol = graph_from_pos_dict(solution)
+    G_sol = graph.complete_from_pos(solution)
 
     q_sol = robot.joint_variables(G_sol, {f"p{n}": T_goal})
     T_riemannian = robot.get_pose(q_sol, f"p{n}")
-
     err_riemannian_pos = norm(T_goal.trans - T_riemannian.trans)
     z_goal = T_goal.as_matrix()[:3, 2]
     z_riemannian = T_riemannian.as_matrix()[:3, 2]
@@ -126,25 +126,31 @@ def solve_random_problem(graph: RobotRevoluteGraph):
     if len(graph.check_collision(G_sol)) > 0:
         col = True
 
+    broken_limits = graph.check_limits(G_sol)
+    lmts = False
+    if len(broken_limits) > 0:
+        print(broken_limits)
+        lmts = True
+
     not_reach = False
     if err_riemannian_pos > 0.01 or err_riemannian_rot > 0.01:
         not_reach = True
 
-    broken_limits = {}
-    limit_violations = False
-    for key in robot.limited_joints:
-        if abs(q_sol[key]) > (graph.robot.ub[key] * 1.01):
-            limit_violations = True
-            broken_limits[key] = abs(q_sol[key]) - (graph.robot.ub[key])
-            print(key, broken_limits[key])
+    # broken_limits = {}
+    # limit_violations = False
+    # for key in robot.limited_joints:
+    #     if abs(q_sol[key]) > (graph.robot.ub[key] * 1.01):
+    #         limit_violations = True
+    #         broken_limits[key] = abs(q_sol[key]) - (graph.robot.ub[key])
+    #         print(key, broken_limits[key])
 
     fail = False
-    if limit_violations or col or not_reach:
+    if lmts or col or not_reach:
         print(
             col * "collision"
             # + infeas * "+ infeasible goal"
             + not_reach * "+ didn't reach"
-            + limit_violations * "+ limit violations"
+            + lmts * "+ limit violations"
         )
         fail = True
     print(

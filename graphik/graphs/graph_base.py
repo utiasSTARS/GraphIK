@@ -130,6 +130,7 @@ class RobotGraph(ABC):
         nodes corresponding to keys with assigned values.
         If dist is True, populate all edges between nodes with assinged POS attributes,
         and return the new graph.
+        Note that this function maintains the node ordering of self.directed!
         :param P: a dictionary of node name position pairs
         :returns: graph with connected nodes with POS attribute
         """
@@ -186,9 +187,19 @@ class RobotGraph(ABC):
                             cols += [pnt]
         return cols
 
-    def check_limits(self, G: nx.DiGraph):
-        typ = nx.get_edge_attributes(self.directed, name=BOUNDED)
-        pass
+    def check_limits(self, G: nx.DiGraph) -> list:
+        lmts = []
+        for u, v, data in self.directed.edges(data=True):
+            if BOUNDED in data:
+                if "below" in data[BOUNDED]:
+                    if G[u][v][DIST] * 1.01 < data[LOWER]:
+                        print(G[u][v][DIST] - data[LOWER])
+                        lmts += [(u, v)]
+                if "above" in data[BOUNDED]:
+                    if G[u][v][DIST] > data[UPPER] * 1.01:
+                        print(G[u][v][DIST] - data[LOWER])
+                        lmts += [(u, v)]
+        return lmts
 
     def distance_bound_matrices(self):
         """
