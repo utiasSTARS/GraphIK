@@ -205,6 +205,26 @@ class RobotGraph(ABC):
                 self.directed[node][name][LOWER] = radius
                 self.directed[node][name][UPPER] = 100
 
+    def check_collision(self, G: nx.DiGraph) -> list:
+        typ = nx.get_node_attributes(self.directed, name=TYPE)
+        cols = []
+        for node in self.directed:
+            if typ[node] == "obstacle":
+                center = self.directed.nodes[node][POS]
+                radius = self.directed["p1"][node][LOWER]
+                for pnt in G:
+                    if typ[pnt] == "robot" and pnt[0] == "p":
+                        pos = G.nodes[pnt][POS]
+                        if (pos - center) @ np.identity(self.dim) @ (
+                            pos - center
+                        ).T <= radius ** 2:
+                            cols += [pnt]
+        return cols
+
+    def check_limits(self, G: nx.DiGraph):
+        typ = nx.get_edge_attributes(self.directed, name=BOUNDED)
+        pass
+
 
 class RobotPlanarGraph(RobotGraph):
     def __init__(self, robot: RobotPlanar):
