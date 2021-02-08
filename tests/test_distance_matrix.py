@@ -242,10 +242,20 @@ class TestDistanceMatrix(unittest.TestCase):
 
             q = robot.random_configuration()
             D = graph.distance_matrix_from_joints(q)
+
             # Reconstruct points
             G = dist_to_gram(D)
-            X = MDS(G)
-            # X = PCA(G, 2)
+            u, s, vh = np.linalg.svd(G, full_matrices=True)
+            X = (
+                np.concatenate(
+                    (
+                        np.sqrt(np.diag(s[: robot.dim])),
+                        np.zeros((robot.dim, graph.n_nodes - robot.dim)),
+                    ),
+                    axis=1,
+                )
+                @ vh
+            ).T
 
             Y = pos_from_graph(graph.realization(q))
             R, t = best_fit_transform(X[[0, 1, 2, -1], :], Y[[0, 1, 2, -1], :])
@@ -282,7 +292,17 @@ class TestDistanceMatrix(unittest.TestCase):
 
             # Reconstruct points
             G = dist_to_gram(D)
-            X = MDS(G)
+            u, s, vh = np.linalg.svd(G, full_matrices=True)
+            X = (
+                np.concatenate(
+                    (
+                        np.sqrt(np.diag(s[: robot.dim])),
+                        np.zeros((robot.dim, graph.n_nodes - robot.dim)),
+                    ),
+                    axis=1,
+                )
+                @ vh
+            ).T
 
             Y = pos_from_graph(graph.realization(q))
             R, t = best_fit_transform(X[[0, 1, 2, -1], :], Y[[0, 1, 2, -1], :])
