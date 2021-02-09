@@ -1,4 +1,5 @@
 from graphik.utils.utils import flatten
+from itertools import combinations
 from urdfpy import URDF
 from liegroups import SE3, SO3
 import numpy as np
@@ -208,6 +209,7 @@ class RobotURDF(object):
         with_frames=True,
         with_balls=True,
         with_robot=True,
+        with_edges=True,
         transparency=None,
     ):
         self.make_scene(
@@ -215,6 +217,7 @@ class RobotURDF(object):
             with_frames=with_frames,
             with_balls=with_balls,
             with_robot=with_robot,
+            with_edges=with_edges,
             transparency=transparency,
         )
 
@@ -226,6 +229,7 @@ class RobotURDF(object):
         with_frames=True,
         with_balls=True,
         with_robot=True,
+        with_edges=True,
         transparency=None,
     ):
 
@@ -258,6 +262,53 @@ class RobotURDF(object):
         if with_balls:
             path = graphik.robots.__path__[0] + "/urdfs/meshes/redball.dae"
             self.scene = view_dae(path, Ts, scene=self.scene, return_scene_only=True)
+
+        if with_edges:
+            #Generate dense tuples that connect all joints
+            dense_edge_indices = list(combinations(range(len(Ts)),r=2))
+
+            #Draw cylinders between each indices
+            for e in dense_edge_indices:
+                
+                m = self._create_edge_cylinder_mesh(Ts[e[0]], Ts[e[1]])
+                #None means the cylinder has zero height (duplicate Ts?)
+                if m is not None:
+                    self.scene.add(m, pose=SE3.identity().as_matrix())
+
+
+    def _create_edge_cylinder_mesh(self, T_i, T_j, radius=0.005):
+        """
+        Creates a cylinder that connects the 'nodes' at T_i and T_j
+
+        Parameters
+        ----------
+        T_i, T_j : SE3
+            SE3 representing nodes between which the cylinder will be drawn
+
+        Returns
+        -------
+        m : pyrender Mesh
+        """
+        #Generate each segment
+        seg = np.zeros((2,3))
+        seg[0] = T_i.trans
+        seg[1] = T_j.trans
+
+        #Check that the cylinder has non-negligible size
+        if np.linalg.norm(seg[1] - seg[0]) < 0.001:
+            return None
+        
+        #Create a gray cylinder
+        cyl = trimesh.creation.cylinder(radius=radius, segment=seg)
+        gray = 0.1
+        cyl.visual.vertex_colors = [gray, gray, gray, 0.98]
+
+        #Render it!
+        m = pyrender.Mesh.from_trimesh(cyl)
+        return m
+
+
+
 
     def joint_limits(self):
         ub = {}
