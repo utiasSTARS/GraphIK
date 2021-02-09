@@ -17,6 +17,19 @@ from graphik.solvers.constraints import get_full_revolute_nearest_point
 from graphik.utils.roboturdf import load_ur10
 
 
+def check_collison(P: np.ndarray, obstacles: list):
+
+    for obs in obstacles:
+        center = obs[0]
+        radius = obs[1]
+        if any(
+            np.diag((P - center) @ np.identity(len(center)) @ (P - center).T)
+            <= radius ** 2
+        ):
+            return True
+    return False
+
+
 def solve_random_problem(graph: RobotRevoluteGraph):
     robot = graph.robot
     n = robot.n
@@ -41,7 +54,7 @@ def solve_random_problem(graph: RobotRevoluteGraph):
         _,
         _,
         _,
-    ) = convex_iterate_sdp_snl_graph(graph, anchors, ranges=True)
+    ) = convex_iterate_sdp_snl_graph(graph, anchors, ranges=True, sparse=True)
     t_sol = time.perf_counter() - t_sol
 
     solution = extract_solution(constraint_clique_dict, sdp_variable_map, robot.dim)
