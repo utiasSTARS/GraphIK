@@ -4,6 +4,8 @@ Rank constraints via convex iteration (Dattorro's Convex Optimization and Euclid
 """
 import numpy as np
 import cvxpy as cp
+from timeit import default_timer
+from progress.bar import ShadyBar as Bar
 
 from graphik.solvers.sdp_formulations import SdpSolverParams
 from graphik.solvers.sdp_snl import (
@@ -42,10 +44,11 @@ def solve_fantope_closed_form(G: np.ndarray, d:int):
     :param G:
     :param d:
     """
+    start = default_timer()
     _, Q = np.linalg.eigh(G)
     Q = np.flip(Q, 1)
     U = Q[:, d:]
-    return U@U.T
+    return U@U.T, default_timer() - start
 
 
 def solve_fantope_sdp(G: np.ndarray, d: int):
@@ -84,17 +87,19 @@ def solve_fantope_iterate(
 
 def solve_fantope_sparse(sdp_variable_map: dict, d: int):
     C_mapping = {}
+    t_fantope = 0.0
     for clique in sdp_variable_map:
         G_clique = sdp_variable_map[clique].value  # Assumes it's been solved by cvxpy
-        C_mapping[clique] = solve_fantope_closed_form(G_clique, d)
-    return C_mapping
+        C_mapping[clique], t_clique = solve_fantope_closed_form(G_clique, d)
+        t_fantope += t_clique
+    return C_mapping, t_fantope
 
 
 def solve_fantope_sdp_sparse(constraint_clique_dict: dict, sdp_variable_map: dict, d: int, verbose=False,
                              solver_params=None):
 
     # Make cvxpy variables and constraints for each Fantope
-    fantope_sdp_variable_map = {}  # TODO: can we just re-use these variables?
+    fantope_sdp_variable_map = {}
     constraints = []
     for clique in sdp_variable_map:
         n_clique = sdp_variable_map[clique].shape[0]
@@ -120,7 +125,7 @@ def solve_fantope_sdp_sparse(constraint_clique_dict: dict, sdp_variable_map: dic
     C_mapping = {}
     for clique in sdp_variable_map:
         C_mapping[clique] = fantope_sdp_variable_map[clique].value
-    return C_mapping
+    return C_mapping, prob.solver_stats.solve_time
 
 
 def sparse_eigenvalue_sum(sdp_variable_map: dict, d: int):
@@ -182,7 +187,12 @@ def convex_iterate_sdp_snl_graph(
         G, anchors, sparse, ee_cost=False
     )
 
+    # Add inequalities (angluar limits, obstacles) if present
     inequality_map = distance_range_constraints(G, constraint_clique_dict, anchors) if ranges else None
+
+    # Save runtimes
+    primal_sdp_runtime = 0.
+    fantope_solver_runtime = 0.
 
     n = len(canonical_point_order)
     N = n + d
@@ -197,18 +207,20 @@ def convex_iterate_sdp_snl_graph(
             verbose=False,
             inequality_constraints_map=inequality_map,
         )
+        primal_sdp_runtime += prob.solver_stats.solve_time
         if not sparse:
             G = extract_full_sdp_solution(constraint_clique_dict, canonical_point_order, sdp_variable_map, N, d)
             eigvals_G = np.linalg.eigvalsh(G)  # Returns in ascending order (according to docs)
             eig_value_sum_vs_iterations.append(np.sum(eigvals_G[0:n]))
-            C = solve_fantope_closed_form(G, robot.dim)
+            C, t_fantope = solve_fantope_closed_form(G, robot.dim)
 
         else:
             if closed_form:
-                C = solve_fantope_sparse(sdp_variable_map, d)
+                C, t_fantope = solve_fantope_sparse(sdp_variable_map, d)
             else:
-                C = solve_fantope_sdp_sparse(constraint_clique_dict, sdp_variable_map, d)
+                C, t_fantope = solve_fantope_sdp_sparse(constraint_clique_dict, sdp_variable_map, d)
             eig_value_sum_vs_iterations.append(sparse_eigenvalue_sum(sdp_variable_map, d))
+        fantope_solver_runtime += t_fantope
 
     return (
         C,
@@ -217,6 +229,8 @@ def convex_iterate_sdp_snl_graph(
         canonical_point_order,
         eig_value_sum_vs_iterations,
         prob,
+        primal_sdp_runtime,
+        fantope_solver_runtime
     )
 
 
@@ -229,9 +243,22 @@ if __name__ == "__main__":
     full_points = [f"p{idx}" for idx in range(0, graph.robot.n + 1)] + [
         f"q{idx}" for idx in range(0, graph.robot.n + 1)
     ]
-
     n_runs = 10
+
+    # Store results
     final_eigvalue_sum_list = []
+    primal_sdp_runtime = []
+    fantope_runtime = []
+
+    final_eigvalue_sum_list_sparse_naive = []
+    primal_sdp_runtime_sparse_naive = []
+    fantope_runtime_sparse_naive = []
+
+    final_eigvalue_sum_list_sparse_sdp = []
+    primal_sdp_runtime_sparse_sdp = []
+    fantope_runtime_sparse_sdp = []
+
+    bar = Bar("", max=n_runs, check_tty=False, hide_cursor=False)
     for idx in range(n_runs):
         # Generate a random feasible target
         q = robot.random_configuration()
@@ -241,24 +268,107 @@ if __name__ == "__main__":
         end_effectors = {
             key: input_vals[key] for key in [f"p{robot.n}", f"q{robot.n}"]
         }
-        # canonical_point_order = [
-        #     point for point in full_points if point not in end_effectors.keys()
-        # ]
+
+        # Run 'dense' default solver
         (
-            C,
-            constraint_clique_dict,
-            sdp_variable_map,
-            canonical_point_order,
+            _,
+            _,
+            _,
+            _,
             eig_value_sum_vs_iterations,
-            prob,
+            _,
+            t_primal,
+            t_fantope
+        ) = convex_iterate_sdp_snl_graph(graph, anchors=end_effectors, ranges=False, max_iters=10,
+                                         sparse=False, verbose=False, closed_form=True)
+        # solution = extract_solution(constraint_clique_dict, sdp_variable_map, d)
+        final_eigvalue_sum_list.append(eig_value_sum_vs_iterations[-1])
+        primal_sdp_runtime.append(t_primal)
+        fantope_runtime.append(t_fantope)
+
+        # Run 'naive' sparse solver (Wang and Yu, 2018)
+        (
+            _,
+            _,
+            _,
+            _,
+            eig_value_sum_vs_iterations,
+            _,
+            t_primal,
+            t_fantope
+        ) = convex_iterate_sdp_snl_graph(graph, anchors=end_effectors, ranges=False, max_iters=10,
+                                         sparse=True, verbose=False, closed_form=True)
+        final_eigvalue_sum_list_sparse_naive.append(eig_value_sum_vs_iterations[-1])
+        primal_sdp_runtime_sparse_naive.append(t_primal)
+        fantope_runtime_sparse_naive.append(t_fantope)
+
+        # Run sparse solver where Fantope program has a sparsity pattern matched to the primal SDP's
+        (
+            _,
+            _,
+            _,
+            _,
+            eig_value_sum_vs_iterations,
+            _,
+            t_primal,
+            t_fantope
         ) = convex_iterate_sdp_snl_graph(graph, anchors=end_effectors, ranges=False, max_iters=10,
                                          sparse=True, verbose=False, closed_form=False)
+        final_eigvalue_sum_list_sparse_sdp.append(eig_value_sum_vs_iterations[-1])
+        primal_sdp_runtime_sparse_sdp.append(t_primal)
+        fantope_runtime_sparse_sdp.append(t_fantope)
 
-        # solution = extract_solution(constraint_clique_dict, sdp_variable_map, d)
-        print(eig_value_sum_vs_iterations)
-        final_eigvalue_sum_list.append(eig_value_sum_vs_iterations[-1])
+        bar.next()
+    bar.finish()
 
+    # Visualize results
     from matplotlib import pyplot as plt
+    from matplotlib import rc
+    rc("font", **{"family": "serif", "serif": ["Computer Modern"]})
+    rc("text", usetex=True)
 
-    plt.hist(np.log10(final_eigvalue_sum_list))
+    # Plot parameters
+    n_bins = 10
+    colors = ['r', 'g', 'b']
+    # Runtime histograms
+    primal_sdp_runtime_full = np.vstack([primal_sdp_runtime, primal_sdp_runtime_sparse_naive, primal_sdp_runtime_sparse_sdp]).T
+    primal_sdp_runtime_min = np.min(primal_sdp_runtime_full)
+    primal_sdp_runtime_max = np.max(primal_sdp_runtime_full)
+    primal_sdp_runtime_bins = np.linspace(primal_sdp_runtime_min, primal_sdp_runtime_max, n_bins)
+    plt.figure()
+    plt.hist(primal_sdp_runtime_full, bins=primal_sdp_runtime_bins, color=colors)
+    plt.legend(('Dense', 'Sparse (Naive)', 'Sparse (SDP)'))
+    plt.title('Distribution of Primal SDP Runtimes')
+    plt.xlabel('Runtime (s)')
+    plt.ylabel('Count')
+    plt.grid()
+    plt.show()
+
+    fantope_runtime_min = min(min(min(fantope_runtime, fantope_runtime_sparse_naive), fantope_runtime_sparse_sdp))
+    fantope_runtime_max = max(max(max(fantope_runtime, fantope_runtime_sparse_naive), fantope_runtime_sparse_sdp))
+    fantope_runtime_bins = np.linspace(fantope_runtime_min, fantope_runtime_max, n_bins)
+    plt.figure()
+    plt.hist(fantope_runtime, bins=fantope_runtime_bins, facecolor='r', alpha=0.5)
+    plt.hist(fantope_runtime_sparse_naive, bins=fantope_runtime_bins, facecolor='g', alpha=0.5)
+    plt.hist(fantope_runtime_sparse_sdp, bins=fantope_runtime_bins, facecolor='b', alpha=0.5)
+    plt.legend(('Dense', 'Sparse (Naive)', 'Sparse (SDP)'))
+    plt.title('Distribution of Fantope Solver Runtimes')
+    plt.xlabel('Runtime (s)')
+    plt.ylabel('Count')
+    plt.grid()
+    plt.show()
+
+    # Eigenvalue sum histograms
+    eigenvalue_sum_min = min(min(min(final_eigvalue_sum_list, final_eigvalue_sum_list_sparse_naive), final_eigvalue_sum_list_sparse_sdp))
+    eigenvalue_sum_max = max(max(max(final_eigvalue_sum_list, final_eigvalue_sum_list_sparse_naive), final_eigvalue_sum_list_sparse_sdp))
+    eigenvalue_sum_bins = np.linspace(final_eigvalue_sum_list, final_eigvalue_sum_list_sparse_naive, n_bins)
+    plt.figure()
+    plt.hist(np.log10(final_eigvalue_sum_list), bins=eigenvalue_sum_bins, facecolor='r', alpha=0.5)
+    plt.hist(np.log10(final_eigvalue_sum_list_sparse_naive), bins=eigenvalue_sum_bins, facecolor='g', alpha=0.5)
+    plt.hist(np.log10(final_eigvalue_sum_list_sparse_sdp), bins=eigenvalue_sum_bins, facecolor='b', alpha=0.5)
+    plt.legend(('Dense', 'Sparse (Naive)', 'Sparse (SDP)'))
+    plt.title('Distribution of Excess Rank')
+    plt.xlabel('log$_{10}$ Excess Rank')
+    plt.ylabel('Count')
+    plt.grid()
     plt.show()
