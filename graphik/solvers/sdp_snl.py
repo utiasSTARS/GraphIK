@@ -590,18 +590,9 @@ def cvxpy_inequality_constraints(sdp_variable_map: dict, inequality_map: dict):
     return constraints
 
 
-def form_sdp_problem(
-    constraint_clique_dict: dict,
-    sdp_variable_map: dict,
-    sdp_constraints_map: dict,
-    sdp_cost_map: dict,
-    d: int,
-    extra_constraints: list = None,
-) -> cp.Problem:
-    constraints = [
-        cons for cons_clique in sdp_constraints_map.values() for cons in cons_clique
-    ]
+def chordal_sparsity_overlap_constraints(constraint_clique_dict: dict, sdp_variable_map: dict, d: int):
     # Link up the repeated values via equality constraints
+    constraints = []
     seen_vars = {}
     for clique in constraint_clique_dict:
         _, _, mapping, is_augmented = constraint_clique_dict[clique]
@@ -627,7 +618,7 @@ def form_sdp_problem(
             Z_target = sdp_variable_map[target_clique]
             for idx, var1 in enumerate(overlapping_vars):
                 for jdx, var2 in enumerate(
-                    overlapping_vars[idx:]
+                        overlapping_vars[idx:]
                 ):  # Don't double count
                     if idx == jdx:
                         constraints += [
@@ -650,6 +641,23 @@ def form_sdp_problem(
         for var in clique:
             if var not in seen_vars:
                 seen_vars[var] = clique
+
+    return constraints
+
+
+def form_sdp_problem(
+    constraint_clique_dict: dict,
+    sdp_variable_map: dict,
+    sdp_constraints_map: dict,
+    sdp_cost_map: dict,
+    d: int,
+    extra_constraints: list = None,
+) -> cp.Problem:
+    # Add constraints in cvxpy's form
+    constraints = [
+        cons for cons_clique in sdp_constraints_map.values() for cons in cons_clique
+    ]
+    constraints += chordal_sparsity_overlap_constraints(constraint_clique_dict, sdp_variable_map, d)
 
     # Convert cost matrices to cvxpy cost function
     cost = lme_to_cvxpy_cost(sdp_cost_map, sdp_variable_map)
@@ -986,4 +994,4 @@ if __name__ == "__main__":
     print(f"Total error nuclear:       {total_error_nuclear}")
     print(f"Total error exact nearest: {total_error_exact}")
 
-    # TODO: check constraint violations
+    # TODO: check constraint violations! See Filip's code (or just plug this in there)

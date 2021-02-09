@@ -13,6 +13,7 @@ from graphik.solvers.sdp_snl import (
     distance_constraints_graph,
     extract_full_sdp_solution,
     extract_solution,
+    chordal_sparsity_overlap_constraints
 )
 from graphik.solvers.constraints import get_full_revolute_nearest_point
 from graphik.utils.roboturdf import load_ur10
@@ -89,6 +90,19 @@ def solve_fantope_sparse(sdp_variable_map: dict, d: int):
     return C_mapping
 
 
+def solve_fantope_sdp_sparse(constraint_clique_dict: dict, sdp_variable_map: dict, d: int):
+
+    # Make cvxpy variables and constraints for each Fantope
+    fantope_sdp_variable_map = {}
+    for clique in sdp_variable_map:
+        fantope_sdp_variable_map[clique] = cp.Variable(sdp_variable_map[clique].shape, PSD=True)
+
+    # Get the overlap constraints that link each Fantope's overlapping variables
+    overlap_constraints = chordal_sparsity_overlap_constraints(constraint_clique_dict, fantope_sdp_variable_map, d)
+
+    # Solve the sparse Fantope SDP
+
+
 def sparse_eigenvalue_sum(sdp_variable_map: dict, d: int):
     running_eigenvalue_sum = 0.
     for clique in sdp_variable_map:
@@ -157,14 +171,14 @@ def convex_iterate_sdp_snl_graph(
             robot,
             anchors,
             constraint_clique_dict,
-            C,  # TODO: add dictionary interpretation as well!
+            C,
             canonical_point_order,
             verbose=False,
             inequality_constraints_map=inequality_map,
         )
         if not sparse:
             G = extract_full_sdp_solution(constraint_clique_dict, canonical_point_order, sdp_variable_map, N, d)
-            eigvals_G = np.linalg.eigvalsh(G )  # Returns in ascending order (according to docs)
+            eigvals_G = np.linalg.eigvalsh(G)  # Returns in ascending order (according to docs)
             eig_value_sum_vs_iterations.append(np.sum(eigvals_G[0:n]))
             C = solve_fantope_closed_form(G, robot.dim)
 
@@ -192,7 +206,7 @@ if __name__ == "__main__":
         f"q{idx}" for idx in range(0, graph.robot.n + 1)
     ]
 
-    n_runs = 100
+    n_runs = 10
     final_eigvalue_sum_list = []
     for idx in range(n_runs):
         # Generate a random feasible target
@@ -214,13 +228,11 @@ if __name__ == "__main__":
             eig_value_sum_vs_iterations,
             prob,
         ) = convex_iterate_sdp_snl_graph(graph, anchors=end_effectors, ranges=False, max_iters=10,
-                                         sparse=True, verbose=False)
+                                         sparse=False, verbose=False)
 
         # solution = extract_solution(constraint_clique_dict, sdp_variable_map, d)
         print(eig_value_sum_vs_iterations)
         final_eigvalue_sum_list.append(eig_value_sum_vs_iterations[-1])
-
-    print(final_eigvalue_sum_list)
 
     from matplotlib import pyplot as plt
 
