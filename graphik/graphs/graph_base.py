@@ -159,47 +159,70 @@ class RobotGraph(ABC):
                 self.directed[nname][name][BOUNDED] = []
 
     def add_spherical_obstacle(self, name: str, position: np.ndarray, radius: float):
-
         # Add a fixed node representing the obstacle to the graph
         self.add_anchor_node(name, {POS: position, TYPE: "obstacle"})
 
         # Set lower (and upper) distance limits to robot nodes
         for node, node_type in self.directed.nodes(data=TYPE):
-            if node_type == "robot":
+            if node_type == "robot" and node[0] == "p":
                 self.directed.add_edge(node, name)
                 self.directed[node][name][BOUNDED] = ["below"]
                 self.directed[node][name][LOWER] = radius
                 self.directed[node][name][UPPER] = 100
 
-    def check_collision(self, G: nx.DiGraph) -> list:
-        typ = nx.get_node_attributes(self.directed, name=TYPE)
-        cols = []
-        for node in self.directed:
-            if typ[node] == "obstacle":
-                center = self.directed.nodes[node][POS]
-                radius = self.directed["p1"][node][LOWER]
-                for pnt in G:
-                    if typ[pnt] == "robot" and pnt[0] == "p":
-                        pos = G.nodes[pnt][POS]
-                        if (pos - center) @ np.identity(self.dim) @ (
-                            pos - center
-                        ).T <= radius ** 2:
-                            cols += [pnt]
-        return cols
+    # def check_collision(self, G: nx.DiGraph) -> list:
+    #     "Given a graph of the same type as self.directed, check collisions."
+    #     typ = nx.get_node_attributes(self.directed, name=TYPE)
+    #     cols = []
+    #     for node in self.directed:
+    #         if typ[node] == "obstacle":
+    #             center = self.directed.nodes[node][POS]
+    #             radius = self.directed["p1"][node][LOWER]
+    #             for pnt in G:
+    #                 if typ[pnt] == "robot" and pnt[0] == "p":
+    #                     pos = G.nodes[pnt][POS]
+    #                     if (pos - center) @ np.identity(self.dim) @ (
+    #                         pos - center
+    #                     ).T <= radius ** 2:
+    #                         cols += [pnt]
+    #     return cols
 
-    def check_limits(self, G: nx.DiGraph) -> list:
-        lmts = []
+    # def check_limits(self, G: nx.DiGraph) -> list:
+    #     lmts = []
+    #     for u, v, data in self.directed.edges(data=True):
+    #         if BOUNDED in data:
+    #             if "below" in data[BOUNDED]:
+    #                 if G[u][v][DIST] < data[LOWER]:
+    #                     lmts += [(u, v)]
+    #             if "above" in data[BOUNDED]:
+    #                 if G[u][v][DIST] > data[UPPER]:
+    #                     lmts += [(u, v)]
+    #     return lmts
+
+    def check_distance_limits(self, G: nx.DiGraph) -> dict:
+        """Given a graph of the same """
+        typ = nx.get_node_attributes(self.directed, name=TYPE)
+        broken_limits = {"joint": [], "obstacle": []}
         for u, v, data in self.directed.edges(data=True):
             if BOUNDED in data:
                 if "below" in data[BOUNDED]:
-                    if G[u][v][DIST] * 1.01 < data[LOWER]:
-                        print(G[u][v][DIST] - data[LOWER])
-                        lmts += [(u, v)]
+                    if G[u][v][DIST] < data[LOWER]:
+                        if typ[u] == "robot" and typ[v] == "obstacle":
+                            broken_limits["obstacle"] += [
+                                (u, v, G[u][v][DIST] - data[LOWER])
+                            ]
+                        if typ[u] == "robot" and typ[v] == "robot":
+                            broken_limits["joint"] += [
+                                (u, v, G[u][v][DIST] - data[LOWER])
+                            ]
                 if "above" in data[BOUNDED]:
-                    if G[u][v][DIST] > data[UPPER] * 1.01:
-                        print(G[u][v][DIST] - data[LOWER])
-                        lmts += [(u, v)]
-        return lmts
+                    if G[u][v][DIST] > data[UPPER]:
+                        if typ[u] == "robot" and typ[v] == "obstacle":
+                            broken_limits["obstacle"] += [(u, v)]
+                        if typ[u] == "robot" and typ[v] == "robot":
+                            broken_limits["joint"] += [(u, v)]
+
+        return broken_limits
 
     def distance_bound_matrices(self):
         """
@@ -480,7 +503,7 @@ class RobotRevoluteGraph(RobotGraph):
     def realization(self, x: np.ndarray) -> nx.DiGraph:
         """
         Given a dictionary of joint variables generate a representative graph.
-        This graph will be fully conncected.
+        This graph will be fully connected.
         """
         [dim, n_nodes, base, struct, ids, axis_length] = [
             self.dim,
@@ -490,6 +513,7 @@ class RobotRevoluteGraph(RobotGraph):
             self.node_ids,
             self.robot.axis_length,
         ]
+
         # s = flatten([[0], self.robot.s])  # b/c we're starting from root
         X = np.zeros([n_nodes, dim])
         X[: dim + 1, :] = pos_from_graph(base)

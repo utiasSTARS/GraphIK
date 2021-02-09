@@ -1,4 +1,3 @@
-from networkx.generators.classic import complete_graph
 import numpy as np
 import networkx as nx
 import time
@@ -85,6 +84,8 @@ def solve_random_problem(graph: RobotRevoluteGraph):
 
     q_goal = robot.random_configuration()
     G_goal = graph.realization(q_goal)
+
+    print(G_goal.nodes["o0"][POS])
     T_goal = robot.get_pose(q_goal, f"p{n}")
 
     full_points = [f"p{idx}" for idx in range(0, n + 1)] + [
@@ -121,16 +122,32 @@ def solve_random_problem(graph: RobotRevoluteGraph):
     z_riemannian = T_riemannian.as_matrix()[:3, 2]
     err_riemannian_rot = abs(safe_arccos(z_riemannian.dot(z_goal)))
 
-    # check for collisons
+    # check for all broken distance limits
+    broken_limits = graph.check_distance_limits(G_sol)
+    print(broken_limits)
+    print(graph.directed.nodes["p0"][POS])
+    print(graph.directed.nodes["o0"][POS])
+    print(G_sol.nodes["o0"][POS])
+    print(G_goal.nodes["o0"][POS])
+    assert 2 < 1
     col = False
-    if len(graph.check_collision(G_sol)) > 0:
+    if len(broken_limits["obstacle"]) > 0:
         col = True
 
-    broken_limits = graph.check_limits(G_sol)
     lmts = False
-    if len(broken_limits) > 0:
-        print(broken_limits)
+    if len(broken_limits["joint"]) > 0:
         lmts = True
+
+    # # check for collisons
+    # col = False
+    # if len(graph.check_collision(G_sol)) > 0:
+    #     col = True
+
+    # broken_limits = graph.check_limits(G_sol)
+    # lmts = False
+    # if len(broken_limits) > 0:
+    #     print(broken_limits)
+    #     lmts = True
 
     not_reach = False
     if err_riemannian_pos > 0.01 or err_riemannian_rot > 0.01:
