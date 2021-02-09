@@ -90,17 +90,37 @@ def solve_fantope_sparse(sdp_variable_map: dict, d: int):
     return C_mapping
 
 
-def solve_fantope_sdp_sparse(constraint_clique_dict: dict, sdp_variable_map: dict, d: int):
+def solve_fantope_sdp_sparse(constraint_clique_dict: dict, sdp_variable_map: dict, d: int, verbose=False,
+                             solver_params=None):
 
     # Make cvxpy variables and constraints for each Fantope
-    fantope_sdp_variable_map = {}
+    fantope_sdp_variable_map = {}  # TODO: can we just re-use these variables?
+    constraints = []
     for clique in sdp_variable_map:
-        fantope_sdp_variable_map[clique] = cp.Variable(sdp_variable_map[clique].shape, PSD=True)
+        n_clique = sdp_variable_map[clique].shape[0]
+        Z_clique = cp.Variable(sdp_variable_map[clique].shape, PSD=True)
+        fantope_sdp_variable_map[clique] = Z_clique
+        constraints += [cp.trace(Z_clique) == float(n_clique - d), np.eye(Z_clique.shape[0]) - Z_clique >> 0]
 
     # Get the overlap constraints that link each Fantope's overlapping variables
-    overlap_constraints = chordal_sparsity_overlap_constraints(constraint_clique_dict, fantope_sdp_variable_map, d)
+    constraints += chordal_sparsity_overlap_constraints(constraint_clique_dict, fantope_sdp_variable_map, d)
 
     # Solve the sparse Fantope SDP
+    if solver_params is None:
+        solver_params = SdpSolverParams()
+    cost = 0.
+    for clique in sdp_variable_map:
+        Z_clique = fantope_sdp_variable_map[clique]
+        G_clique = sdp_variable_map[clique].value
+        cost += cp.trace(G_clique @ Z_clique)
+    prob = cp.Problem(cp.Minimize(cost), constraints)
+    prob.solve(verbose=verbose, solver="MOSEK", mosek_params=solver_params.mosek_params)
+
+    # Return the desired cost function matrices
+    C_mapping = {}
+    for clique in sdp_variable_map:
+        C_mapping[clique] = fantope_sdp_variable_map[clique].value
+    return C_mapping
 
 
 def sparse_eigenvalue_sum(sdp_variable_map: dict, d: int):
@@ -137,6 +157,7 @@ def convex_iterate_sdp_snl_graph(
     max_iters=10,
     sparse=False,
     verbose=False,
+    closed_form=True,
     W_init=None
 ):
     # get a copy of the current robot + environment graph
@@ -183,7 +204,10 @@ def convex_iterate_sdp_snl_graph(
             C = solve_fantope_closed_form(G, robot.dim)
 
         else:
-            C = solve_fantope_sparse(sdp_variable_map, d)
+            if closed_form:
+                C = solve_fantope_sparse(sdp_variable_map, d)
+            else:
+                C = solve_fantope_sdp_sparse(constraint_clique_dict, sdp_variable_map, d)
             eig_value_sum_vs_iterations.append(sparse_eigenvalue_sum(sdp_variable_map, d))
 
     return (
@@ -228,7 +252,7 @@ if __name__ == "__main__":
             eig_value_sum_vs_iterations,
             prob,
         ) = convex_iterate_sdp_snl_graph(graph, anchors=end_effectors, ranges=False, max_iters=10,
-                                         sparse=False, verbose=False)
+                                         sparse=True, verbose=False, closed_form=False)
 
         # solution = extract_solution(constraint_clique_dict, sdp_variable_map, d)
         print(eig_value_sum_vs_iterations)
