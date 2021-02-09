@@ -243,7 +243,7 @@ if __name__ == "__main__":
     full_points = [f"p{idx}" for idx in range(0, graph.robot.n + 1)] + [
         f"q{idx}" for idx in range(0, graph.robot.n + 1)
     ]
-    n_runs = 10
+    n_runs = 100
 
     # Store results
     final_eigvalue_sum_list = []
@@ -344,13 +344,12 @@ if __name__ == "__main__":
     plt.grid()
     plt.show()
 
-    fantope_runtime_min = min(min(min(fantope_runtime, fantope_runtime_sparse_naive), fantope_runtime_sparse_sdp))
-    fantope_runtime_max = max(max(max(fantope_runtime, fantope_runtime_sparse_naive), fantope_runtime_sparse_sdp))
+    fantope_runtime_full = np.vstack([fantope_runtime, fantope_runtime_sparse_naive, fantope_runtime_sparse_sdp]).T
+    fantope_runtime_min = np.min(fantope_runtime_full)
+    fantope_runtime_max = np.max(fantope_runtime_full)
     fantope_runtime_bins = np.linspace(fantope_runtime_min, fantope_runtime_max, n_bins)
     plt.figure()
-    plt.hist(fantope_runtime, bins=fantope_runtime_bins, facecolor='r', alpha=0.5)
-    plt.hist(fantope_runtime_sparse_naive, bins=fantope_runtime_bins, facecolor='g', alpha=0.5)
-    plt.hist(fantope_runtime_sparse_sdp, bins=fantope_runtime_bins, facecolor='b', alpha=0.5)
+    plt.hist(fantope_runtime_full, bins=fantope_runtime_bins, color=colors)
     plt.legend(('Dense', 'Sparse (Naive)', 'Sparse (SDP)'))
     plt.title('Distribution of Fantope Solver Runtimes')
     plt.xlabel('Runtime (s)')
@@ -359,13 +358,13 @@ if __name__ == "__main__":
     plt.show()
 
     # Eigenvalue sum histograms
-    eigenvalue_sum_min = min(min(min(final_eigvalue_sum_list, final_eigvalue_sum_list_sparse_naive), final_eigvalue_sum_list_sparse_sdp))
-    eigenvalue_sum_max = max(max(max(final_eigvalue_sum_list, final_eigvalue_sum_list_sparse_naive), final_eigvalue_sum_list_sparse_sdp))
-    eigenvalue_sum_bins = np.linspace(final_eigvalue_sum_list, final_eigvalue_sum_list_sparse_naive, n_bins)
+    eigenvalue_sum_full = np.vstack([final_eigvalue_sum_list, final_eigvalue_sum_list_sparse_naive, final_eigvalue_sum_list_sparse_sdp]).T
+    eigenvalue_sum_min = max(np.min(eigenvalue_sum_full), 1e-12)
+    eigenvalue_sum_max = np.max(eigenvalue_sum_full)
+    # eigenvalue_sum_bins = np.log10(np.linspace(eigenvalue_sum_min, eigenvalue_sum_max, n_bins))
+    eigenvalue_sum_bins = np.log10(np.logspace(np.log10(eigenvalue_sum_min), np.log10(eigenvalue_sum_max), n_bins))
     plt.figure()
-    plt.hist(np.log10(final_eigvalue_sum_list), bins=eigenvalue_sum_bins, facecolor='r', alpha=0.5)
-    plt.hist(np.log10(final_eigvalue_sum_list_sparse_naive), bins=eigenvalue_sum_bins, facecolor='g', alpha=0.5)
-    plt.hist(np.log10(final_eigvalue_sum_list_sparse_sdp), bins=eigenvalue_sum_bins, facecolor='b', alpha=0.5)
+    plt.hist(np.log10(eigenvalue_sum_full), bins=eigenvalue_sum_bins, color=colors)
     plt.legend(('Dense', 'Sparse (Naive)', 'Sparse (SDP)'))
     plt.title('Distribution of Excess Rank')
     plt.xlabel('log$_{10}$ Excess Rank')
