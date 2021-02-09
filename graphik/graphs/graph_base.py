@@ -500,11 +500,12 @@ class RobotRevoluteGraph(RobotGraph):
             base[u][v][UPPER] = base[u][v][DIST]
         return base
 
-    def realization(self, x: np.ndarray) -> nx.DiGraph:
+    def realization(self, x: dict) -> nx.DiGraph:
         """
         Given a dictionary of joint variables generate a representative graph.
         This graph will be fully connected.
         """
+<<<<<<< HEAD
         [dim, n_nodes, base, struct, ids, axis_length] = [
             self.dim,
             self.n_nodes,
@@ -513,18 +514,37 @@ class RobotRevoluteGraph(RobotGraph):
             self.node_ids,
             self.robot.axis_length,
         ]
+=======
+        # [dim, n_nodes, base, struct, ids, axis_length] = [
+        #     self.dim,
+        #     self.n_nodes,
+        #     self.base,
+        #     self.robot.structure,
+        #     self.node_ids,
+        #     self.robot.axis_length,
+        # ]
+
+        axis_length = self.robot.axis_length
+        T_all = self.robot.get_all_poses(x)
+
+        P = {}
+        for node, T in T_all.items():
+            P[node] = T.trans
+            P["q" + node[1:]] = T.dot(trans_axis(axis_length, "z")).trans
+        return self.complete_from_pos(P)
+>>>>>>> main
 
         # s = flatten([[0], self.robot.s])  # b/c we're starting from root
-        X = np.zeros([n_nodes, dim])
-        X[: dim + 1, :] = pos_from_graph(base)
-        for idx in range(len(x)):  # get node locations
-            if type(x) is not dict:
-                T = self.robot.get_pose(list_to_variable_dict(x), "p" + str(idx + 1))
-            else:
-                T = self.robot.get_pose(x, "p" + str(idx + 1))
-            X[ids.index(f"p{idx+1}"), :] = T.trans
-            X[ids.index(f"q{idx+1}"), :] = T.dot(trans_axis(axis_length, "z")).trans
-        return graph_from_pos(X, self.node_ids)
+        # X = np.zeros([n_nodes, dim])
+        # X[: dim + 1, :] = pos_from_graph(base)
+        # for idx in range(len(x)):  # get node locations
+        #     if type(x) is not dict:
+        #         T = self.robot.get_pose(list_to_variable_dict(x), "p" + str(idx + 1))
+        #     else:
+        #         T = self.robot.get_pose(x, "p" + str(idx + 1))
+        #     X[ids.index(f"p{idx+1}"), :] = T.trans
+        #     X[ids.index(f"q{idx+1}"), :] = T.dot(trans_axis(axis_length, "z")).trans
+        # return graph_from_pos(X, self.node_ids)
 
     def distance_bounds_from_sampling(self):
         robot = self.robot
