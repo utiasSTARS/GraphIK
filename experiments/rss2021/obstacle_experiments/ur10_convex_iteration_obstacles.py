@@ -65,16 +65,17 @@ def solve_random_problem(graph: RobotRevoluteGraph):
     n = robot.n
     t_sol = 0
 
-    q_goal = robot.random_configuration()
-    G_goal = graph.realization(q_goal)
+    # ensure the goal is feasible (i.e. no collisons)
+    feasible = False
+    while not feasible:
+        q_goal = robot.random_configuration()
+        G_goal = graph.realization(q_goal)
+        T_goal = robot.get_pose(q_goal, f"p{n}")
+        broken_limits = graph.check_distance_limits(G_goal)
+        if len(broken_limits["obstacle"]) > 0:
+            feasible = True
 
-    T_goal = robot.get_pose(q_goal, f"p{n}")
-
-    full_points = [f"p{idx}" for idx in range(0, n + 1)] + [
-        f"q{idx}" for idx in range(0, n + 1)
-    ]
-
-    input_vals = get_full_revolute_nearest_point(graph, q_goal, full_points)
+    input_vals = get_full_revolute_nearest_point(graph, q_goal, list(robot.structure))
     anchors = {key: input_vals[key] for key in ["p0", "q0", f"p{n}", f"q{n}"]}
 
     t_sol = time.perf_counter()
@@ -146,6 +147,11 @@ if __name__ == "__main__":
         (np.array([0, 1, 1]), 0.5),
         (np.array([0, 1, -1]), 0.5),
         (np.array([0, -1, 1]), 0.5),
+        (np.array([0, -1, -1]), 0.5),
+        (np.array([1, 0, 1]), 0.5),
+        (np.array([1, 0, -1]), 0.5),
+        (np.array([-1, 0, 1]), 0.5),
+        (np.array([-1, 0, -1]), 0.5),
     ]
     for idx, obs in enumerate(obstacles):
         graph.add_spherical_obstacle(f"o{idx}", obs[0], obs[1])
