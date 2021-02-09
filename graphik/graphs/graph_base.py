@@ -505,24 +505,6 @@ class RobotRevoluteGraph(RobotGraph):
         Given a dictionary of joint variables generate a representative graph.
         This graph will be fully connected.
         """
-<<<<<<< HEAD
-        [dim, n_nodes, base, struct, ids, axis_length] = [
-            self.dim,
-            self.n_nodes,
-            self.base,
-            self.robot.structure,
-            self.node_ids,
-            self.robot.axis_length,
-        ]
-=======
-        # [dim, n_nodes, base, struct, ids, axis_length] = [
-        #     self.dim,
-        #     self.n_nodes,
-        #     self.base,
-        #     self.robot.structure,
-        #     self.node_ids,
-        #     self.robot.axis_length,
-        # ]
 
         axis_length = self.robot.axis_length
         T_all = self.robot.get_all_poses(x)
@@ -532,7 +514,6 @@ class RobotRevoluteGraph(RobotGraph):
             P[node] = T.trans
             P["q" + node[1:]] = T.dot(trans_axis(axis_length, "z")).trans
         return self.complete_from_pos(P)
->>>>>>> main
 
         # s = flatten([[0], self.robot.s])  # b/c we're starting from root
         # X = np.zeros([n_nodes, dim])

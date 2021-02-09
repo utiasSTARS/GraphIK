@@ -60,23 +60,6 @@ def plot_robot(G: nx.DiGraph, pos: dict):
     ax.set_zlim((-3, 3))
 
 
-# def check_collision(graph: RobotRevoluteGraph, sol: nx.DiGraph):
-#     typ = nx.get_node_attributes(graph.directed, name=TYPE)
-#     for node in graph.directed:
-#         if typ[node] == "obstacle":
-#             center = graph.directed.nodes[node][POS]
-#             radius = graph.directed["p1"][node][LOWER]
-
-#             for pnt in sol:
-#                 if typ[pnt] == "robot" and pnt[0] == "p":
-#                     pos = sol.nodes[pnt][POS]
-#                     if (pos - center) @ np.identity(len(center)) @ (
-#                         pos - center
-#                     ).T <= radius ** 2:
-#                         return True
-#     return False
-
-
 def solve_random_problem(graph: RobotRevoluteGraph):
     robot = graph.robot
     n = robot.n
@@ -85,7 +68,6 @@ def solve_random_problem(graph: RobotRevoluteGraph):
     q_goal = robot.random_configuration()
     G_goal = graph.realization(q_goal)
 
-    print(G_goal.nodes["o0"][POS])
     T_goal = robot.get_pose(q_goal, f"p{n}")
 
     full_points = [f"p{idx}" for idx in range(0, n + 1)] + [
@@ -124,12 +106,7 @@ def solve_random_problem(graph: RobotRevoluteGraph):
 
     # check for all broken distance limits
     broken_limits = graph.check_distance_limits(G_sol)
-    print(broken_limits)
-    print(graph.directed.nodes["p0"][POS])
-    print(graph.directed.nodes["o0"][POS])
-    print(G_sol.nodes["o0"][POS])
-    print(G_goal.nodes["o0"][POS])
-    assert 2 < 1
+
     col = False
     if len(broken_limits["obstacle"]) > 0:
         col = True
@@ -138,28 +115,9 @@ def solve_random_problem(graph: RobotRevoluteGraph):
     if len(broken_limits["joint"]) > 0:
         lmts = True
 
-    # # check for collisons
-    # col = False
-    # if len(graph.check_collision(G_sol)) > 0:
-    #     col = True
-
-    # broken_limits = graph.check_limits(G_sol)
-    # lmts = False
-    # if len(broken_limits) > 0:
-    #     print(broken_limits)
-    #     lmts = True
-
     not_reach = False
     if err_riemannian_pos > 0.01 or err_riemannian_rot > 0.01:
         not_reach = True
-
-    # broken_limits = {}
-    # limit_violations = False
-    # for key in robot.limited_joints:
-    #     if abs(q_sol[key]) > (graph.robot.ub[key] * 1.01):
-    #         limit_violations = True
-    #         broken_limits[key] = abs(q_sol[key]) - (graph.robot.ub[key])
-    #         print(key, broken_limits[key])
 
     fail = False
     if lmts or col or not_reach:
@@ -170,6 +128,7 @@ def solve_random_problem(graph: RobotRevoluteGraph):
             + lmts * "+ limit violations"
         )
         fail = True
+        print(broken_limits)
     print(
         f"Pos. error: {err_riemannian_pos}\nRot. error: {err_riemannian_rot}\nSolution time: {t_sol}"
     )
@@ -182,9 +141,11 @@ if __name__ == "__main__":
     lb = -ub
     limits = (lb, ub)
 
-    robot, graph = load_ur10(limits=None)
+    robot, graph = load_ur10(limits)
     obstacles = [
-        (np.array([0, 1, 1]), 0.75),
+        (np.array([0, 1, 1]), 0.5),
+        (np.array([0, 1, -1]), 0.5),
+        (np.array([0, -1, 1]), 0.5),
     ]
     for idx, obs in enumerate(obstacles):
         graph.add_spherical_obstacle(f"o{idx}", obs[0], obs[1])
