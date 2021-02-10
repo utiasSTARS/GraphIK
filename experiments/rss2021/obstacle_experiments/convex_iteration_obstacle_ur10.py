@@ -15,7 +15,7 @@ from numpy import pi
 from numpy.linalg.linalg import norm
 
 
-def solve_random_problem(graph: RobotRevoluteGraph):
+def solve_random_problem(graph: RobotRevoluteGraph, sparse=False, closed_form=True):
     robot = graph.robot
     n = robot.n
 
@@ -40,7 +40,9 @@ def solve_random_problem(graph: RobotRevoluteGraph):
         _,
         _,
         _,
-    ) = convex_iterate_sdp_snl_graph(graph, anchors, ranges=True)
+        _,
+        _
+    ) = convex_iterate_sdp_snl_graph(graph, anchors, ranges=True, sparse=sparse, closed_form=closed_form)
     t_sol = time.perf_counter() - t_sol
 
     solution = extract_solution(constraint_clique_dict, sdp_variable_map, robot.dim)
@@ -85,6 +87,10 @@ if __name__ == "__main__":
     lb = -ub
     limits = (lb, ub)
 
+    # Convex iteration parameters
+    sparse = False
+    closed_form = True
+
     robot, graph = load_ur10(limits=None)
     obstacles = [
         (np.array([0, 1, 1]), 0.5),
@@ -97,9 +103,9 @@ if __name__ == "__main__":
 
     sol_data = []
     viol_data = []
-    num_tests = 4000
+    num_tests = 100  # 4000
     for idx in range(num_tests):
-        sol, viol = solve_random_problem(graph)
+        sol, viol = solve_random_problem(graph, sparse=sparse, closed_form=closed_form)
         sol_data += [sol]
         viol_data += [pd.DataFrame(viol, index=len(viol) * [idx])]
 

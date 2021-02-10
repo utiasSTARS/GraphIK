@@ -184,7 +184,7 @@ def convex_iterate_sdp_snl_graph(
     # full_points = [node for node in G if node not in ["x", "y"]]
     canonical_point_order = [point for point in G if point not in anchors.keys()]
     constraint_clique_dict = distance_constraints_graph(
-        G, anchors, sparse, ee_cost=False
+        G, anchors, sparse, ee_cost=False, angle_limits=ranges  # TODO: is a param other than ranges needed?
     )
 
     # Add inequalities (angluar limits, obstacles) if present

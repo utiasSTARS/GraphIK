@@ -7,6 +7,7 @@ import cvxpy as cp
 
 from graphik.utils.roboturdf import load_ur10, load_truncated_ur10
 from graphik.utils.constants import *
+from graphik.utils.chordal import complete_to_chordal_graph
 from graphik.robots.robot_base import RobotRevolute
 from graphik.graphs.graph_base import RobotGraph
 from graphik.solvers.constraints import get_full_revolute_nearest_point
@@ -165,7 +166,7 @@ def constraint_for_variable_pair(
     n: int,
     ee_cost: bool,
 ):
-    if (u, v) in graph.edges and frozenset((u, v)) not in index_mapping:
+    if (u, v) in graph.edges and frozenset((u, v)) not in index_mapping and DIST in graph[u][v].keys():
         if not ee_cost:
             if (
                 u in ees_clique and v in ees_clique
@@ -175,23 +176,23 @@ def constraint_for_variable_pair(
                 A_uv = linear_matrix_equality_with_anchor(
                     index_mapping[v], n, ee_assignments[u]
                 )
-                b_uv = graph[u][v]["weight"] ** 2 - ee_assignments[u].dot(
+                b_uv = graph[u][v][DIST] ** 2 - ee_assignments[u].dot(
                     ee_assignments[u]
                 )
             elif v in ees_clique:
                 A_uv = linear_matrix_equality_with_anchor(
                     index_mapping[u], n, ee_assignments[v]
                 )
-                b_uv = graph[u][v]["weight"] ** 2 - ee_assignments[v].dot(
+                b_uv = graph[u][v][DIST] ** 2 - ee_assignments[v].dot(
                     ee_assignments[v]
                 )
             else:
                 A_uv = linear_matrix_equality(index_mapping[u], index_mapping[v], n)
-                b_uv = graph[u][v]["weight"] ** 2
+                b_uv = graph[u][v][DIST] ** 2
 
         else:
             A_uv = linear_matrix_equality(index_mapping[u], index_mapping[v], n)
-            b_uv = graph[u][v]["weight"] ** 2
+            b_uv = graph[u][v][DIST] ** 2
         return A_uv, b_uv
     else:
         return None, None
@@ -266,19 +267,29 @@ def distance_clique_linear_map(
 
 
 def distance_constraints_graph(
-    G: nx.Graph, anchors: dict = {}, sparse: bool = False, ee_cost=None
+    G: nx.Graph, anchors: dict = {}, sparse: bool = False, ee_cost=None, angle_limits=False
 ) -> dict:
 
     G = G.copy()
-    # remove the edges that don't have distances defined
-    edges = []
-    for u, v, data in G.edges(data=True):
-        if not data.get(DIST, False):
-            edges += [(u, v)]
+    if angle_limits:
+        # Remove the edges that don't have a
+        typ = nx.get_edge_attributes(G, name=BOUNDED)
+        edges = []
+        for u, v, data in G.edges(data=True):
+            if (not data.get(DIST, False) and ("below" not in data[BOUNDED] and "above" not in data[BOUNDED])):
+                edges += [(u, v)]
+
+    else:
+        # remove the edges that don't have distances defined
+        edges = []
+        for u, v, data in G.edges(data=True):
+            if not data.get(DIST, False):
+                edges += [(u, v)]
     G.remove_edges_from(edges)
 
     undirected = G.to_undirected()
-    # undirected = nx.Graph(G)
+    if not nx.is_chordal(undirected):
+        undirected, _ = complete_to_chordal_graph(undirected)
     equality_cliques = nx.chordal_graph_cliques(
         undirected
     )  # Returns maximal cliques (in spite of name)
