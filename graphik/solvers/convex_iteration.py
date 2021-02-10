@@ -243,7 +243,7 @@ if __name__ == "__main__":
     full_points = [f"p{idx}" for idx in range(0, graph.robot.n + 1)] + [
         f"q{idx}" for idx in range(0, graph.robot.n + 1)
     ]
-    n_runs = 100
+    n_runs = 10
 
     # Store results
     final_eigvalue_sum_list = []
@@ -328,7 +328,7 @@ if __name__ == "__main__":
     rc("text", usetex=True)
 
     # Plot parameters
-    n_bins = 10
+    n_bins = 100
     colors = ['r', 'g', 'b']
     # Runtime histograms
     primal_sdp_runtime_full = np.vstack([primal_sdp_runtime, primal_sdp_runtime_sparse_naive, primal_sdp_runtime_sparse_sdp]).T
