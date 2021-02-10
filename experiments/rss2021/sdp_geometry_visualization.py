@@ -1,7 +1,17 @@
 import numpy as np
 import sympy as sp
+
+import matplotlib
+import os
+
+matplotlib.use('Agg')
+matplotlib.rcParams['mathtext.fontset'] = 'stix'
+matplotlib.rcParams['font.family'] = 'STIXGeneral'
+matplotlib.rcParams['text.usetex'] = True
+
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+
 
 def compute_pointset(output_file):
     # Define SDP variables
@@ -86,18 +96,20 @@ def compute_pointset(output_file):
     np.save(output_file, data_dict, allow_pickle=True)
     print('...done.')
 
-def plot_sdp_fig(data):
+def plot_sdp_fig(data, output_folder):
     rank1_points = data.item().get('rank1_points')
     rank2_points = data.item().get('rank2_points')
 
     fig = plt.figure()
     ax = fig.gca(projection='3d')
     # ax.scatter(psd_set_x, psd_set_y, psd_set_z, c='g', marker='.', s=10)
-    ax.scatter(rank1_points[:,0], rank1_points[:,1], rank1_points[:,2], c='r', marker='o', s=20)
-    #ax.scatter(rank2_points[:,0], rank2_points[:,1], rank2_points[:,2], c='b', marker='.', s=10)
+    decimate_factor = 1
+    ax.scatter(rank2_points[::decimate_factor,0], \
+        rank2_points[::decimate_factor,1], \
+        rank2_points[::decimate_factor,2], c='g', marker='.', s=2, label='Feasible Boundary')
     #plt.xlabel('$xy$')
     #plt.ylabel('$y$')
-    ax.set_xlabel('$xY$')
+    ax.set_xlabel('$xy$')
     ax.set_ylabel('$y$')
     
     
@@ -107,7 +119,7 @@ def plot_sdp_fig(data):
     #(0,0,0), (0,1,1), (0.5,0.5,0.5)
     xx, yy = np.meshgrid(np.linspace(0,1,5), np.linspace(0,1,5))
     z = yy
-    ax.plot_surface(xx, yy, z, alpha=0.25)
+    ax.plot_surface(xx, yy, z, alpha=0.15)
 
     ax.plot_trisurf(rank2_points[rank2_above_mask,0], \
         rank2_points[rank2_above_mask,1], \
@@ -117,8 +129,16 @@ def plot_sdp_fig(data):
         rank2_points[~rank2_above_mask,1], \
         rank2_points[~rank2_above_mask,2], cmap='summer', alpha=0.5, antialiased=True)
 
+    ax.scatter(rank1_points[:,0], rank1_points[:,1], rank1_points[:,2], c='r', marker='o', s=20, label='Rank 1 Solutions')
+    ax.legend()
+    ax.view_init(elev=15., azim=210.)
     plt.grid()
     plt.show()
+    output_file = output_folder + '/spectrahedron.pdf'
+    print('Saving figure to ... {}'.format(output_file))
+    fig.savefig(output_file, bbox_inches='tight')
+    plt.close(fig)
+
 
 
 if __name__ == '__main__':
@@ -133,7 +153,8 @@ if __name__ == '__main__':
         compute_pointset(cached_data_file)
         data = np.load(cached_data_file, allow_pickle=True)
     
-    plot_sdp_fig(data)
+    output_folder = os.path.dirname(os.path.realpath(__file__)) + "/results/figs"
+    plot_sdp_fig(data, output_folder=output_folder)
 
 
     # Surface
