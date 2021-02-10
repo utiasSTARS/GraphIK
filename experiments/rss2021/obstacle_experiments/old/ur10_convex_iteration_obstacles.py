@@ -88,7 +88,9 @@ def solve_random_problem(graph: RobotRevoluteGraph):
         _,
         _,
         _,
-    ) = convex_iterate_sdp_snl_graph(graph, anchors, ranges=True)
+    ) = convex_iterate_sdp_snl_graph(
+        graph, anchors, ranges=True, sparse=False, closed_form=True
+    )
     t_sol = time.perf_counter() - t_sol
 
     solution = extract_solution(constraint_clique_dict, sdp_variable_map, robot.dim)
@@ -110,28 +112,31 @@ def solve_random_problem(graph: RobotRevoluteGraph):
     # check for all broken distance limits
     broken_limits = graph.check_distance_limits(G_sol)
 
-    col = False
-    if len(broken_limits["obstacle"]) > 0:
-        col = True
+    # col = False
+    # if len(broken_limits["obstacle"]) > 0:
+    #     col = True
 
-    lmts = False
-    if len(broken_limits["joint"]) > 0:
-        lmts = True
+    # lmts = False
+    # if len(broken_limits["joint"]) > 0:
+    #     lmts = True
 
     not_reach = False
     if err_riemannian_pos > 0.01 or err_riemannian_rot > 0.01:
         not_reach = True
 
     fail = False
-    if lmts or col or not_reach:
-        print(
-            col * "collision"
-            # + infeas * "+ infeasible goal"
-            + not_reach * "+ didn't reach"
-            + lmts * "+ limit violations"
-        )
+    if len(broken_limits) > 0:
         fail = True
         print(broken_limits)
+    # if lmts or col or not_reach:
+    #     print(
+    #         col * "collision"
+    #         # + infeas * "+ infeasible goal"
+    #         + not_reach * "+ didn't reach"
+    #         + lmts * "+ limit violations"
+    #     )
+    #     fail = True
+    #     print(broken_limits)
     print(
         f"Pos. error: {err_riemannian_pos}\nRot. error: {err_riemannian_rot}\nSolution time: {t_sol}"
     )
