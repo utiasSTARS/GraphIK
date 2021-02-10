@@ -3,7 +3,7 @@ import sympy as sp
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-if __name__ == '__main__':
+def compute_pointset(output_file):
     # Define SDP variables
     x2, xy, y2, x, y, s2 = sp.symbols('x2, xy, y2, x, y, s2')
     # Goal pose
@@ -62,28 +62,81 @@ if __name__ == '__main__':
     psd_set_x = [full_points[idx][0] for idx in psd_set]
     psd_set_y = [full_points[idx][1] for idx in psd_set]
     psd_set_z = [full_points[idx][2] for idx in psd_set]
+    
+    psd_points = np.array([np.array(psd_set_x), np.array(psd_set_y), np.array(psd_set_z)]).transpose()
+
+
+
 
     rank1_set_x = [full_points[idx][0] for idx in range(len(eig1)) if rank_approx[idx] == 1 and idx in psd_set]
     rank1_set_y = [full_points[idx][1] for idx in range(len(eig1)) if rank_approx[idx] == 1 and idx in psd_set]
     rank1_set_z = [full_points[idx][2] for idx in range(len(eig1)) if rank_approx[idx] == 1 and idx in psd_set]
 
+    rank1_points = np.array([np.array(rank1_set_x), np.array(rank1_set_y), np.array(rank1_set_z)]).transpose() #Nx3
+
     rank2_set_x = [full_points[idx][0] for idx in range(len(eig1)) if rank_approx[idx] == 2 and idx in psd_set]
     rank2_set_y = [full_points[idx][1] for idx in range(len(eig1)) if rank_approx[idx] == 2 and idx in psd_set]
     rank2_set_z = [full_points[idx][2] for idx in range(len(eig1)) if rank_approx[idx] == 2 and idx in psd_set]
 
+    rank2_points = np.array([np.array(rank2_set_x), np.array(rank2_set_y), np.array(rank2_set_z)]).transpose() #Nx3
+
+    #Cache data
+    data_dict = {'psd_points':psd_points, 'rank1_points': rank1_points, 'rank2_points': rank2_points}
+    print('Saving data to ... {}'.format(output_file))
+    np.save(output_file, data_dict, allow_pickle=True)
+    print('...done.')
+
+def plot_sdp_fig(data):
+    rank1_points = data.item().get('rank1_points')
+    rank2_points = data.item().get('rank2_points')
+
     fig = plt.figure()
     ax = fig.gca(projection='3d')
     # ax.scatter(psd_set_x, psd_set_y, psd_set_z, c='g', marker='.', s=10)
-    ax.scatter(rank1_set_x, rank1_set_y, rank1_set_z, c='r', marker='o', s=15)
-    ax.scatter(rank2_set_x, rank2_set_y, rank2_set_z, c='b', marker='.', s=10)
-    plt.xlabel('$xy$')
-    plt.ylabel('$y$')
-    # ax.zlabel('$y2$')
+    ax.scatter(rank1_points[:,0], rank1_points[:,1], rank1_points[:,2], c='r', marker='o', s=20)
+    #ax.scatter(rank2_points[:,0], rank2_points[:,1], rank2_points[:,2], c='b', marker='.', s=10)
+    #plt.xlabel('$xy$')
+    #plt.ylabel('$y$')
+    ax.set_xlabel('$xY$')
+    ax.set_ylabel('$y$')
+    
+    
+    rank2_above_mask = rank2_points[:,2] > rank2_points[:,1]
+    
+    #Points of a Plane
+    #(0,0,0), (0,1,1), (0.5,0.5,0.5)
+    xx, yy = np.meshgrid(np.linspace(0,1,5), np.linspace(0,1,5))
+    z = yy
+    ax.plot_surface(xx, yy, z, alpha=0.25)
+
+    ax.plot_trisurf(rank2_points[rank2_above_mask,0], \
+        rank2_points[rank2_above_mask,1], \
+        rank2_points[rank2_above_mask,2], cmap='summer', alpha=0.5, antialiased=True)
+
+    ax.plot_trisurf(rank2_points[~rank2_above_mask,0], \
+        rank2_points[~rank2_above_mask,1], \
+        rank2_points[~rank2_above_mask,2], cmap='summer', alpha=0.5, antialiased=True)
+
     plt.grid()
     plt.show()
 
+
+if __name__ == '__main__':
+    cached_data_file = '/tmp/sdp_data_vis.npy'
+
+    try:
+        data = np.load(cached_data_file, allow_pickle=True)
+        print('Using cached data file: {}'.format(cached_data_file))
+    
+    except IOError:
+        print("Cached data not found. Generating...")
+        compute_pointset(cached_data_file)
+        data = np.load(cached_data_file, allow_pickle=True)
+    
+    plot_sdp_fig(data)
+
+
     # Surface
-    ax.plot_surface(np.array(rank2_set_x), np.array(rank2_set_y), np.array(rank2_set_z))
 
     # TODO: add obstacle, do heatmap, plot actual solutions, and use SDP constraint, NOT determinant!
     # TODO: to check the SDP constraint, simply construct the whole matrix and check its eigenvalues
