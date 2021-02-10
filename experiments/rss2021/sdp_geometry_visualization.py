@@ -130,7 +130,7 @@ def plot_sdp_fig(data, output_folder):
         rank2_points[~rank2_above_mask,2], cmap='summer', alpha=0.5, antialiased=True)
 
     ax.scatter(rank1_points[:,0], rank1_points[:,1], rank1_points[:,2], c='r', marker='o', s=20, label='Rank 1 Solutions')
-    ax.legend()
+    ax.legend(loc=(0.5, 0.7))
     ax.view_init(elev=15., azim=210.)
     plt.grid()
     plt.show()
