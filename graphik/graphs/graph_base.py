@@ -170,57 +170,41 @@ class RobotGraph(ABC):
                 self.directed[node][name][LOWER] = radius
                 self.directed[node][name][UPPER] = 100
 
-    # def check_collision(self, G: nx.DiGraph) -> list:
-    #     "Given a graph of the same type as self.directed, check collisions."
-    #     typ = nx.get_node_attributes(self.directed, name=TYPE)
-    #     cols = []
-    #     for node in self.directed:
-    #         if typ[node] == "obstacle":
-    #             center = self.directed.nodes[node][POS]
-    #             radius = self.directed["p1"][node][LOWER]
-    #             for pnt in G:
-    #                 if typ[pnt] == "robot" and pnt[0] == "p":
-    #                     pos = G.nodes[pnt][POS]
-    #                     if (pos - center) @ np.identity(self.dim) @ (
-    #                         pos - center
-    #                     ).T <= radius ** 2:
-    #                         cols += [pnt]
-    #     return cols
-
-    # def check_limits(self, G: nx.DiGraph) -> list:
-    #     lmts = []
-    #     for u, v, data in self.directed.edges(data=True):
-    #         if BOUNDED in data:
-    #             if "below" in data[BOUNDED]:
-    #                 if G[u][v][DIST] < data[LOWER]:
-    #                     lmts += [(u, v)]
-    #             if "above" in data[BOUNDED]:
-    #                 if G[u][v][DIST] > data[UPPER]:
-    #                     lmts += [(u, v)]
-    #     return lmts
-
     def check_distance_limits(self, G: nx.DiGraph) -> dict:
         """Given a graph of the same """
         typ = nx.get_node_attributes(self.directed, name=TYPE)
-        broken_limits = {"joint": [], "obstacle": []}
+        # broken_limits = {"edge": [], "value": [], "type": [], "side": []}
+        broken_limits = []
         for u, v, data in self.directed.edges(data=True):
             if BOUNDED in data:
                 if "below" in data[BOUNDED]:
                     if G[u][v][DIST] < data[LOWER]:
+                        broken_limit = {}
                         if typ[u] == "robot" and typ[v] == "obstacle":
-                            broken_limits["obstacle"] += [
-                                (u, v, G[u][v][DIST] - data[LOWER])
-                            ]
+                            broken_limit["edge"] = (u, v)
+                            broken_limit["value"] = G[u][v][DIST] - data[LOWER]
+                            broken_limit["type"] = "obstacle"
+                            broken_limit["side"] = LOWER
                         if typ[u] == "robot" and typ[v] == "robot":
-                            broken_limits["joint"] += [
-                                (u, v, G[u][v][DIST] - data[LOWER])
-                            ]
+                            broken_limit["edge"] = (u, v)
+                            broken_limit["value"] = G[u][v][DIST] - data[LOWER]
+                            broken_limit["type"] = "joint"
+                            broken_limit["side"] = LOWER
+                        broken_limits += [broken_limit]
                 if "above" in data[BOUNDED]:
                     if G[u][v][DIST] > data[UPPER]:
+                        broken_limit = {}
                         if typ[u] == "robot" and typ[v] == "obstacle":
-                            broken_limits["obstacle"] += [(u, v)]
+                            broken_limit["edge"] = (u, v)
+                            broken_limit["value"] = G[u][v][DIST] - data[UPPER]
+                            broken_limit["type"] = "obstacle"
+                            broken_limit["side"] = UPPER
                         if typ[u] == "robot" and typ[v] == "robot":
-                            broken_limits["joint"] += [(u, v)]
+                            broken_limit["edge"] = (u, v)
+                            broken_limit["value"] = G[u][v][DIST] - data[UPPER]
+                            broken_limit["type"] = "joint"
+                            broken_limit["side"] = UPPER
+                        broken_limits += [broken_limit]
 
         return broken_limits
 
