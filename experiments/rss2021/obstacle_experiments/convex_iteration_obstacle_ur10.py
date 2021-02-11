@@ -3,6 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 import pickle
+from progress.bar import ShadyBar as Bar
 
 from graphik.graphs.graph_base import RobotRevoluteGraph
 from graphik.solvers.constraints import get_full_revolute_nearest_point
@@ -38,10 +39,10 @@ def solve_random_problem(graph: RobotRevoluteGraph, sparse=False, closed_form=Tr
         constraint_clique_dict,
         sdp_variable_map,
         _,
+        excess_eigvalue_sum,
         _,
-        _,
-        _,
-        _
+        primal_runtime,
+        fantope_runtime
     ) = convex_iterate_sdp_snl_graph(graph, anchors, ranges=True, sparse=sparse, closed_form=closed_form)
     t_sol = time.perf_counter() - t_sol
 
@@ -65,7 +66,8 @@ def solve_random_problem(graph: RobotRevoluteGraph, sparse=False, closed_form=Tr
     broken_limits = graph.check_distance_limits(G_sol)
 
     print(
-        f"Pos. error: {err_pos}\nRot. error: {err_rot}\nViolations: {broken_limits}\nSolution time: {t_sol}"
+        f"Pos. error: {err_pos}\nRot. error: {err_rot}\nViolations: {broken_limits}\nTotal time: {t_sol}" +
+        f"\nSolvers Time: {primal_runtime+fantope_runtime}\nExcess Eig. Sum: {excess_eigvalue_sum[-1]}"
     )
     print("------------------------------------")
 
@@ -75,8 +77,11 @@ def solve_random_problem(graph: RobotRevoluteGraph, sparse=False, closed_form=Tr
         "Sol. Graph": G_sol,
         "Sol. Config": q_sol,
         "Sol. Time": t_sol,
+        "Primal Time": primal_runtime,
+        "Fantope Time": fantope_runtime,
         "Pos. Error": err_pos,
         "Rot. Error": err_rot,
+        "Excess Eig. Sum": excess_eigvalue_sum
     }
 
     return sol_data, broken_limits
@@ -98,17 +103,20 @@ if __name__ == "__main__":
         (np.array([0, -1, 1]), 0.5),
         (np.array([1, 0, 1]), 0.5),
     ]
+
     for idx, obs in enumerate(obstacles):
         graph.add_spherical_obstacle(f"o{idx}", obs[0], obs[1])
 
     sol_data = []
     viol_data = []
-    num_tests = 100  # 4000
+    num_tests = 10  # 4000
+    bar = Bar("", max=num_tests, check_tty=False, hide_cursor=False)
     for idx in range(num_tests):
         sol, viol = solve_random_problem(graph, sparse=sparse, closed_form=closed_form)
         sol_data += [sol]
         viol_data += [pd.DataFrame(viol, index=len(viol) * [idx])]
-
+        bar.next()
+    bar.finish()
     prob_cols = ["Goal Pose", "Prob. Graph"]
     sol_cols = ["Sol. Graph", "Sol. Config", "Sol. Time", "Pos. Error", "Rot. Error"]
     data = {
