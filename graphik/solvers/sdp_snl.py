@@ -353,9 +353,9 @@ def distance_range_constraints(
     dists = []
     upper = []
     for u, v, data in G.edges(data=True):
-        if u not in anchors.keys() and v not in anchors.keys():
+        if u not in anchors.keys() or v not in anchors.keys():  # If BOTH are anchors we can ignore
             if data.get(BOUNDED, False):
-                if "below" in data[BOUNDED]:
+                if "below" in data[BOUNDED]:  #TODO All the bounds are only listed as below, ask Filip!
                     pairs += [frozenset((u, v))]
                     dists += [data[LOWER]]
                     upper += [False]
@@ -368,7 +368,7 @@ def distance_range_constraints(
     for idx, pair in enumerate(pairs):
         dist = dists[idx]
         upper_idx = upper[idx]  # it's either upper or lower
-        clique, (A, b) = distance_inequality_constraint(
+        clique, (A, b) = distance_inequality_constraint(  # TODO: needs anchors to work!
             constraint_clique_dict, pair, dist, upper_idx
         )
         if clique in inequality_map:

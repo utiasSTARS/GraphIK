@@ -27,7 +27,7 @@ def solve_random_problem(graph: RobotRevoluteGraph, sparse=False, closed_form=Tr
         G_goal = graph.realization(q_goal)
         T_goal = robot.get_pose(q_goal, f"p{n}")
         broken_limits = graph.check_distance_limits(G_goal)
-        if len(broken_limits) > 0:
+        if len(broken_limits) == 0:
             feasible = True
 
     input_vals = get_full_revolute_nearest_point(graph, q_goal, list(robot.structure))
