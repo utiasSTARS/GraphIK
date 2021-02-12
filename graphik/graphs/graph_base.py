@@ -185,12 +185,13 @@ class RobotGraph(ABC):
                             broken_limit["value"] = G[u][v][DIST] - data[LOWER]
                             broken_limit["type"] = "obstacle"
                             broken_limit["side"] = LOWER
+                            broken_limits += [broken_limit]
                         if typ[u] == "robot" and typ[v] == "robot":
                             broken_limit["edge"] = (u, v)
                             broken_limit["value"] = G[u][v][DIST] - data[LOWER]
                             broken_limit["type"] = "joint"
                             broken_limit["side"] = LOWER
-                        broken_limits += [broken_limit]
+                            broken_limits += [broken_limit]
                 if "above" in data[BOUNDED]:
                     if G[u][v][DIST] > data[UPPER]:
                         broken_limit = {}
@@ -199,12 +200,13 @@ class RobotGraph(ABC):
                             broken_limit["value"] = G[u][v][DIST] - data[UPPER]
                             broken_limit["type"] = "obstacle"
                             broken_limit["side"] = UPPER
+                            broken_limits += [broken_limit]
                         if typ[u] == "robot" and typ[v] == "robot":
                             broken_limit["edge"] = (u, v)
                             broken_limit["value"] = G[u][v][DIST] - data[UPPER]
                             broken_limit["type"] = "joint"
                             broken_limit["side"] = UPPER
-                        broken_limits += [broken_limit]
+                            broken_limits += [broken_limit]
 
         return broken_limits
 
