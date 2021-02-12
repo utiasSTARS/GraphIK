@@ -197,6 +197,7 @@ def convex_iterate_sdp_snl_graph(
     n = len(canonical_point_order)
     N = n + d
     C = np.eye(N) if W_init is None else W_init  # Identity satisfies any sparsity pattern by default
+    # bar = Bar("Convex iteration", max=max_iters, check_tty=False, hide_cursor=False)
     for iter in range(max_iters):
         solution, prob, sdp_variable_map, _ = solve_linear_cost_sdp(
             robot,
@@ -221,7 +222,8 @@ def convex_iterate_sdp_snl_graph(
                 C, t_fantope = solve_fantope_sdp_sparse(constraint_clique_dict, sdp_variable_map, d)
             eig_value_sum_vs_iterations.append(sparse_eigenvalue_sum(sdp_variable_map, d))
         fantope_solver_runtime += t_fantope
-
+    #     bar.next()
+    # bar.finish()
     return (
         C,
         constraint_clique_dict,

@@ -355,7 +355,7 @@ def distance_range_constraints(
     for u, v, data in G.edges(data=True):
         if u not in anchors.keys() or v not in anchors.keys():  # If BOTH are anchors we can ignore
             if data.get(BOUNDED, False):
-                if "below" in data[BOUNDED]:  #TODO All the bounds are only listed as below, ask Filip!
+                if "below" in data[BOUNDED]:  # TODO: All the bounds are only listed as below, ask Filip!
                     pairs += [frozenset((u, v))]
                     dists += [data[LOWER]]
                     upper += [False]
@@ -368,13 +368,18 @@ def distance_range_constraints(
     for idx, pair in enumerate(pairs):
         dist = dists[idx]
         upper_idx = upper[idx]  # it's either upper or lower
-        clique, (A, b) = distance_inequality_constraint(  # TODO: needs anchors to work!
-            constraint_clique_dict, pair, dist, upper_idx
-        )
-        if clique in inequality_map:
-            inequality_map[clique] += [(A, b)]
-        else:
-            inequality_map[clique] = [(A, b)]
+
+        if 'o' in list(pair)[0] or 'o' in list(pair)[1]:  # TODO: testing only obstacles, for now
+            if list(pair)[0] in anchors or list(pair)[1] in anchors:
+                clique, (A, b) = anchor_inequality_constraint(constraint_clique_dict, pair, dist, anchors, upper_idx)
+            else:
+                clique, (A, b) = distance_inequality_constraint(
+                    constraint_clique_dict, pair, dist, upper_idx
+                )
+            if clique in inequality_map:
+                inequality_map[clique] += [(A, b)]
+            else:
+                inequality_map[clique] = [(A, b)]
     return inequality_map
 
 
@@ -559,6 +564,26 @@ def constraints_and_sparse_linear_cost_to_sdp_vars(
         sdp_constraints_map[clique] = constraints_clique
 
     return sdp_variable_map, sdp_constraints_map, C
+
+
+def anchor_inequality_constraint(constraint_clique_dict: dict, point_pair: frozenset, distance: float, anchors: dict,
+                                 upper_bound: bool):
+    lower = not upper_bound
+    for clique in constraint_clique_dict:
+        A, _, index_mapping, is_augmented = constraint_clique_dict[clique]
+        if is_augmented and point_pair.issubset(clique):
+            u = list(point_pair)[0]
+            v = list(point_pair)[1]
+            assert u not in anchors or v not in anchors, f"ERROR: no need to constrain two anchored points ({u}, {v})!"
+            if u in anchors:
+                assert v not in anchors, f"ERROR: one of {u}, {v} needs to be a variable and not an anchor!"
+                A_ineq = linear_matrix_equality_with_anchor(index_mapping[v], A[0].shape[0], anchors[u]) * (1 - 2*lower)
+                b = (distance ** 2 - np.linalg.norm(anchors[u]) ** 2)*(1 - 2 * lower)
+            elif v in anchors:
+                assert u not in anchors, f"ERROR: one of {u}, {v} needs to be a variable and not an anchor!"
+                A_ineq = linear_matrix_equality_with_anchor(index_mapping[u], A[0].shape[0], anchors[v]) * (1 - 2*lower)
+                b = (distance**2 - np.linalg.norm(anchors[v])**2)*(1 - 2 * lower)
+            return clique, (A_ineq, b)
 
 
 def distance_inequality_constraint(

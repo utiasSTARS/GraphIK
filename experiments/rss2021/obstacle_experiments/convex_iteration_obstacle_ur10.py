@@ -103,14 +103,15 @@ if __name__ == "__main__":
         (np.array([0, -1, 1]), 0.5),
         (np.array([1, 0, 1]), 0.5),
     ]
+    # obstacles = [(np.array([0, 1, 1]), 0.5)]
 
     for idx, obs in enumerate(obstacles):
         graph.add_spherical_obstacle(f"o{idx}", obs[0], obs[1])
 
     sol_data = []
     viol_data = []
-    num_tests = 10  # 4000
-    bar = Bar("", max=num_tests, check_tty=False, hide_cursor=False)
+    num_tests = 100  # 4000
+    bar = Bar("UR10 Convex Iteration with Obstacles", max=num_tests, check_tty=False, hide_cursor=False)
     for idx in range(num_tests):
         sol, viol = solve_random_problem(graph, sparse=sparse, closed_form=closed_form)
         sol_data += [sol]
