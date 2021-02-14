@@ -115,7 +115,7 @@ if __name__ == "__main__":
 
     sol_data = []
     viol_data = []
-    num_tests = 100  # 4000
+    num_tests = 2000  # 4000
     bar = Bar("UR10 Convex Iteration with Obstacles", max=num_tests, check_tty=False, hide_cursor=False)
     for idx in range(num_tests):
         sol, viol = solve_random_problem(graph, sparse=sparse, closed_form=closed_form)

@@ -103,24 +103,26 @@ def plot_sdp_fig(data, output_folder):
     fig = plt.figure()
     ax = fig.gca(projection='3d')
     # ax.scatter(psd_set_x, psd_set_y, psd_set_z, c='g', marker='.', s=10)
-    decimate_factor = 1
-    ax.scatter(rank2_points[::decimate_factor,0], \
+    decimate_factor = 2
+    bound_obj = ax.scatter(rank2_points[::decimate_factor,0], \
         rank2_points[::decimate_factor,1], \
-        rank2_points[::decimate_factor,2], c='g', marker='.', s=2, label='Feasible Boundary')
+        rank2_points[::decimate_factor,2], c='g', marker='.', s=2)
     #plt.xlabel('$xy$')
     #plt.ylabel('$y$')
     ax.set_xlabel('$xy$')
     ax.set_ylabel('$y$')
-    
-    
-    rank2_above_mask = rank2_points[:,2] > rank2_points[:,1]
-    
-    #Points of a Plane
-    #(0,0,0), (0,1,1), (0.5,0.5,0.5)
-    xx, yy = np.meshgrid(np.linspace(0,1,5), np.linspace(0,1,5))
-    z = yy
-    ax.plot_surface(xx, yy, z, alpha=0.15)
+    ax.set_zlabel('$y^2$')
 
+
+    
+    #y > 0.5 obstacle constraint
+    xx, zz = np.meshgrid(np.linspace(0,1,5), np.linspace(0,1,5))
+    y = 0.5
+    ax.plot_surface(xx, y, zz, alpha=0.25)
+
+
+    #Plot spectrahedron as two 'shells', below and above the z = y plane
+    rank2_above_mask = rank2_points[:,2] > rank2_points[:,1]
     ax.plot_trisurf(rank2_points[rank2_above_mask,0], \
         rank2_points[rank2_above_mask,1], \
         rank2_points[rank2_above_mask,2], cmap='summer', alpha=0.5, antialiased=True)
@@ -129,11 +131,14 @@ def plot_sdp_fig(data, output_folder):
         rank2_points[~rank2_above_mask,1], \
         rank2_points[~rank2_above_mask,2], cmap='summer', alpha=0.5, antialiased=True)
 
-    ax.scatter(rank1_points[:,0], rank1_points[:,1], rank1_points[:,2], c='r', marker='o', s=20, label='Rank 1 Solutions')
-    ax.legend(loc=(0.5, 0.7))
+    rank1_obj = ax.scatter(rank1_points[:,0], rank1_points[:,1], rank1_points[:,2], c='r', marker='o', s=20)
+
+    plane_obj = matplotlib.lines.Line2D([0],[0], linestyle="none", c='b', marker = 's', alpha=0.25)
+    spec_obj = matplotlib.lines.Line2D([0],[0], linestyle="none", c='g', marker = 's', alpha=0.25)
+    ax.legend([rank1_obj, bound_obj, spec_obj], ['Rank 1 (Extreme Points)', 'Rank 2 (Boundary)', 'Rank 3 (Interior)'], loc=(0.4, 0.7))
     ax.view_init(elev=15., azim=210.)
     plt.grid()
-    plt.show()
+    #plt.show()
     output_file = output_folder + '/spectrahedron.pdf'
     print('Saving figure to ... {}'.format(output_file))
     fig.savefig(output_file, bbox_inches='tight')
