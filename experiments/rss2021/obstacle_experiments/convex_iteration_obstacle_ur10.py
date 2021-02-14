@@ -116,7 +116,12 @@ if __name__ == "__main__":
     sol_data = []
     viol_data = []
     num_tests = 2000  # 4000
-    bar = Bar("UR10 Convex Iteration with Obstacles", max=num_tests, check_tty=False, hide_cursor=False)
+    bar = Bar(
+        "UR10 Convex Iteration with Obstacles",
+        max=num_tests,
+        check_tty=False,
+        hide_cursor=False,
+    )
     for idx in range(num_tests):
         sol, viol = solve_random_problem(graph, sparse=sparse, closed_form=closed_form)
         sol_data += [sol]
@@ -124,7 +129,15 @@ if __name__ == "__main__":
         bar.next()
     bar.finish()
     prob_cols = ["Goal Pose", "Prob. Graph"]
-    sol_cols = ["Sol. Graph", "Sol. Config", "Sol. Time", "Pos. Error", "Rot. Error"]
+    sol_cols = [
+        "Sol. Graph",
+        "Sol. Config",
+        "Sol. Time",
+        "Pos. Error",
+        "Rot. Error",
+        "Primal Time",
+        "Fantope Time",
+    ]
     data = {
         "Problem": pd.DataFrame(sol_data, columns=prob_cols),
         "Solution": pd.DataFrame(sol_data, columns=sol_cols),
