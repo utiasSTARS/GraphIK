@@ -166,7 +166,11 @@ def constraint_for_variable_pair(
     n: int,
     ee_cost: bool,
 ):
-    if (u, v) in graph.edges and frozenset((u, v)) not in index_mapping and DIST in graph[u][v].keys():
+    if (
+        (u, v) in graph.edges
+        and frozenset((u, v)) not in index_mapping
+        and DIST in graph[u][v].keys()
+    ):
         if not ee_cost:
             if (
                 u in ees_clique and v in ees_clique
@@ -176,16 +180,12 @@ def constraint_for_variable_pair(
                 A_uv = linear_matrix_equality_with_anchor(
                     index_mapping[v], n, ee_assignments[u]
                 )
-                b_uv = graph[u][v][DIST] ** 2 - ee_assignments[u].dot(
-                    ee_assignments[u]
-                )
+                b_uv = graph[u][v][DIST] ** 2 - ee_assignments[u].dot(ee_assignments[u])
             elif v in ees_clique:
                 A_uv = linear_matrix_equality_with_anchor(
                     index_mapping[u], n, ee_assignments[v]
                 )
-                b_uv = graph[u][v][DIST] ** 2 - ee_assignments[v].dot(
-                    ee_assignments[v]
-                )
+                b_uv = graph[u][v][DIST] ** 2 - ee_assignments[v].dot(ee_assignments[v])
             else:
                 A_uv = linear_matrix_equality(index_mapping[u], index_mapping[v], n)
                 b_uv = graph[u][v][DIST] ** 2
@@ -267,7 +267,11 @@ def distance_clique_linear_map(
 
 
 def distance_constraints_graph(
-    G: nx.Graph, anchors: dict = {}, sparse: bool = False, ee_cost=None, angle_limits=False
+    G: nx.Graph,
+    anchors: dict = {},
+    sparse: bool = False,
+    ee_cost=None,
+    angle_limits=False,
 ) -> dict:
 
     G = G.copy()
@@ -276,7 +280,9 @@ def distance_constraints_graph(
         typ = nx.get_edge_attributes(G, name=BOUNDED)
         edges = []
         for u, v, data in G.edges(data=True):
-            if (not data.get(DIST, False) and ("below" not in data[BOUNDED] and "above" not in data[BOUNDED])):
+            if (DIST not in list(data.keys())) and (
+                "below" not in data[BOUNDED] and "above" not in data[BOUNDED]
+            ):
                 edges += [(u, v)]
 
     else:
@@ -353,9 +359,13 @@ def distance_range_constraints(
     dists = []
     upper = []
     for u, v, data in G.edges(data=True):
-        if u not in anchors.keys() or v not in anchors.keys():  # If BOTH are anchors we can ignore
+        if (
+            u not in anchors.keys() or v not in anchors.keys()
+        ):  # If BOTH are anchors we can ignore
             if data.get(BOUNDED, False):
-                if "below" in data[BOUNDED]:  # TODO: All the bounds are only listed as below, ask Filip!
+                if (
+                    "below" in data[BOUNDED]
+                ):  # TODO: All the bounds are only listed as below, ask Filip!
                     pairs += [frozenset((u, v))]
                     dists += [data[LOWER]]
                     upper += [False]
@@ -369,9 +379,13 @@ def distance_range_constraints(
         dist = dists[idx]
         upper_idx = upper[idx]  # it's either upper or lower
 
-        if 'o' in list(pair)[0] or 'o' in list(pair)[1]:  # TODO: testing only obstacles, for now
+        if (
+            "o" in list(pair)[0] or "o" in list(pair)[1]
+        ):  # TODO: testing only obstacles, for now
             if list(pair)[0] in anchors or list(pair)[1] in anchors:
-                clique, (A, b) = anchor_inequality_constraint(constraint_clique_dict, pair, dist, anchors, upper_idx)
+                clique, (A, b) = anchor_inequality_constraint(
+                    constraint_clique_dict, pair, dist, anchors, upper_idx
+                )
             else:
                 clique, (A, b) = distance_inequality_constraint(
                     constraint_clique_dict, pair, dist, upper_idx
@@ -515,7 +529,9 @@ def constraints_and_linear_cost_to_sdp_vars(
         for idx, jdx in remaining_pairs:
             idx_is_var = idx < (n - d)
             jdx_is_var = jdx < (n - d)
-            if (not idx_is_var or canonical_point_order[idx] in mapping) and (not jdx_is_var or canonical_point_order[jdx] in mapping):
+            if (not idx_is_var or canonical_point_order[idx] in mapping) and (
+                not jdx_is_var or canonical_point_order[jdx] in mapping
+            ):
                 u = mapping[canonical_point_order[idx]] if idx < (n - d) else None
                 v = mapping[canonical_point_order[jdx]] if jdx < (n - d) else None
 
@@ -566,23 +582,38 @@ def constraints_and_sparse_linear_cost_to_sdp_vars(
     return sdp_variable_map, sdp_constraints_map, C
 
 
-def anchor_inequality_constraint(constraint_clique_dict: dict, point_pair: frozenset, distance: float, anchors: dict,
-                                 upper_bound: bool):
+def anchor_inequality_constraint(
+    constraint_clique_dict: dict,
+    point_pair: frozenset,
+    distance: float,
+    anchors: dict,
+    upper_bound: bool,
+):
     lower = not upper_bound
     for clique in constraint_clique_dict:
         A, _, index_mapping, is_augmented = constraint_clique_dict[clique]
         if is_augmented and point_pair.issubset(clique):
             u = list(point_pair)[0]
             v = list(point_pair)[1]
-            assert u not in anchors or v not in anchors, f"ERROR: no need to constrain two anchored points ({u}, {v})!"
+            assert (
+                u not in anchors or v not in anchors
+            ), f"ERROR: no need to constrain two anchored points ({u}, {v})!"
             if u in anchors:
-                assert v not in anchors, f"ERROR: one of {u}, {v} needs to be a variable and not an anchor!"
-                A_ineq = linear_matrix_equality_with_anchor(index_mapping[v], A[0].shape[0], anchors[u]) * (1 - 2*lower)
-                b = (distance ** 2 - np.linalg.norm(anchors[u]) ** 2)*(1 - 2 * lower)
+                assert (
+                    v not in anchors
+                ), f"ERROR: one of {u}, {v} needs to be a variable and not an anchor!"
+                A_ineq = linear_matrix_equality_with_anchor(
+                    index_mapping[v], A[0].shape[0], anchors[u]
+                ) * (1 - 2 * lower)
+                b = (distance ** 2 - np.linalg.norm(anchors[u]) ** 2) * (1 - 2 * lower)
             elif v in anchors:
-                assert u not in anchors, f"ERROR: one of {u}, {v} needs to be a variable and not an anchor!"
-                A_ineq = linear_matrix_equality_with_anchor(index_mapping[u], A[0].shape[0], anchors[v]) * (1 - 2*lower)
-                b = (distance**2 - np.linalg.norm(anchors[v])**2)*(1 - 2 * lower)
+                assert (
+                    u not in anchors
+                ), f"ERROR: one of {u}, {v} needs to be a variable and not an anchor!"
+                A_ineq = linear_matrix_equality_with_anchor(
+                    index_mapping[u], A[0].shape[0], anchors[v]
+                ) * (1 - 2 * lower)
+                b = (distance ** 2 - np.linalg.norm(anchors[v]) ** 2) * (1 - 2 * lower)
             return clique, (A_ineq, b)
 
 
@@ -626,7 +657,9 @@ def cvxpy_inequality_constraints(sdp_variable_map: dict, inequality_map: dict):
     return constraints
 
 
-def chordal_sparsity_overlap_constraints(constraint_clique_dict: dict, sdp_variable_map: dict, d: int):
+def chordal_sparsity_overlap_constraints(
+    constraint_clique_dict: dict, sdp_variable_map: dict, d: int
+):
     # Link up the repeated values via equality constraints
     constraints = []
     seen_vars = {}
@@ -654,7 +687,7 @@ def chordal_sparsity_overlap_constraints(constraint_clique_dict: dict, sdp_varia
             Z_target = sdp_variable_map[target_clique]
             for idx, var1 in enumerate(overlapping_vars):
                 for jdx, var2 in enumerate(
-                        overlapping_vars[idx:]
+                    overlapping_vars[idx:]
                 ):  # Don't double count
                     if idx == jdx:
                         constraints += [
@@ -693,7 +726,9 @@ def form_sdp_problem(
     constraints = [
         cons for cons_clique in sdp_constraints_map.values() for cons in cons_clique
     ]
-    constraints += chordal_sparsity_overlap_constraints(constraint_clique_dict, sdp_variable_map, d)
+    constraints += chordal_sparsity_overlap_constraints(
+        constraint_clique_dict, sdp_variable_map, d
+    )
 
     # Convert cost matrices to cvxpy cost function
     cost = lme_to_cvxpy_cost(sdp_cost_map, sdp_variable_map)
@@ -829,8 +864,13 @@ def solve_linear_cost_sdp(
         ]
 
     if type(C) == dict:
-        sdp_variable_map, sdp_constraints_map, sdp_cost_map = \
-            constraints_and_sparse_linear_cost_to_sdp_vars(constraint_clique_dict, C, canonical_point_order, robot.dim)
+        (
+            sdp_variable_map,
+            sdp_constraints_map,
+            sdp_cost_map,
+        ) = constraints_and_sparse_linear_cost_to_sdp_vars(
+            constraint_clique_dict, C, canonical_point_order, robot.dim
+        )
     else:
         (
             sdp_variable_map,

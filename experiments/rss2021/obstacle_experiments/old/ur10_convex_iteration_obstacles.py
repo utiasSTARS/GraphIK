@@ -19,6 +19,31 @@ from graphik.solvers.sdp_snl import (
 )
 from graphik.solvers.constraints import get_full_revolute_nearest_point
 from graphik.utils.roboturdf import load_ur10
+from matplotlib import rc
+
+
+def check_collision(graph: RobotRevoluteGraph, sol: nx.DiGraph):
+    typ = nx.get_node_attributes(graph.directed, name=TYPE)
+    obs = []
+    for node in graph.directed:
+        if typ[node] == "obstacle":
+            center = graph.directed.nodes[node][POS]
+            radius = graph.directed["p1"][node][LOWER]
+
+            for pnt in sol:
+                if typ[pnt] == "robot" and pnt[0] == "p":
+                    pos = sol.nodes[pnt][POS]
+                    if (pos - center) @ np.identity(len(center)) @ (
+                        pos - center
+                    ).T <= radius ** 2:
+                        obs += [
+                            pnt,
+                            node,
+                            (pos - center)
+                            @ np.identity(len(center))
+                            @ (pos - center).T,
+                        ]
+    return obs
 
 
 def plot_robot(G: nx.DiGraph, pos: dict):
@@ -44,20 +69,36 @@ def plot_robot(G: nx.DiGraph, pos: dict):
             y = np.array((pos_u[1], pos_v[1]))
             z = np.array((pos_u[2], pos_v[2]))
 
-            ax.plot(x, y, z, c="black", alpha=0.5)
+            ax.plot(x, y, z, c="black", alpha=0.5, linewidth=2.0)
 
     for node in G:
         if typ[node] == "obstacle":
             center, radius = G.nodes[node][POS], G["p1"][node][LOWER]
-            u, v = np.mgrid[0 : 2 * np.pi : 20j, 0 : np.pi : 10j]
-            x = radius * np.cos(u) * np.sin(v) + center[0]
-            y = radius * np.sin(u) * np.sin(v) + center[1]
-            z = radius * np.cos(v) + center[2]
-            ax.plot_wireframe(x, y, z, color="r")
+            # u, v = np.mgrid[0 : 2 * np.pi : 20j, 0 : np.pi : 10j]
+            # x = radius * np.cos(u) * np.sin(v) + center[0]
+            # y = radius * np.sin(u) * np.sin(v) + center[1]
+            # z = radius * np.cos(v) + center[2]
+            # ax.plot_wireframe(x, y, z, color="r")
 
-    ax.set_xlim((-3, 3))
-    ax.set_ylim((-3, 3))
-    ax.set_zlim((-3, 3))
+            # BETTER-LOOKING, COMPUTATIONALLY HEAVY
+            u = np.linspace(0, 2 * np.pi, 20)
+            v = np.linspace(0, np.pi, 20)
+            x = radius * np.outer(np.cos(u), np.sin(v)) + center[0]
+            y = radius * np.outer(np.sin(u), np.sin(v)) + center[1]
+            z = radius * np.outer(np.ones(np.size(u)), np.cos(v)) + center[2]
+            ax.plot_surface(x, y, z, linewidth=0.0, color="c", alpha=0.5)
+
+    ax.set_xlim((-2, 2))
+    ax.set_ylim((-2, 2))
+    ax.set_zlim((-2, 2))
+
+    ax.set_xlabel("$x$ [m]", labelpad=10)
+    ax.set_ylabel("$y$ [m]", labelpad=10)
+    ax.set_zlabel("$z$ [m]", labelpad=10)
+    ax.set_xticks(ticks=[-2, -1, 0, 1, 2])
+    ax.set_yticks(ticks=[-2, -1, 0, 1, 2])
+    ax.set_zticks(ticks=[-2, -1, 0, 1, 2])
+    # ax.set_title("Obstacle Experiment")
 
 
 def solve_random_problem(graph: RobotRevoluteGraph):
@@ -72,7 +113,7 @@ def solve_random_problem(graph: RobotRevoluteGraph):
         G_goal = graph.realization(q_goal)
         T_goal = robot.get_pose(q_goal, f"p{n}")
         broken_limits = graph.check_distance_limits(G_goal)
-        if len(broken_limits) > 0:
+        if len(broken_limits) == 0:
             feasible = True
 
     input_vals = get_full_revolute_nearest_point(graph, q_goal, list(robot.structure))
@@ -110,7 +151,7 @@ def solve_random_problem(graph: RobotRevoluteGraph):
     err_riemannian_rot = abs(safe_arccos(z_riemannian.dot(z_goal)))
 
     # check for all broken distance limits
-    broken_limits = graph.check_distance_limits(G_sol)
+    broken_limits = graph.check_distance_limits(graph.realization(q_sol))
 
     # col = False
     # if len(broken_limits["obstacle"]) > 0:
@@ -119,15 +160,15 @@ def solve_random_problem(graph: RobotRevoluteGraph):
     # lmts = False
     # if len(broken_limits["joint"]) > 0:
     #     lmts = True
-
     not_reach = False
     if err_riemannian_pos > 0.01 or err_riemannian_rot > 0.01:
         not_reach = True
+    # print(check_collision(graph, graph.realization(q_sol)))
+    # print(broken_limits)
 
     fail = False
     if len(broken_limits) > 0:
         fail = True
-        print(broken_limits)
     # if lmts or col or not_reach:
     #     print(
     #         col * "collision"
@@ -145,20 +186,22 @@ def solve_random_problem(graph: RobotRevoluteGraph):
 
 
 if __name__ == "__main__":
+    rc("font", **{"family": "serif", "serif": ["Computer Modern"], "size": 20})
+    rc("text", usetex=True)
     ub = np.minimum(np.random.rand(6) * (pi / 2) + pi / 2, pi)
     lb = -ub
     limits = (lb, ub)
 
     robot, graph = load_ur10(limits)
     obstacles = [
-        (np.array([0, 1, 1]), 0.5),
-        (np.array([0, 1, -1]), 0.5),
-        (np.array([0, -1, 1]), 0.5),
-        (np.array([0, -1, -1]), 0.5),
-        (np.array([1, 0, 1]), 0.5),
-        (np.array([1, 0, -1]), 0.5),
-        (np.array([-1, 0, 1]), 0.5),
-        (np.array([-1, 0, -1]), 0.5),
+        (np.array([0, 1, 0.75]), 0.5),
+        (np.array([0, 1, -0.75]), 0.5),
+        (np.array([0, -1, 0.75]), 0.5),
+        (np.array([0, -1, -0.75]), 0.5),
+        (np.array([1, 0, 0.75]), 0.5),
+        (np.array([1, 0, -0.75]), 0.5),
+        (np.array([-1, 0, 0.75]), 0.5),
+        (np.array([-1, 0, -0.75]), 0.5),
     ]
     for idx, obs in enumerate(obstacles):
         graph.add_spherical_obstacle(f"o{idx}", obs[0], obs[1])
@@ -172,13 +215,13 @@ if __name__ == "__main__":
     for _ in range(num_tests):
         e_r_pos, e_r_rot, t_sol, fail, G_sol = solve_random_problem(graph)
         plot_robot(graph.directed, nx.get_node_attributes(G_sol, POS))
-        plt.pause(0.5)
+        plt.pause(100)
 
         e_pos += [e_r_pos]
         e_rot += [e_r_rot]
         t += [t_sol]
         fails += [fail]
-
+    plt.show()
     t = np.array(t)
     t = t[abs(t - np.mean(t)) < 2 * np.std(t)]
 

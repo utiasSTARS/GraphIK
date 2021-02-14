@@ -42,8 +42,10 @@ def solve_random_problem(graph: RobotRevoluteGraph, sparse=False, closed_form=Tr
         excess_eigvalue_sum,
         _,
         primal_runtime,
-        fantope_runtime
-    ) = convex_iterate_sdp_snl_graph(graph, anchors, ranges=True, sparse=sparse, closed_form=closed_form)
+        fantope_runtime,
+    ) = convex_iterate_sdp_snl_graph(
+        graph, anchors, ranges=True, sparse=sparse, closed_form=closed_form
+    )
     t_sol = time.perf_counter() - t_sol
 
     solution = extract_solution(constraint_clique_dict, sdp_variable_map, robot.dim)
@@ -63,11 +65,11 @@ def solve_random_problem(graph: RobotRevoluteGraph, sparse=False, closed_form=Tr
     err_rot = abs(safe_arccos(z_riemannian.dot(z_goal)))
 
     # check for all broken distance limits
-    broken_limits = graph.check_distance_limits(G_sol)
+    broken_limits = graph.check_distance_limits(graph.realization(q_sol))
 
     print(
-        f"Pos. error: {err_pos}\nRot. error: {err_rot}\nViolations: {broken_limits}\nTotal time: {t_sol}" +
-        f"\nSolvers Time: {primal_runtime+fantope_runtime}\nExcess Eig. Sum: {excess_eigvalue_sum[-1]}"
+        f"\nPos. error: {err_pos}\nRot. error: {err_rot}\nViolations: {broken_limits}\nTotal time: {t_sol}"
+        + f"\nSolvers Time: {primal_runtime+fantope_runtime}\nExcess Eig. Sum: {excess_eigvalue_sum[-1]}",
     )
     print("------------------------------------")
 
@@ -81,9 +83,8 @@ def solve_random_problem(graph: RobotRevoluteGraph, sparse=False, closed_form=Tr
         "Fantope Time": fantope_runtime,
         "Pos. Error": err_pos,
         "Rot. Error": err_rot,
-        "Excess Eig. Sum": excess_eigvalue_sum
+        "Excess Eig. Sum": excess_eigvalue_sum,
     }
-
     return sol_data, broken_limits
 
 
@@ -98,10 +99,14 @@ if __name__ == "__main__":
 
     robot, graph = load_ur10(limits=None)
     obstacles = [
-        (np.array([0, 1, 1]), 0.5),
-        (np.array([0, 1, -1]), 0.5),
-        (np.array([0, -1, 1]), 0.5),
-        (np.array([1, 0, 1]), 0.5),
+        (np.array([0, 1, 0.75]), 0.75),
+        (np.array([0, 1, -0.75]), 0.75),
+        (np.array([0, -1, 0.75]), 0.75),
+        (np.array([0, -1, -0.75]), 0.75),
+        (np.array([1, 0, 0.75]), 0.75),
+        (np.array([1, 0, -0.75]), 0.75),
+        (np.array([-1, 0, 0.75]), 0.75),
+        (np.array([-1, 0, -0.75]), 0.75),
     ]
     # obstacles = [(np.array([0, 1, 1]), 0.5)]
 

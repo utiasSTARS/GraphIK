@@ -492,6 +492,51 @@ def normalize(x):
     return x / np.linalg.norm(x)
 
 
+def load_schunk_lwa4p(limits=None):
+    fname = graphik.__path__[0] + "/robots/urdfs/lwa4p.urdf"
+    urdf_robot = RobotURDF(fname)
+    n = 6
+    if limits is None:
+        ub = np.ones(n) * np.pi
+        lb = -ub
+    else:
+        lb = limits[0]
+        ub = limits[1]
+    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
+    graph = RobotRevoluteGraph(robot)
+    return robot, graph
+
+
+def load_schunk_lwa4d(limits=None):
+    fname = graphik.__path__[0] + "/robots/urdfs/lwa4d.urdf"
+    urdf_robot = RobotURDF(fname)
+    n = 7
+    if limits is None:
+        ub = np.ones(n) * np.pi
+        lb = -ub
+    else:
+        lb = limits[0]
+        ub = limits[1]
+    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
+    graph = RobotRevoluteGraph(robot)
+    return robot, graph
+
+
+def load_kuka(limits=None):
+    fname = graphik.__path__[0] + "/robots/urdfs/kuka_iiwr.urdf"
+    urdf_robot = RobotURDF(fname)
+    n = 7
+    if limits is None:
+        ub = np.ones(n) * np.pi
+        lb = -ub
+    else:
+        lb = limits[0]
+        ub = limits[1]
+    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
+    graph = RobotRevoluteGraph(robot)
+    return robot, graph
+
+
 def load_ur10(limits=None):
     fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
     urdf_robot = RobotURDF(fname)
