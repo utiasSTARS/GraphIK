@@ -118,10 +118,11 @@ class RiemannianSolver:
             )
         elif params["solver"] == "ConjugateGradient":
             self.solver = ConjugateGradient(
-                maxiter=params["maxiter"],
-                minstepsize=1e-6,
+                # maxiter=params["maxiter"],
+                maxiter=10e4,
+                minstepsize=1e-10,
                 mingradnorm=params["mingradnorm"],
-                beta_type=BetaTypes[2],
+                beta_type=BetaTypes[3],
                 orth_value=4,  # 4
                 logverbosity=params["logverbosity"]
                 # linesearch=LineSearchBackTracking(suff_decr=0.001, initial_stepsize=0.001),
@@ -426,7 +427,7 @@ class RiemannianSolver:
 
         # Define problem
         problem = pymanopt.Problem(
-            manifold, cost=cost, egrad=egrad, ehess=ehess, verbosity=0
+            manifold, cost=cost, egrad=egrad, ehess=ehess, verbosity=1
         )
 
         # Solve problem

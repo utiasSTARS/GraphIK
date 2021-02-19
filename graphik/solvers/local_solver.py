@@ -284,8 +284,8 @@ class LocalSolver(GraphProblemSolver):
 
             def grad_function(angles):
                 angles_dict = list_to_variable_dict(angles)
-                J = robot.jacobian_linear_symb(angles_dict)
-                J_z = robot.jacobian_linear_symb(angles_dict, pose_term=True)
+                J = robot.jacobian(angles_dict)
+                J_z = robot.jacobian(angles_dict, pose_term=True)
                 grad = np.zeros(len(angles_dict))
                 for ee in end_effector_assignment:
                     T_goal = end_effector_assignment[ee]
@@ -303,7 +303,7 @@ class LocalSolver(GraphProblemSolver):
 
             def grad_function(angles):
                 angles_dict = list_to_variable_dict(angles)
-                J = robot.jacobian_linear_symb(
+                J = robot.jacobian(
                     angles_dict, ee_keys=list(end_effector_assignment.keys())
                 )
                 grad = np.zeros(len(angles_dict))
@@ -320,8 +320,8 @@ class LocalSolver(GraphProblemSolver):
 
             def hess_function(angles):
                 angles_dict = list_to_variable_dict(angles)
-                J = robot.jacobian_linear_symb(angles_dict)
-                J_z = robot.jacobian_linear_symb(angles_dict, pose_term=True)
+                J = robot.jacobian(angles_dict)
+                J_z = robot.jacobian(angles_dict, pose_term=True)
                 K = robot.hessian_linear_symb(angles_dict, J)
                 K_z = robot.hessian_linear_symb(angles_dict, J_z, pose_term=True)
                 r = {}
@@ -344,7 +344,7 @@ class LocalSolver(GraphProblemSolver):
 
             def hess_function(angles):
                 angles_dict = list_to_variable_dict(angles)
-                J = robot.jacobian_linear_symb(
+                J = robot.jacobian(
                     angles_dict, ee_keys=list(end_effector_assignment.keys())
                 )
                 K = robot.hessian_linear_symb(

@@ -2,7 +2,7 @@
 import graphik
 import numpy as np
 from graphik.robots.robot_base import RobotRevolute
-from graphik.graphs.graph_base import RobotGraph, RobotRevoluteGraph
+from graphik.graphs.graph_base import RobotRevoluteGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.dgp import (
     adjacency_matrix_from_graph,
@@ -17,7 +17,7 @@ from numpy import pi
 from numpy.linalg import norm
 
 
-def solve_random_problem(graph: RobotGraph, solver: RiemannianSolver):
+def solve_random_problem(graph: RobotRevoluteGraph, solver: RiemannianSolver):
     n = graph.robot.n
     axis_len = graph.robot.axis_length
     q_goal = graph.robot.random_configuration()

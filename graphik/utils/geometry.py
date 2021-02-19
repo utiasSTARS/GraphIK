@@ -3,6 +3,7 @@ import sympy as sp
 from scipy.optimize import fsolve
 
 from liegroups.numpy import SO2, SE2, SO3, SE3
+from numpy import sin, cos
 
 
 def sph_to_se3(alpha: float, d: float, theta: float) -> SE3:
@@ -199,13 +200,9 @@ def rotx(angle_in_radians):
             0 & \\sin \\phi & \\cos \\phi
         \\end{bmatrix}
     """
-    c = sp.cos(angle_in_radians)
-    s = sp.sin(angle_in_radians)
-
-    if type(angle_in_radians) == sp.Symbol:
-        return np.array([[1.0, 0.0, 0.0], [0.0, c, -s], [0.0, s, c]])
-    else:
-        return np.array([[1.0, 0.0, 0.0], [0.0, c, -s], [0.0, s, c]], dtype="float64")
+    c = cos(angle_in_radians)
+    s = sin(angle_in_radians)
+    return np.array([[1.0, 0.0, 0.0], [0.0, c, -s], [0.0, s, c]], dtype="float64")
 
 
 def roty(angle_in_radians):
@@ -219,13 +216,9 @@ def roty(angle_in_radians):
             \\sin \\phi & 0 & \\cos \\phi
         \\end{bmatrix}
     """
-    c = sp.cos(angle_in_radians)
-    s = sp.sin(angle_in_radians)
-
-    if type(angle_in_radians) == sp.Symbol:
-        return np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]])
-    else:
-        return np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]], dtype="float64")
+    c = cos(angle_in_radians)
+    s = sin(angle_in_radians)
+    return np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]], dtype="float64")
 
 
 def rotz(angle_in_radians):
@@ -239,13 +232,15 @@ def rotz(angle_in_radians):
             0 & 0 & 1
         \\end{bmatrix}
     """
-    c = sp.cos(angle_in_radians)
-    s = sp.sin(angle_in_radians)
+    # c = sp.cos(angle_in_radians)
+    # s = sp.sin(angle_in_radians)
 
-    if type(angle_in_radians) == sp.Symbol:
-        return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
-    else:
-        return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]], dtype="float64")
+    # if type(angle_in_radians) == sp.Symbol:
+    #     return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+    # else:
+    c = cos(angle_in_radians)
+    s = sin(angle_in_radians)
+    return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]], dtype="float64")
 
 
 def trans_axis(d, axis="z"):

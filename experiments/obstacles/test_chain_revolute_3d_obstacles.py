@@ -19,10 +19,19 @@ from numpy.linalg import norm
 
 
 def solve_random_problem(graph: RobotGraph, solver: RiemannianSolver):
-    q_goal = graph.robot.random_configuration()
-    T_goal = robot.get_pose(q_goal, f"p{n}")
-    goals = robot.end_effector_pos(q_goal)
+    # q_goal = graph.robot.random_configuration()
+    # T_goal = robot.get_pose(q_goal, f"p{n}")
 
+    feasible = False
+    while not feasible:
+        q_goal = robot.random_configuration()
+        G_goal = graph.realization(q_goal)
+        T_goal = robot.get_pose(q_goal, f"p{n}")
+        broken_limits = graph.check_distance_limits(G_goal)
+        if len(broken_limits) == 0:
+            feasible = True
+
+    goals = robot.end_effector_pos(q_goal)
     G = graph.complete_from_pos(goals)
     D_goal = distance_matrix_from_graph(G)
     omega = adjacency_matrix_from_graph(G)
@@ -47,6 +56,8 @@ def solve_random_problem(graph: RobotGraph, solver: RiemannianSolver):
     if err_riemannian_pos > 0.01 or err_riemannian_rot > 0.01:
         fail = True
 
+    broken_limits = graph.check_distance_limits(graph.realization(q_sol))
+    print(broken_limits)
     print(
         f"Pos. error: {err_riemannian_pos}\nRot. error: {err_riemannian_rot}\nCost: {sol_info['f(x)']}\nSolution time: {t_sol}."
     )
@@ -57,12 +68,12 @@ def solve_random_problem(graph: RobotGraph, solver: RiemannianSolver):
 if __name__ == "__main__":
 
     np.random.seed(21)
-    n = 6
+    n = 7
     ub = (pi) * np.ones(n)
     lb = -ub
-    fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
+    # fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/lwa4p.urdf"
-    # fname = graphik.__path__[0] + "/robots/urdfs/lwa4d.urdf"
+    fname = graphik.__path__[0] + "/robots/urdfs/lwa4d.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/panda_arm.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/kuka_iiwr.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/kuka_lwr.urdf"
@@ -73,7 +84,14 @@ if __name__ == "__main__":
     graph = RobotRevoluteGraph(robot)
 
     obstacles = [
-        (np.array([0, 1, 2]), 0.75),
+        (np.array([0, 1, 0.75]), 0.75),
+        (np.array([0, 1, -0.75]), 0.75),
+        (np.array([0, -1, 0.75]), 0.75),
+        (np.array([0, -1, -0.75]), 0.75),
+        (np.array([1, 0, 0.75]), 0.75),
+        (np.array([1, 0, -0.75]), 0.75),
+        (np.array([-1, 0, 0.75]), 0.75),
+        (np.array([-1, 0, -0.75]), 0.75),
     ]
     for idx, obs in enumerate(obstacles):
         graph.add_spherical_obstacle(f"o{idx}", obs[0], obs[1])
