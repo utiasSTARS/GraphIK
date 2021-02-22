@@ -2,17 +2,16 @@ from abc import ABC, abstractmethod
 
 import networkx as nx
 import numpy as np
+import numpy.typing as npt
 import numpy.linalg as la
+from typing import Dict, List, Any
 from graphik.robots.robot_base import Robot, RobotPlanar, RobotRevolute
 from graphik.utils.constants import *
 from graphik.utils.dgp import (
     graph_complete_edges,
-    graph_from_pos,
-    pos_from_graph,
     distance_matrix_from_graph,
 )
 from graphik.utils.geometry import rot_axis, trans_axis
-from graphik.utils.utils import list_to_variable_dict
 from liegroups.numpy import SE3
 from numpy import cos, pi, sqrt
 
@@ -79,14 +78,14 @@ class RobotGraph(ABC):
         return self.directed.number_of_nodes()
 
     @property
-    def node_ids(self) -> list:
+    def node_ids(self) -> List[str]:
         """
         :returns: List of nodes in this graph.
         """
         return list(self.directed.nodes())
 
     @abstractmethod
-    def realization(self, joint_angles: np.ndarray) -> nx.DiGraph:
+    def realization(self, joint_angles: Dict[str, Any]) -> nx.DiGraph:
         """
         Given a set of joint angles, return a graph realization in R^dim.
         :param x: Decision variables (revolute joints, prismatic joints)
@@ -95,14 +94,14 @@ class RobotGraph(ABC):
         """
         raise NotImplementedError
 
-    def distance_matrix(self) -> np.ndarray:
+    def distance_matrix(self) -> npt.ArrayLike:
         """
         Returns a partial distance matrix of known distances in the problem graph.
         :returns: Distance matrix
         """
         return distance_matrix_from_graph(self.directed)
 
-    def distance_matrix_from_joints(self, joint_angles: np.ndarray) -> np.ndarray:
+    def distance_matrix_from_joints(self, joint_angles: npt.ArrayLike) -> npt.ArrayLike:
         """
         Given a set of joint angles, return a matrix whose element
         [idx,jdx] corresponds to the squared distance between nodes idx and jdx.
@@ -111,7 +110,7 @@ class RobotGraph(ABC):
         """
         return distance_matrix_from_graph(self.realization(joint_angles))
 
-    def adjacency_matrix(self) -> np.ndarray:
+    def adjacency_matrix(self) -> npt.ArrayLike:
         """
         Returns the adjacency matrix representing the edges that are known,
         given the kinematic and base structure, as well as the end-effector targets.
@@ -123,7 +122,7 @@ class RobotGraph(ABC):
             nx.to_undirected(G.edge_subgraph(selected_edges)), weight=""
         )
 
-    def complete_from_pos(self, P: dict, dist=True) -> nx.DiGraph:
+    def complete_from_pos(self, P: dict, dist: bool = True) -> nx.DiGraph:
         """
         Given a dictionary of node name and position key-value pairs,
         generate a copy of the problem graph and fill the POS attributes of
@@ -145,7 +144,7 @@ class RobotGraph(ABC):
 
         return G
 
-    def add_anchor_node(self, name: str, data: dict):
+    def add_anchor_node(self, name: str, data: Dict[str, Any]):
         if POS not in data:
             raise KeyError("Node needs to gave a position to be added.")
 
@@ -158,7 +157,7 @@ class RobotGraph(ABC):
                 self.directed[nname][name][UPPER] = la.norm(ndata[POS] - data[POS])
                 self.directed[nname][name][BOUNDED] = []
 
-    def add_spherical_obstacle(self, name: str, position: np.ndarray, radius: float):
+    def add_spherical_obstacle(self, name: str, position: npt.ArrayLike, radius: float):
         # Add a fixed node representing the obstacle to the graph
         self.add_anchor_node(name, {POS: position, TYPE: "obstacle"})
 
@@ -170,7 +169,7 @@ class RobotGraph(ABC):
                 self.directed[node][name][LOWER] = radius
                 self.directed[node][name][UPPER] = 100
 
-    def check_distance_limits(self, G: nx.DiGraph) -> dict:
+    def check_distance_limits(self, G: nx.DiGraph) -> List[Dict[str, List[Any]]]:
         """Given a graph of the same """
         typ = nx.get_node_attributes(self.directed, name=TYPE)
         # broken_limits = {"edge": [], "value": [], "type": [], "side": []}
@@ -214,7 +213,7 @@ class RobotGraph(ABC):
 
         return broken_limits
 
-    def distance_bound_matrices(self):
+    def distance_bound_matrices(self) -> npt.ArrayLike:
         """
         Generates a matrices of distance bounds induced by joint variables.
         """

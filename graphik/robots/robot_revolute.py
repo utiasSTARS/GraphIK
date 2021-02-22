@@ -1,4 +1,5 @@
 from typing import Any, Dict
+from numpy.typing import ArrayLike
 
 import networkx as nx
 import numpy as np
@@ -72,11 +73,11 @@ class RobotRevolute(Robot):
                 for node in kinematic_map["p0"][ee[0]][1:]:
                     path_nodes = kinematic_map["p0"][node][1:]
 
-                    q = np.array([0 for node in path_nodes])
-                    a = np.array([self.a[node] for node in path_nodes])
-                    alpha = np.array([self.al[node] for node in path_nodes])
-                    th = np.array([self.th[node] for node in path_nodes])
-                    d = np.array([self.d[node] for node in path_nodes])
+                    q = np.asarray([0 for node in path_nodes])
+                    a = np.asarray([self.a[node] for node in path_nodes])
+                    alpha = np.asarray([self.al[node] for node in path_nodes])
+                    th = np.asarray([self.th[node] for node in path_nodes])
+                    d = np.asarray([self.d[node] for node in path_nodes])
 
                     if not self.modified_dh:
                         T[node] = fk_3d(a, alpha, d, q + th)
@@ -316,7 +317,7 @@ class RobotRevolute(Robot):
                 c5 = 2 * (ap.dot(bp) + aq.dot(bq))
 
                 # poly = [c0 -c2 +c4, 2*c1 - 2*c5, 2*c0 + 4*c3 -2*c4, 2*c1 + 2*c5, c0 + c2 + c4]
-                diff = np.array(
+                diff = np.asarray(
                     [
                         c1 - c5,
                         2 * c2 + 4 * c3 - 4 * c4,
@@ -355,7 +356,7 @@ class RobotRevolute(Robot):
 
             if (
                 T_final[ee[0]] is not None
-                and norm(cross(T_rel.trans, np.array([0, 0, 1]))) < tol
+                and norm(cross(T_rel.trans, np.asarray([0, 0, 1]))) < tol
             ):
                 T_th = (T[cur]).inv().dot(T_final[ee[0]]).as_matrix()
                 theta[ee[0]] += np.arctan2(T_th[1, 0], T_th[0, 0])
@@ -397,7 +398,7 @@ class RobotRevolute(Robot):
 
     def jacobian(
         self, joint_angles: Dict[str, float], nodes: list = None
-    ) -> Dict[Any, Any]:
+    ) -> Dict[str, ArrayLike]:
         """
         Calculate the robot's linear velocity Jacobian for all end-effectors.
         """

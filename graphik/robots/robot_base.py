@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# from abc import ABC, abstractmethod
-
-from typing import Any, Dict, List, Union
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Union, Tuple
+from numpy.typing import ArrayLike
 
 import networkx as nx
 from graphik.utils.constants import *
@@ -9,7 +9,7 @@ from graphik.utils.utils import flatten, list_to_variable_dict
 from liegroups.numpy._base import SEMatrixBase
 
 
-class Robot:
+class Robot(ABC):
     """
     Describes the kinematic parameters for a robot whose joints and links form a tree (no loops like in parallel
     mechanisms).
@@ -18,9 +18,11 @@ class Robot:
     def __init__(self):
         self.lambdified = False
 
-    # @abstractmethod
-    def get_pose(self, node_inputs: Dict[str, Any], query_node: str) -> SEMatrixBase:
-        """Given a list of N joint variables, calculate the Nth joint's pose.
+    @abstractmethod
+    def get_pose(self, joint_angles: Dict[str, Any], query_node: str) -> SEMatrixBase:
+        """
+        TODO rename to pose, requires extensive refactor
+        Given a list of N joint variables, calculate the Nth joint's pose.
 
         :param node_inputs: joint variables node names as keys mapping to values
         :param query_node: node ID of node whose pose we want
@@ -29,20 +31,17 @@ class Robot:
         """
         raise NotImplementedError
 
-    def get_all_poses(self, joint_angles: Dict[str, float]) -> Dict[str, SEMatrixBase]:
-        T = {ROOT: self.T_base}
-        for ee in self.end_effectors:
-            for node in self.kinematic_map[ROOT][ee[0]][1:]:
-                T[node] = self.get_pose(joint_angles, node)
-        return T
-
-    def jacobian(self, joint_angles: Dict[str, float], nodes: Union[List[str], str]):
+    @abstractmethod
+    def jacobian(
+        self, joint_angles: Dict[str, float], nodes: Union[List[str], str]
+    ) -> Dict[str, ArrayLike]:
         """
+        TODO planar doesn't have an isolated jacobian method
         Calculate the robot's Jacobian for nodes
         """
         raise NotImplementedError
 
-    # @abstractmethod
+    @abstractmethod
     def random_configuration(self) -> Dict[str, float]:
         """
         Returns a random set of joint values within the joint limits
@@ -51,35 +50,16 @@ class Robot:
         raise NotImplementedError
 
     @property
-    # @abstractmethod
+    @abstractmethod
     def end_effectors(self) -> List[Any]:
         """
         :return: all end-effector nodes
         """
         raise NotImplementedError
 
-    def end_effector_pos(self, q: Dict[str, float]) -> Dict[str, SEMatrixBase]:
-        """
-        Gets the positions of all end-effector nodes in a dictionary.
-        """
-        goals = {}
-        for ee in self.end_effectors:
-            for node in ee:
-                goals[node] = self.get_pose(q, node).trans
-        return goals
-
-    @property
-    def joint_ids(self) -> List[str]:
-        try:
-            return self._joint_ids
-        except AttributeError:
-            self._joint_ids = list(self.kinematic_map.keys())
-            return self._joint_ids
-
-    @joint_ids.setter
-    def joint_ids(self, ids: list):
-        self._joint_ids = ids
-
+    ########################################
+    #         ATTRIBUTES
+    ########################################
     @property
     def structure(self) -> nx.DiGraph:
         """
@@ -94,13 +74,26 @@ class Robot:
     @property
     def kinematic_map(self) -> dict:
         """
-        :return: topological graph of the robot's structure
+        :return: topological graph of the robot's structure, but not auxiliary points q
+        Used for forward kinematics on multi end-effector manipulators.
         """
         return self._kinematic_map
 
     @kinematic_map.setter
     def kinematic_map(self, kinematic_map: dict):
         self._kinematic_map = kinematic_map
+
+    @property
+    def joint_ids(self) -> List[str]:
+        try:
+            return self._joint_ids
+        except AttributeError:
+            self._joint_ids = list(self.kinematic_map.keys())
+            return self._joint_ids
+
+    @joint_ids.setter
+    def joint_ids(self, ids: list):
+        self._joint_ids = ids
 
     @property
     def T_base(self) -> SEMatrixBase:
@@ -112,6 +105,29 @@ class Robot:
     @T_base.setter
     def T_base(self, T_base: SEMatrixBase):
         self._T_base = T_base
+
+    @property
+    def limit_edges(self) -> List[List[str]]:
+        """
+        FIXME switch to tuples
+        :return: list of limited edges
+        """
+        return self._limit_edges
+
+    @limit_edges.setter
+    def limit_edges(self, lim: List[List[str]]):
+        self._limit_edges = lim
+
+    @property
+    def limited_joints(self) -> List[str]:
+        """
+        :return: list of limited edges
+        """
+        return self._limited_joints
+
+    @limited_joints.setter
+    def limited_joints(self, lim: List[str]):
+        self._limited_joints = lim
 
     ########################################
     #         KINEMATIC PARAMETERS
@@ -173,6 +189,30 @@ class Robot:
     @property
     def spherical(self) -> bool:
         return False
+
+    ########################################
+    #         CONVENIENCE METHODS
+    ########################################
+
+    def get_all_poses(self, joint_angles: Dict[str, Any]) -> Dict[str, SEMatrixBase]:
+        """
+        Convenient method for getting all poses of coordinate systems attached to each point in the robot's graph description.
+        """
+        T = {ROOT: self.T_base}
+        for ee in self.end_effectors:
+            for node in self.kinematic_map[ROOT][ee[0]][1:]:
+                T[node] = self.get_pose(joint_angles, node)
+        return T
+
+    def end_effector_pos(self, q: Dict[str, float]) -> Dict[str, SEMatrixBase]:
+        """
+        Gets the positions of all end-effector nodes in a dictionary.
+        """
+        goals = {}
+        for ee in self.end_effectors:
+            for node in ee:
+                goals[node] = self.get_pose(q, node).trans
+        return goals
 
 
 from graphik.robots.robot_planar import RobotPlanar

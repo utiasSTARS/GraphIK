@@ -104,9 +104,6 @@ class LocalSolver:
         cost = self.gen_cost()
         cost_grad = self.gen_cost_gradient()
 
-        # constraints are dicts of form
-        # {'type':['ineq', 'eq'], 'fun': f, 'jac':J}
-
         # parse goals into eq constraints
         h = []
         for node, goal in goals.items():
@@ -117,12 +114,12 @@ class LocalSolver:
         # solve
         res = minimize(
             cost,
-            np.array(list(q0.values())),
+            np.asarray(list(q0.values())),
             jac=cost_grad,
             constraints=h + self.g,
             method="SLSQP",
         )
-        print(fun(res.x))
+        # print(fun(res.x))
         return res
 
 

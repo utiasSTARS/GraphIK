@@ -1,4 +1,5 @@
-from typing import Dict, List
+from typing import Dict, List, Union, Any
+from numpy.typing import ArrayLike
 
 import networkx as nx
 import numpy as np
@@ -7,7 +8,7 @@ from graphik.utils.constants import *
 from graphik.utils.kinematics import fk_2d
 from graphik.utils.utils import level2_descendants, wraptopi
 from liegroups.numpy import SE2, SO2
-from numpy import cos, pi, sqrt
+from numpy import cos, pi, sqrt, inf
 
 
 class RobotPlanar(Robot):
@@ -64,7 +65,7 @@ class RobotPlanar(Robot):
         self.structure = self.tree_graph(self.parents)
 
     @property
-    def end_effectors(self) -> Dict[str, List[str]]:
+    def end_effectors(self) -> List[Any]:
         """
         Returns the names of end effector nodes and the nodes
         preceeding them (required for orientation goals) as
@@ -78,7 +79,7 @@ class RobotPlanar(Robot):
                 if S.out_degree(x) == 0
                 for y in S.predecessors(x)
                 if DIST in S[y][x]
-                if S[y][x][DIST] < np.inf
+                if S[y][x][DIST] < inf
             ]
 
         return self._end_effectors
@@ -93,9 +94,9 @@ class RobotPlanar(Robot):
             return SE2.identity()
 
         path_nodes = self.kinematic_map["p0"][query_node][1:]
-        q = np.array([node_inputs[node] for node in path_nodes])
-        a = np.array([self.a[node] for node in path_nodes])
-        th = np.array([self.th[node] for node in path_nodes])
+        q = np.asarray([node_inputs[node] for node in path_nodes])
+        a = np.asarray([self.a[node] for node in path_nodes])
+        th = np.asarray([self.th[node] for node in path_nodes])
         return fk_2d(a, th, q)
 
     def joint_variables(self, G: nx.Graph) -> Dict[str, float]:
@@ -149,12 +150,39 @@ class RobotPlanar(Robot):
                 S[u][v][BOUNDED] = "below"
                 self.limit_edges += [[u, v]]  # TODO remove/fix
 
-    def random_configuration(self):
+    def random_configuration(self) -> Dict[str, float]:
         q = {}
         for key in self.structure:
             if key != "p0":
                 q[key] = self.lb[key] + (self.ub[key] - self.lb[key]) * np.random.rand()
         return q
+
+    def jacobian(
+        self, joint_angles: Dict[str, float], nodes: Union[List[str], str] = None
+    ) -> Dict[str, ArrayLike]:
+        kinematic_map = self.kinematic_map["p0"]  # get map to all nodes from root
+
+        # find end-effector nodes #FIXME so much code
+        if nodes is None:
+            nodes = []
+            for ee in self.end_effectors:  # get p nodes in end-effectors
+                nodes += [ee]
+
+        Ts = self.get_all_poses(joint_angles)  # get all frame poses
+        J = {}
+        for node in nodes:  # iterate through end-effector nodes
+            path = kinematic_map[node][1:]  # find nodes for joints to end-effector
+            T_0_n = Ts[node].as_matrix()  # ee frame
+            p_ee = T_0_n[0:2, -1]
+            J_i = []
+            for joint in path:  # algorithm fills Jac per column
+                T_0_i = Ts[list(self.parents.predecessors(joint))[0]].as_matrix()
+                p_i = T_0_i[:2, -1]
+                e = p_i - p_ee
+                J_i += [np.hstack([e[1], -e[0], 1])]
+            J[node] = np.zeros([3, self.n])
+            J[node][:, : len(J_i)] = np.column_stack(J_i)
+        return J
 
     def jacobian_cost(self, joint_angles: dict, ee_goals) -> np.ndarray:
         """
