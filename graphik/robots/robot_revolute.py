@@ -1,6 +1,7 @@
 from typing import Any, Dict
 from numpy.typing import ArrayLike
 
+from liegroups.numpy._base import SEMatrixBase
 import networkx as nx
 import numpy as np
 from graphik.robots.robot_base import Robot
@@ -129,6 +130,7 @@ class RobotRevolute(Robot):
                                 v,
                                 **{DIST: dist, LOWER: dist, UPPER: dist, BOUNDED: []},
                             )
+                    S[pred][cur]["T"] = T[pred].inv().dot(T[cur])
 
         # Delete positions used for weights
         for u in S.nodes:
@@ -153,7 +155,8 @@ class RobotRevolute(Robot):
 
         for idx in range(len(kinematic_map) - 1):
             pred, cur = kinematic_map[idx], kinematic_map[idx + 1]
-            T_rel = self.T_zero[pred].inv().dot(self.T_zero[cur])
+            # T_rel = self.T_zero[pred].inv().dot(self.T_zero[cur])
+            T_rel = self.structure[pred][cur]["T"]
             T_rot = rot_axis(joint_angles[cur], "z")
             T = T.dot(T_rot).dot(T_rel)
 
@@ -374,6 +377,43 @@ class RobotRevolute(Robot):
                 q[key] = self.lb[key] + (self.ub[key] - self.lb[key]) * np.random.rand()
         return q
 
+    def jacobian(
+        self,
+        joint_angles: Dict[str, float],
+        nodes: list = None,
+        Ts: Dict[str, SEMatrixBase] = None,
+    ) -> Dict[str, ArrayLike]:
+        """
+        Calculate the robot's linear velocity Jacobian for all end-effectors.
+        """
+        kinematic_map = self.kinematic_map["p0"]  # get map to all nodes from root
+
+        # find end-effector nodes #FIXME so much code
+        if nodes is None:
+            nodes = []
+            for ee in self.end_effectors:  # get p nodes in end-effectors
+                if ee[0][0] == "p":
+                    nodes += [ee[0]]
+                elif ee[1][0] == "p":
+                    nodes += [ee[1]]
+
+        if Ts is None:
+            Ts = self.get_all_poses(joint_angles)  # precompute all poses
+
+        J = {}
+        for node in nodes:  # iterate through end-effector nodes
+            path = kinematic_map[node][1:]  # find nodes for joints to end-effector
+            p_ee = Ts[node].trans
+
+            J[node] = np.zeros([6, self.n])
+            for idx, joint in enumerate(path):  # algorithm fills Jac per column
+                T_0_i = Ts[list(self.parents.predecessors(joint))[0]]
+                z_hat_i = T_0_i.rot.mat[:3, 2]
+                p_i = T_0_i.trans
+                J[node][:3, idx] = np.cross(z_hat_i, p_ee - p_i)
+                J[node][3:, idx] = z_hat_i
+        return J
+
     def euclidean_cost_hessian(self, J: dict, K: dict, r: dict):
         """
         Based on 'Solving Inverse Kinematics Using Exact Hessian Matrices', Erleben, 2019
@@ -395,47 +435,6 @@ class RobotRevolute(Robot):
                     if idx != jdx:
                         H[jdx, idx] -= dH
         return H
-
-    def jacobian(
-        self, joint_angles: Dict[str, float], nodes: list = None
-    ) -> Dict[str, ArrayLike]:
-        """
-        Calculate the robot's linear velocity Jacobian for all end-effectors.
-        """
-        kinematic_map = self.kinematic_map["p0"]  # get map to all nodes from root
-
-        # find end-effector nodes #FIXME so much code
-        if nodes is None:
-            nodes = []
-            for ee in self.end_effectors:  # get p nodes in end-effectors
-                if ee[0][0] == "p":
-                    nodes += [ee[0]]
-                elif ee[1][0] == "p":
-                    nodes += [ee[1]]
-
-        Ts = self.get_all_poses(joint_angles)  # get all frame poses
-        J = {}
-        for node in nodes:  # iterate through end-effector nodes
-            path = kinematic_map[node][1:]  # find nodes for joints to end-effector
-
-            T_0_n = Ts[node].as_matrix()  # ee frame
-            p_ee = T_0_n[0:3, -1]
-
-            # Jp = np.zeros([3, self.n], dtype=object)  # translation jac
-            J_i = []
-            for joint in path:  # algorithm fills Jac per column
-                T_0_i = Ts[list(self.parents.predecessors(joint))[0]].as_matrix()
-                z_hat_i = T_0_i[:3, 2]
-                p_i = T_0_i[:3, -1]
-                J_i += [np.hstack([np.cross(z_hat_i, p_ee - p_i), z_hat_i])]
-
-            J[node] = np.zeros([6, self.n])
-            if len(J_i) > 1:
-                J[node][:, : len(J_i)] = np.column_stack(J_i)
-            else:
-                J[node][:, 0] = J_i[0]
-            # need to fill extra space with zeros
-        return J
 
     def hessian_linear_symb(
         self,
