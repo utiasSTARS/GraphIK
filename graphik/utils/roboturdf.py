@@ -264,17 +264,16 @@ class RobotURDF(object):
             self.scene = view_dae(path, Ts, scene=self.scene, return_scene_only=True)
 
         if with_edges:
-            #Generate dense tuples that connect all joints
-            dense_edge_indices = list(combinations(range(len(Ts)),r=2))
+            # Generate dense tuples that connect all joints
+            dense_edge_indices = list(combinations(range(len(Ts)), r=2))
 
-            #Draw cylinders between each indices
+            # Draw cylinders between each indices
             for e in dense_edge_indices:
-                
+
                 m = self._create_edge_cylinder_mesh(Ts[e[0]], Ts[e[1]])
-                #None means the cylinder has zero height (duplicate Ts?)
+                # None means the cylinder has zero height (duplicate Ts?)
                 if m is not None:
                     self.scene.add(m, pose=SE3.identity().as_matrix())
-
 
     def _create_edge_cylinder_mesh(self, T_i, T_j, radius=0.005):
         """
@@ -289,26 +288,23 @@ class RobotURDF(object):
         -------
         m : pyrender Mesh
         """
-        #Generate each segment
-        seg = np.zeros((2,3))
+        # Generate each segment
+        seg = np.zeros((2, 3))
         seg[0] = T_i.trans
         seg[1] = T_j.trans
 
-        #Check that the cylinder has non-negligible size
+        # Check that the cylinder has non-negligible size
         if np.linalg.norm(seg[1] - seg[0]) < 0.001:
             return None
-        
-        #Create a gray cylinder
+
+        # Create a gray cylinder
         cyl = trimesh.creation.cylinder(radius=radius, segment=seg)
         gray = 0.1
         cyl.visual.vertex_colors = [gray, gray, gray, 0.98]
 
-        #Render it!
+        # Render it!
         m = pyrender.Mesh.from_trimesh(cyl)
         return m
-
-
-
 
     def joint_limits(self):
         ub = {}
@@ -366,14 +362,10 @@ class RobotURDF(object):
         for cl in self.parents.values():
             l += len(cl)
         if l == len(self.parents.keys()) - 1:
-            # number of children == number of joints
-            # ub, lb = self.joint_limits()
             params["ub"] = ub
             params["lb"] = lb
-            # return Revolute3dChain(params)
             return RobotRevolute(params)
         else:
-            # return Revolute3dTree(params)
             return RobotRevolute(params)
 
 
@@ -576,6 +568,7 @@ def load_truncated_ur10(n: int):
         "lb": lb[:n],
         "ub": ub[:n],
         "modified_dh": modified_dh,
+        "num_joints": n,
     }
 
     robot = RobotRevolute(params)

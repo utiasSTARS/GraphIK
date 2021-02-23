@@ -6,7 +6,9 @@ from numpy.typing import ArrayLike
 import networkx as nx
 from graphik.utils.constants import *
 from graphik.utils.utils import flatten, list_to_variable_dict
-from liegroups.numpy._base import SEMatrixBase
+from liegroups.numpy import SE2, SE3
+
+SEMatrix = Union[SE2, SE3]
 
 
 class Robot(ABC):
@@ -19,7 +21,7 @@ class Robot(ABC):
         self.lambdified = False
 
     @abstractmethod
-    def get_pose(self, joint_angles: Dict[str, Any], query_node: str) -> SEMatrixBase:
+    def get_pose(self, joint_angles: Dict[str, Any], query_node: str) -> SEMatrix:
         """
         TODO rename to pose, requires extensive refactor
         Given a list of N joint variables, calculate the Nth joint's pose.
@@ -33,7 +35,10 @@ class Robot(ABC):
 
     @abstractmethod
     def jacobian(
-        self, joint_angles: Dict[str, float], nodes: Union[List[str], str]
+        self,
+        joint_angles: Dict[str, float],
+        nodes: Union[List[str], str],
+        Ts: Dict[str, SEMatrix] = None,
     ) -> Dict[str, ArrayLike]:
         """
         TODO planar doesn't have an isolated jacobian method
@@ -46,6 +51,20 @@ class Robot(ABC):
         """
         Returns a random set of joint values within the joint limits
         determined by lb and ub.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def joint_variables(
+        self, G: nx.DiGraph, T: Dict[str, SEMatrix] = None
+    ) -> Dict[str, Any]:
+        """
+        Finds the set of decision variables corresponding to the
+        graph realization G.
+
+        :param G: networkx.DiGraph with known node positions
+        :returns: Dictionary of joint variables
+        :rtype: np.ndarray
         """
         raise NotImplementedError
 
@@ -96,14 +115,14 @@ class Robot(ABC):
         self._joint_ids = ids
 
     @property
-    def T_base(self) -> SEMatrixBase:
+    def T_base(self) -> SEMatrix:
         """
         :return: SE(dim) Transform to robot base frame
         """
         return self._T_base
 
     @T_base.setter
-    def T_base(self, T_base: SEMatrixBase):
+    def T_base(self, T_base: SEMatrix):
         self._T_base = T_base
 
     @property
@@ -194,7 +213,7 @@ class Robot(ABC):
     #         CONVENIENCE METHODS
     ########################################
 
-    def get_all_poses(self, joint_angles: Dict[str, Any]) -> Dict[str, SEMatrixBase]:
+    def get_all_poses(self, joint_angles: Dict[str, Any]) -> Dict[str, SEMatrix]:
         """
         Convenient method for getting all poses of coordinate systems attached to each point in the robot's graph description.
         """
@@ -204,7 +223,7 @@ class Robot(ABC):
                 T[node] = self.get_pose(joint_angles, node)
         return T
 
-    def end_effector_pos(self, q: Dict[str, float]) -> Dict[str, SEMatrixBase]:
+    def end_effector_pos(self, q: Dict[str, float]) -> Dict[str, ArrayLike]:
         """
         Gets the positions of all end-effector nodes in a dictionary.
         """

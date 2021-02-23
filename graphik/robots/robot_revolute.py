@@ -1,10 +1,8 @@
-from typing import Any, Dict
-from numpy.typing import ArrayLike
+from typing import Any, Dict, Union, List
 
-from liegroups.numpy._base import SEMatrixBase
 import networkx as nx
 import numpy as np
-from graphik.robots.robot_base import Robot
+from graphik.robots.robot_base import Robot, SEMatrix
 from graphik.utils.constants import *
 from graphik.utils.geometry import cross_symb, rot_axis, skew, trans_axis
 from graphik.utils.kinematics import fk_3d, modified_fk_3d
@@ -12,6 +10,7 @@ from graphik.utils.utils import list_to_variable_dict
 from liegroups.numpy import SE3
 from numpy import arctan2, cos, cross, pi, sin
 from numpy.linalg import norm
+from numpy.typing import ArrayLike
 
 
 class RobotRevolute(Robot):
@@ -20,7 +19,6 @@ class RobotRevolute(Robot):
         self.n = params.get("num_joints", len(params["lb"]))  # number of joints
         self.axis_length = params.get("axis_length", 1)  # distance between p and q
         self.T_base = params.get("T_base", SE3.identity())  # base frame
-        # self.modified_dh = params.get("modified_dh", False)
 
         # Topological "map" of the robot, if not provided assume chain
         if "parents" in params:
@@ -32,10 +30,6 @@ class RobotRevolute(Robot):
 
         # A dict of shortest paths between joints for forward kinematics
         self.kinematic_map = nx.shortest_path(self.parents)
-
-        # joint limits NOTE currently assuming symmetric around 0
-        self.lb = params.get("lb", dict(zip(self.joint_ids, self.n * [-pi])))
-        self.ub = params.get("ub", dict(zip(self.joint_ids, self.n * [pi])))
 
         # Use frame poses at zero conf if provided, otherwise construct from DH
         if "T_zero" in params:
@@ -53,6 +47,10 @@ class RobotRevolute(Robot):
                 raise Exception("Robot description not provided.")
 
         self.generate_structure_graph()
+
+        self.lb = params.get("lb", dict(zip(self.joint_ids, self.n * [-pi])))
+        self.ub = params.get("ub", dict(zip(self.joint_ids, self.n * [pi])))
+
         self.set_limits()
         super(RobotRevolute, self).__init__()
 
@@ -62,8 +60,13 @@ class RobotRevolute(Robot):
         Returns a list of end effector node pairs, since it's the
         last two points that are defined for a full pose.
         """
-        S = self.parents
-        return [[x, f"q{x[1:]}"] for x in S if S.out_degree(x) == 0]
+        if not hasattr(self, "_end_effectors"):
+            self._end_effectors = [
+                [x, f"q{x[1:]}"]
+                for x in self.parents
+                if self.parents.out_degree(x) == 0
+            ]
+        return self._end_effectors
 
     @property
     def T_zero(self) -> dict:
@@ -130,14 +133,14 @@ class RobotRevolute(Robot):
                                 v,
                                 **{DIST: dist, LOWER: dist, UPPER: dist, BOUNDED: []},
                             )
-                    S[pred][cur]["T"] = T[pred].inv().dot(T[cur])
+                    S[pred][cur][TRANSFORM] = T[pred].inv().dot(T[cur])
 
         # Delete positions used for weights
         for u in S.nodes:
             del S.nodes[u][POS]
 
         # Set node type to robot
-        nx.set_node_attributes(S, "robot", TYPE)
+        nx.set_node_attributes(S, ROBOT, TYPE)
 
         # Set structure graph attribute
         self.structure = S
@@ -155,8 +158,7 @@ class RobotRevolute(Robot):
 
         for idx in range(len(kinematic_map) - 1):
             pred, cur = kinematic_map[idx], kinematic_map[idx + 1]
-            # T_rel = self.T_zero[pred].inv().dot(self.T_zero[cur])
-            T_rel = self.structure[pred][cur]["T"]
+            T_rel = self.structure[pred][cur][TRANSFORM]
             T_rot = rot_axis(joint_angles[cur], "z")
             T = T.dot(T_rot).dot(T_rel)
 
@@ -209,9 +211,9 @@ class RobotRevolute(Robot):
         d_max = norm(T1.dot(rot_max).dot(T_rel_12).trans - T0.trans)
 
         if abs(th_max - delta_th) < tol and d_max > d_min:
-            return d_max, d_min, "below"
+            return d_max, d_min, BELOW
         elif abs(th_min - delta_th) < tol and d_max > d_min:
-            return d_max, d_min, "above"
+            return d_max, d_min, ABOVE
         else:
             return d_max, d_min, False
 
@@ -256,7 +258,7 @@ class RobotRevolute(Robot):
 
                         d_limit = norm(T1.dot(rot_limit).dot(T_rel).trans - T0.trans)
 
-                        if limit == "above":
+                        if limit == ABOVE:
                             d_max = d_limit
                         else:
                             d_min = d_limit
@@ -271,7 +273,9 @@ class RobotRevolute(Robot):
                     S[ids[0]][ids[1]][UPPER] = d_max
                     S[ids[0]][ids[1]][LOWER] = d_min
 
-    def joint_variables(self, G: nx.Graph, T_final: dict = None) -> np.ndarray:
+    def joint_variables(
+        self, G: nx.DiGraph, T_final: Dict[str, SE3] = None
+    ) -> Dict[str, Any]:
         """
         Calculate joint angles from a complete set of point positions.
         """
@@ -380,8 +384,8 @@ class RobotRevolute(Robot):
     def jacobian(
         self,
         joint_angles: Dict[str, float],
-        nodes: list = None,
-        Ts: Dict[str, SEMatrixBase] = None,
+        nodes: Union[List[str], str],
+        Ts: Dict[str, SEMatrix] = None,
     ) -> Dict[str, ArrayLike]:
         """
         Calculate the robot's linear velocity Jacobian for all end-effectors.

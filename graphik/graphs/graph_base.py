@@ -2,14 +2,15 @@ from abc import ABC, abstractmethod
 
 import networkx as nx
 import numpy as np
-import numpy.typing as npt
 import numpy.linalg as la
 from typing import Dict, List, Any
+from numpy.typing import ArrayLike
 from graphik.robots.robot_base import Robot, RobotPlanar, RobotRevolute
 from graphik.utils.constants import *
 from graphik.utils.dgp import (
     graph_complete_edges,
     distance_matrix_from_graph,
+    adjacency_matrix_from_graph,
 )
 from graphik.utils.geometry import rot_axis, trans_axis
 from liegroups.numpy import SE3
@@ -94,14 +95,14 @@ class RobotGraph(ABC):
         """
         raise NotImplementedError
 
-    def distance_matrix(self) -> npt.ArrayLike:
+    def distance_matrix(self) -> ArrayLike:
         """
         Returns a partial distance matrix of known distances in the problem graph.
         :returns: Distance matrix
         """
         return distance_matrix_from_graph(self.directed)
 
-    def distance_matrix_from_joints(self, joint_angles: npt.ArrayLike) -> npt.ArrayLike:
+    def distance_matrix_from_joints(self, joint_angles: ArrayLike) -> ArrayLike:
         """
         Given a set of joint angles, return a matrix whose element
         [idx,jdx] corresponds to the squared distance between nodes idx and jdx.
@@ -110,17 +111,13 @@ class RobotGraph(ABC):
         """
         return distance_matrix_from_graph(self.realization(joint_angles))
 
-    def adjacency_matrix(self) -> npt.ArrayLike:
+    def adjacency_matrix(self) -> ArrayLike:
         """
         Returns the adjacency matrix representing the edges that are known,
         given the kinematic and base structure, as well as the end-effector targets.
         :returns: Adjacency matrix
         """
-        G = self.directed
-        selected_edges = [(u, v) for u, v, d in G.edges(data=True) if DIST in d]
-        return nx.to_numpy_array(
-            nx.to_undirected(G.edge_subgraph(selected_edges)), weight=""
-        )
+        return adjacency_matrix_from_graph(self.directed)
 
     def complete_from_pos(self, P: dict, dist: bool = True) -> nx.DiGraph:
         """
@@ -157,15 +154,15 @@ class RobotGraph(ABC):
                 self.directed[nname][name][UPPER] = la.norm(ndata[POS] - data[POS])
                 self.directed[nname][name][BOUNDED] = []
 
-    def add_spherical_obstacle(self, name: str, position: npt.ArrayLike, radius: float):
+    def add_spherical_obstacle(self, name: str, position: ArrayLike, radius: float):
         # Add a fixed node representing the obstacle to the graph
-        self.add_anchor_node(name, {POS: position, TYPE: "obstacle"})
+        self.add_anchor_node(name, {POS: position, TYPE: OBSTACLE})
 
         # Set lower (and upper) distance limits to robot nodes
         for node, node_type in self.directed.nodes(data=TYPE):
-            if node_type == "robot" and node[0] == "p":
+            if node_type == ROBOT and node[0] == "p":
                 self.directed.add_edge(node, name)
-                self.directed[node][name][BOUNDED] = ["below"]
+                self.directed[node][name][BOUNDED] = [BELOW]
                 self.directed[node][name][LOWER] = radius
                 self.directed[node][name][UPPER] = 100
 
@@ -213,7 +210,7 @@ class RobotGraph(ABC):
 
         return broken_limits
 
-    def distance_bound_matrices(self) -> npt.ArrayLike:
+    def distance_bound_matrices(self) -> ArrayLike:
         """
         Generates a matrices of distance bounds induced by joint variables.
         """
@@ -287,14 +284,14 @@ class RobotPlanarGraph(RobotGraph):
                 self.robot.limit_edges.append([ax, node])
         return G
 
-    def realization(self, x: dict) -> nx.DiGraph:
+    def realization(self, joint_angles: Dict[str, float]) -> nx.DiGraph:
         """
         Given a dictionary of joint variables generate a representative graph.
         This graph will be fully conncected.
         """
         P = {}
         for name in self.robot.structure:  # TODO make single for loop
-            P[name] = self.robot.get_pose(x, name).trans
+            P[name] = self.robot.get_pose(joint_angles, name).trans
 
         for name in self.base:
             P[name] = self.base.nodes[name][POS]
@@ -377,14 +374,14 @@ class RobotSphericalGraph(RobotGraph):
             base[u][v][UPPER] = base[u][v][DIST]
         return base
 
-    def realization(self, x: dict) -> nx.DiGraph:
+    def realization(self, joint_angles: Dict[str, List[float]]) -> nx.DiGraph:
         """
         Given a dictionary of joint variables generate a representative graph.
         This graph will be fully conncected.
         """
         P = {}
         for name in self.robot.structure:  # TODO make single for loop
-            P[name] = self.robot.get_pose(x, name).trans
+            P[name] = self.robot.get_pose(joint_angles, name).trans
 
         for name in self.base:
             P[name] = self.base.nodes[name][POS]
@@ -490,32 +487,20 @@ class RobotRevoluteGraph(RobotGraph):
             base[u][v][BOUNDED] = []
         return base
 
-    def realization(self, x: dict) -> nx.DiGraph:
+    def realization(self, joint_angles: Dict[str, float]) -> nx.DiGraph:
         """
         Given a dictionary of joint variables generate a representative graph.
         This graph will be fully connected.
         """
 
         axis_length = self.robot.axis_length
-        T_all = self.robot.get_all_poses(x)
+        T_all = self.robot.get_all_poses(joint_angles)
 
         P = {}
         for node, T in T_all.items():
             P[node] = T.trans
             P["q" + node[1:]] = T.dot(trans_axis(axis_length, "z")).trans
         return self.complete_from_pos(P)
-
-        # s = flatten([[0], self.robot.s])  # b/c we're starting from root
-        # X = np.zeros([n_nodes, dim])
-        # X[: dim + 1, :] = pos_from_graph(base)
-        # for idx in range(len(x)):  # get node locations
-        #     if type(x) is not dict:
-        #         T = self.robot.get_pose(list_to_variable_dict(x), "p" + str(idx + 1))
-        #     else:
-        #         T = self.robot.get_pose(x, "p" + str(idx + 1))
-        #     X[ids.index(f"p{idx+1}"), :] = T.trans
-        #     X[ids.index(f"q{idx+1}"), :] = T.dot(trans_axis(axis_length, "z")).trans
-        # return graph_from_pos(X, self.node_ids)
 
     def distance_bounds_from_sampling(self):
         robot = self.robot
@@ -540,3 +525,37 @@ class RobotRevoluteGraph(RobotGraph):
                 G[e1][e2][UPPER] = np.sqrt(D_max[idx, jdx])
                 if abs(D_max[idx, jdx] - D_min[idx, jdx]) < 1e-5:
                     G[e1][e2][DIST] = abs(D_max[idx, jdx] - D_min[idx, jdx])
+
+
+if __name__ == "__main__":
+    import graphik
+    from graphik.utils.roboturdf import RobotURDF
+
+    n = 6
+    ub = (pi) * np.ones(n)
+    lb = -ub
+    modified_dh = False
+
+    fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
+    # fname = graphik.__path__[0] + "/robots/urdfs/lwa4p.urdf"
+    # fname = graphik.__path__[0] + "/robots/urdfs/lwa4d.urdf"
+    # fname = graphik.__path__[0] + "/robots/urdfs/panda_arm.urdf"
+    # fname = graphik.__path__[0] + "/robots/urdfs/kuka_iiwr.urdf"
+    # fname = graphik.__path__[0] + "/robots/urdfs/kuka_lwr.urdf"
+    # fname = graphik.__path__[0] + "/robots/urdfs/jaco2arm6DOF_no_hand.urdf"
+
+    urdf_robot = RobotURDF(fname)
+    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
+    graph = RobotRevoluteGraph(robot)
+    import timeit
+
+    print(
+        max(
+            timeit.repeat(
+                "graph.realization(robot.random_configuration())",
+                globals=globals(),
+                number=1,
+                repeat=1000,
+            )
+        )
+    )
