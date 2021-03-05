@@ -11,4 +11,6 @@ RADIUS = "radius"
 DIST = "weight"
 POS = "pos"
 ROOT = "p0"
+MAIN_PREFIX = "p"
+AUX_PREFIX = "q"
 UNDEFINED = None

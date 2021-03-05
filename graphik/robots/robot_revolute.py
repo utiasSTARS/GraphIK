@@ -1,4 +1,5 @@
 from typing import Any, Dict, Union, List
+from numpy.typing import ArrayLike
 
 import networkx as nx
 import numpy as np
@@ -10,7 +11,6 @@ from graphik.utils.utils import list_to_variable_dict
 from liegroups.numpy import SE3
 from numpy import arctan2, cos, cross, pi, sin
 from numpy.linalg import norm
-from numpy.typing import ArrayLike
 
 
 class RobotRevolute(Robot):
@@ -71,11 +71,11 @@ class RobotRevolute(Robot):
     @property
     def T_zero(self) -> dict:
         if not hasattr(self, "_T_zero"):
-            T = {"p0": self.T_base}
+            T = {ROOT: self.T_base}
             kinematic_map = self.kinematic_map
             for ee in self.end_effectors:
-                for node in kinematic_map["p0"][ee[0]][1:]:
-                    path_nodes = kinematic_map["p0"][node][1:]
+                for node in kinematic_map[ROOT][ee[0]][1:]:
+                    path_nodes = kinematic_map[ROOT][node][1:]
 
                     q = np.asarray([0 for node in path_nodes])
                     a = np.asarray([self.a[node] for node in path_nodes])
@@ -110,7 +110,7 @@ class RobotRevolute(Robot):
         S = nx.empty_graph(create_using=nx.DiGraph)
 
         for ee in self.end_effectors:
-            k_map = self.kinematic_map["p0"][ee[0]]
+            k_map = self.kinematic_map[ROOT][ee[0]]
             for idx in range(len(k_map)):
                 cur, aux_cur = k_map[idx], f"q{k_map[idx][1:]}"
                 cur_pos, aux_cur_pos = T[cur].trans, T[cur].dot(trans_z).trans
@@ -152,7 +152,7 @@ class RobotRevolute(Robot):
         of the query_node in the configuration determined by
         node_inputs.
         """
-        kinematic_map = self.kinematic_map["p0"]["p" + query_node[1:]]
+        kinematic_map = self.kinematic_map[ROOT][MAIN_PREFIX + query_node[1:]]
 
         T = self.T_base
 
@@ -230,22 +230,27 @@ class RobotRevolute(Robot):
         T_axis = trans_axis(self.axis_length, "z")
 
         for ee in self.end_effectors:
-            k_map = self.kinematic_map["p0"][ee[0]]
+            k_map = self.kinematic_map[ROOT][ee[0]]
             for idx in range(2, len(k_map)):
                 cur, prev = k_map[idx], k_map[idx - 2]
                 names = [
-                    (f"p{prev[1:]}", f"p{cur[1:]}"),
-                    (f"p{prev[1:]}", f"q{cur[1:]}"),
-                    (f"q{prev[1:]}", f"p{cur[1:]}"),
-                    (f"q{prev[1:]}", f"q{cur[1:]}"),
+                    (MAIN_PREFIX + str(prev[1:]), MAIN_PREFIX + str(cur[1:])),
+                    (MAIN_PREFIX + str(prev[1:]), AUX_PREFIX + str(cur[1:])),
+                    (AUX_PREFIX + str(prev[1:]), MAIN_PREFIX + str(cur[1:])),
+                    (AUX_PREFIX + str(prev[1:]), AUX_PREFIX + str(cur[1:])),
+                    # (f"p{prev[1:]}", f"q{cur[1:]}"),
+                    # (f"q{prev[1:]}", f"p{cur[1:]}"),
+                    # (f"q{prev[1:]}", f"q{cur[1:]}"),
                 ]
                 for ids in names:
                     path = kinematic_map[prev][cur]
                     T0, T1, T2 = [T[path[0]], T[path[1]], T[path[2]]]
 
-                    if "q" in ids[0]:
+                    # if "q" in ids[0]:
+                    if AUX_PREFIX in ids[0]:
                         T0 = T0.dot(T_axis)
-                    if "q" in ids[1]:
+                    # if "q" in ids[1]:
+                    if AUX_PREFIX in ids[1]:
                         T2 = T2.dot(T_axis)
 
                     d_max, d_min, limit = self.max_min_distance(T0, T1, T2)
@@ -286,11 +291,11 @@ class RobotRevolute(Robot):
         axis_length = self.axis_length
 
         T = {}
-        T["p0"] = self.T_base
+        T[ROOT] = self.T_base
         theta = {}
 
         for ee in self.end_effectors:
-            k_map = self.kinematic_map["p0"][ee[0]]
+            k_map = self.kinematic_map[ROOT][ee[0]]
             for idx in range(1, len(k_map)):
                 cur, aux_cur = k_map[idx], f"q{k_map[idx][1:]}"
                 pred, aux_pred = (k_map[idx - 1], f"q{k_map[idx-1][1:]}")
@@ -366,7 +371,7 @@ class RobotRevolute(Robot):
                 and norm(cross(T_rel.trans, np.asarray([0, 0, 1]))) < tol
             ):
                 T_th = (T[cur]).inv().dot(T_final[ee[0]]).as_matrix()
-                theta[ee[0]] += np.arctan2(T_th[1, 0], T_th[0, 0])
+                theta[ee[0]] += arctan2(T_th[1, 0], T_th[0, 0])
 
         return theta
 
@@ -377,7 +382,7 @@ class RobotRevolute(Robot):
         """
         q = {}
         for key in self.joint_ids:
-            if key != "p0":
+            if key != ROOT:
                 q[key] = self.lb[key] + (self.ub[key] - self.lb[key]) * np.random.rand()
         return q
 
@@ -387,26 +392,32 @@ class RobotRevolute(Robot):
         nodes: Union[List[str], str],
         Ts: Dict[str, SEMatrix] = None,
     ) -> Dict[str, ArrayLike]:
+
         """
         Calculate the robot's linear velocity Jacobian for all end-effectors.
-        """
-        kinematic_map = self.kinematic_map["p0"]  # get map to all nodes from root
 
-        # find end-effector nodes #FIXME so much code
+        :param joint_angles: dictionary describing the current joint configuration
+        :param nodes: list of nodes that the Jacobian shoulf be computed for
+        :param Ts: the current list of frame poses for all nodes, speeds up computation
+        :return: dictionary of Jacobians indexed by relevant node
+        """
+        kinematic_map = self.kinematic_map[ROOT]  # get map to all nodes from root
+
+        # find end-effector nodes #FIXME so much code and relies on notation
         if nodes is None:
             nodes = []
             for ee in self.end_effectors:  # get p nodes in end-effectors
-                if ee[0][0] == "p":
+                if ee[0][0] == MAIN_PREFIX:
                     nodes += [ee[0]]
-                elif ee[1][0] == "p":
+                elif ee[1][0] == MAIN_PREFIX:
                     nodes += [ee[1]]
 
         if Ts is None:
-            Ts = self.get_all_poses(joint_angles)  # precompute all poses
+            Ts = self.get_all_poses(joint_angles)  # compute all poses
 
         J = {}
-        for node in nodes:  # iterate through end-effector nodes
-            path = kinematic_map[node][1:]  # find nodes for joints to end-effector
+        for node in nodes:  # iterate through nodes
+            path = kinematic_map[node][1:]  # find joints that move node
             p_ee = Ts[node].trans
 
             J[node] = np.zeros([6, self.n])
@@ -447,21 +458,21 @@ class RobotRevolute(Robot):
         query_frame: str = "",
         pose_term=False,
         ee_keys=None,
-    ) -> np.ndarray:
+    ) -> ArrayLike:
         """
         Calculates the Hessian at query_frame geometrically.
         """
         # dZ = np.array([0., 0., 1.])  # For the pose_term = True case
         if J is None:
             J = self.jacobian(joint_angles, pose_term=pose_term)
-        kinematic_map = self.kinematic_map["p0"]  # get map to all nodes from root
+        kinematic_map = self.kinematic_map[ROOT]  # get map to all nodes from root
 
         if ee_keys is None:
             end_effector_nodes = []
             for ee in self.end_effectors:  # get p nodes in end-effectors
-                if ee[0][0] == "p":
+                if ee[0][0] == MAIN_PREFIX:
                     end_effector_nodes += [ee[0]]
-                if ee[1][0] == "p":
+                if ee[1][0] == MAIN_PREFIX:
                     end_effector_nodes += [ee[1]]
         else:
             end_effector_nodes = ee_keys

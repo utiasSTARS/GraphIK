@@ -166,47 +166,47 @@ class RobotGraph(ABC):
                 self.directed[node][name][LOWER] = radius
                 self.directed[node][name][UPPER] = 100
 
-    def check_distance_limits(self, G: nx.DiGraph) -> List[Dict[str, List[Any]]]:
+    def check_distance_limits(
+        self, G: nx.DiGraph, tol=1e-10
+    ) -> List[Dict[str, List[Any]]]:
         """Given a graph of the same """
         typ = nx.get_node_attributes(self.directed, name=TYPE)
         # broken_limits = {"edge": [], "value": [], "type": [], "side": []}
         broken_limits = []
         for u, v, data in self.directed.edges(data=True):
-            # if BOUNDED in data:
-            # if "below" in data[BOUNDED]:
-            if G[u][v][DIST] < data[LOWER] - 1e-10:
-                broken_limit = {}
-                if (typ[u] == "robot" and typ[v] == "obstacle") or (
-                    typ[u] == "obstacle" and typ[v] == "robot"
-                ):
-                    broken_limit["edge"] = (u, v)
-                    broken_limit["value"] = G[u][v][DIST] - data[LOWER]
-                    broken_limit["type"] = "obstacle"
-                    broken_limit["side"] = LOWER
-                    broken_limits += [broken_limit]
-                if typ[u] == "robot" and typ[v] == "robot":
-                    broken_limit["edge"] = (u, v)
-                    broken_limit["value"] = G[u][v][DIST] - data[LOWER]
-                    broken_limit["type"] = "joint"
-                    broken_limit["side"] = LOWER
-                    broken_limits += [broken_limit]
-            # if "above" in data[BOUNDED]:
-            if G[u][v][DIST] > data[UPPER] + 1e-10:
-                broken_limit = {}
-                if (typ[u] == "robot" and typ[v] == "obstacle") or (
-                    typ[u] == "obstacle" and typ[v] == "robot"
-                ):
-                    broken_limit["edge"] = (u, v)
-                    broken_limit["value"] = G[u][v][DIST] - data[UPPER]
-                    broken_limit["type"] = "obstacle"
-                    broken_limit["side"] = UPPER
-                    broken_limits += [broken_limit]
-                if typ[u] == "robot" and typ[v] == "robot":
-                    broken_limit["edge"] = (u, v)
-                    broken_limit["value"] = G[u][v][DIST] - data[UPPER]
-                    broken_limit["type"] = "joint"
-                    broken_limit["side"] = UPPER
-                    broken_limits += [broken_limit]
+            if BELOW in data[BOUNDED] or ABOVE in data[BOUNDED]:
+                if G[u][v][DIST] < data[LOWER] - tol:
+                    broken_limit = {}
+                    if (typ[u] == "robot" and typ[v] == "obstacle") or (
+                        typ[u] == "obstacle" and typ[v] == "robot"
+                    ):
+                        broken_limit["edge"] = (u, v)
+                        broken_limit["value"] = G[u][v][DIST] - data[LOWER]
+                        broken_limit["type"] = "obstacle"
+                        broken_limit["side"] = LOWER
+                        broken_limits += [broken_limit]
+                    if typ[u] == "robot" and typ[v] == "robot":
+                        broken_limit["edge"] = (u, v)
+                        broken_limit["value"] = G[u][v][DIST] - data[LOWER]
+                        broken_limit["type"] = "joint"
+                        broken_limit["side"] = LOWER
+                        broken_limits += [broken_limit]
+                if G[u][v][DIST] > data[UPPER] + tol:
+                    broken_limit = {}
+                    if (typ[u] == "robot" and typ[v] == "obstacle") or (
+                        typ[u] == "obstacle" and typ[v] == "robot"
+                    ):
+                        broken_limit["edge"] = (u, v)
+                        broken_limit["value"] = G[u][v][DIST] - data[UPPER]
+                        broken_limit["type"] = "obstacle"
+                        broken_limit["side"] = UPPER
+                        broken_limits += [broken_limit]
+                    if typ[u] == "robot" and typ[v] == "robot":
+                        broken_limit["edge"] = (u, v)
+                        broken_limit["value"] = G[u][v][DIST] - data[UPPER]
+                        broken_limit["type"] = "joint"
+                        broken_limit["side"] = UPPER
+                        broken_limits += [broken_limit]
 
         return broken_limits
 
