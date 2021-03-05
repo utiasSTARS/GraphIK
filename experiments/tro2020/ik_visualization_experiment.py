@@ -126,7 +126,6 @@ if __name__ == "__main__":
 
     graph = RobotRevoluteGraph(robot)
     print(graph.node_ids)
-    print(robot.limit_edges)
     print(robot.limited_joints)
     solver = RiemannianSolver(graph)
     results = ik_workspace_sample_riemannian(graph, solver)

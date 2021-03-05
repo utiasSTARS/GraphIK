@@ -224,7 +224,6 @@ class RobotRevolute(Robot):
         """
         S = self.structure
         T = self.T_zero
-        self.limit_edges = []  # edges enforcing joint limits
         self.limited_joints = []  # joint limits that can be enforced
         kinematic_map = self.kinematic_map
         T_axis = trans_axis(self.axis_length, "z")
@@ -238,18 +237,13 @@ class RobotRevolute(Robot):
                     (MAIN_PREFIX + str(prev[1:]), AUX_PREFIX + str(cur[1:])),
                     (AUX_PREFIX + str(prev[1:]), MAIN_PREFIX + str(cur[1:])),
                     (AUX_PREFIX + str(prev[1:]), AUX_PREFIX + str(cur[1:])),
-                    # (f"p{prev[1:]}", f"q{cur[1:]}"),
-                    # (f"q{prev[1:]}", f"p{cur[1:]}"),
-                    # (f"q{prev[1:]}", f"q{cur[1:]}"),
                 ]
                 for ids in names:
                     path = kinematic_map[prev][cur]
                     T0, T1, T2 = [T[path[0]], T[path[1]], T[path[2]]]
 
-                    # if "q" in ids[0]:
                     if AUX_PREFIX in ids[0]:
                         T0 = T0.dot(T_axis)
-                    # if "q" in ids[1]:
                     if AUX_PREFIX in ids[1]:
                         T2 = T2.dot(T_axis)
 
@@ -269,7 +263,6 @@ class RobotRevolute(Robot):
                             d_min = d_limit
 
                         self.limited_joints += [cur]
-                        self.limit_edges += [[ids[0], ids[1]]]  # TODO remove/fix
 
                     S.add_edge(ids[0], ids[1])
                     if d_max == d_min:

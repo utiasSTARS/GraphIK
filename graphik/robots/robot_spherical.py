@@ -146,7 +146,6 @@ class RobotSpherical(Robot):
         This is induced by link length and joint limits.
         """
         S = self.structure
-        self.limit_edges = []
         for u in S:
             # direct successors are fully known
             for v in (suc for suc in S.successors(u) if suc):
@@ -163,7 +162,6 @@ class RobotSpherical(Robot):
                 S[u][v][UPPER] = l1 + l2
                 S[u][v][LOWER] = sqrt(l1 ** 2 + l2 ** 2 - 2 * l1 * l2 * cos(pi - lim))
                 S[u][v][BOUNDED] = "below"
-                self.limit_edges += [[u, v]]  # TODO remove/fix
 
     def random_configuration(self):
         """

@@ -281,7 +281,6 @@ class RobotPlanarGraph(RobotGraph):
                     l1 ** 2 + l2 ** 2 - 2 * l1 * l2 * cos(pi - lim)
                 )
                 G[ax][node][BOUNDED] = "below"
-                self.robot.limit_edges.append([ax, node])
         return G
 
     def realization(self, joint_angles: Dict[str, float]) -> nx.DiGraph:
@@ -343,7 +342,6 @@ class RobotSphericalGraph(RobotGraph):
                     l1 ** 2 + l2 ** 2 - 2 * l1 * l2 * cos(pi - lim)
                 )
                 G[ax][node][BOUNDED] = ["below"]
-                self.robot.limit_edges.append([ax, node])
 
         return G
 
@@ -449,7 +447,6 @@ class RobotRevoluteGraph(RobotGraph):
                     else:
                         d_min = d_limit
                     self.robot.limited_joints += ["p1"]  # joint at p0 is limited
-                    self.robot.limit_edges += [[base_node, node]]  # TODO remove/fix
 
                 G.add_edge(base_node, node)
                 if d_max == d_min:

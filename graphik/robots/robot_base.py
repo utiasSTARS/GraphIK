@@ -126,18 +126,6 @@ class Robot(ABC):
         self._T_base = T_base
 
     @property
-    def limit_edges(self) -> List[List[str]]:
-        """
-        FIXME switch to tuples
-        :return: list of limited edges
-        """
-        return self._limit_edges
-
-    @limit_edges.setter
-    def limit_edges(self, lim: List[List[str]]):
-        self._limit_edges = lim
-
-    @property
     def limited_joints(self) -> List[str]:
         """
         :return: list of limited edges

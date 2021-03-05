@@ -129,9 +129,9 @@ if __name__ == "__main__":
     ub = angular_limits
     lb = -angular_limits
 
-    # fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
+    fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/lwa4d.urdf"
-    fname = graphik.__path__[0] + "/robots/urdfs/lwa4p.urdf"
+    # fname = graphik.__path__[0] + "/robots/urdfs/lwa4p.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/kuka_iiwr.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/kuka_lwr.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/jaco2arm6DOF_no_hand.urdf"
@@ -140,7 +140,6 @@ if __name__ == "__main__":
 
     graph = RobotRevoluteGraph(robot)
     print(graph.node_ids)
-    print(robot.limit_edges)
     print(robot.limited_joints)
     # print(robot.get_pose(robot.random_configuration(), "p7"))
     solver = RiemannianSolver(graph)
