@@ -3,7 +3,7 @@ import time
 import unittest
 import networkx as nx
 
-from graphik.robots.robot_base import RobotSpherical
+from graphik.robots import RobotSpherical
 from graphik.utils.utils import list_to_variable_dict, list_to_variable_dict_spherical
 
 

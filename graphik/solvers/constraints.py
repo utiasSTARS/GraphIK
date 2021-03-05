@@ -1,8 +1,8 @@
 from copy import deepcopy
 from graphik.graphs.graph_base import (
     RobotGraph,
-    RobotRevoluteGraph,
 )
+from graphik.graphs import RobotRevoluteGraph
 import networkx as nx
 import numpy as np
 import sympy as sp
@@ -10,7 +10,7 @@ import numpy.linalg as la
 from numpy import pi
 from graphik.utils.utils import norm_sq
 from graphik.utils.dgp import pos_from_graph
-from graphik.robots.robot_base import RobotRevolute
+from graphik.robots import RobotRevolute
 
 
 def apply_angular_offset_2d(joint_angle_offset, z0):

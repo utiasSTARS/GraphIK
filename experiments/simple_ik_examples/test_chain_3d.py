@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 import numpy as np
-from numpy.testing import assert_array_less
-from graphik.graphs.graph_base import RobotSphericalGraph
-from graphik.robots.robot_base import RobotSpherical
+from graphik.graphs import RobotSphericalGraph
+from graphik.robots import RobotSpherical
 
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.utils import best_fit_transform, list_to_variable_dict
 from graphik.utils.dgp import (
     adjacency_matrix_from_graph,
     pos_from_graph,
-    bound_smoothing,
     graph_from_pos,
 )
 

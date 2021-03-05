@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 import graphik
 import numpy as np
-from graphik.robots.robot_base import RobotRevolute
-from graphik.graphs.graph_base import RobotRevoluteGraph
+from graphik.graphs import RobotRevoluteGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.dgp import (
     adjacency_matrix_from_graph,

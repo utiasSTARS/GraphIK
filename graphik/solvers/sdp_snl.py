@@ -8,7 +8,7 @@ import cvxpy as cp
 from graphik.utils.roboturdf import load_ur10, load_truncated_ur10
 from graphik.utils.constants import *
 from graphik.utils.chordal import complete_to_chordal_graph
-from graphik.robots.robot_base import RobotRevolute
+from graphik.robots import RobotRevolute
 from graphik.graphs.graph_base import RobotGraph
 from graphik.solvers.constraints import get_full_revolute_nearest_point
 from graphik.solvers.sdp_formulations import SdpSolverParams

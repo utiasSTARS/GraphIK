@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
 import numpy as np
-from numpy.testing import assert_array_less
-import networkx as nx
-import time
-from graphik.graphs.graph_base import RobotPlanarGraph
-from graphik.robots.robot_base import RobotPlanar
+from graphik.graphs import RobotPlanarGraph
+from graphik.robots import RobotPlanar
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.dgp import (
-    dist_to_gram,
-    linear_projection,
     adjacency_matrix_from_graph,
     pos_from_graph,
     bound_smoothing,

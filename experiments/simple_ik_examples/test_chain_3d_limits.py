@@ -4,8 +4,8 @@ from numpy import pi
 from numpy.testing import assert_array_less
 import networkx as nx
 import time
-from graphik.graphs.graph_base import RobotSphericalGraph
-from graphik.robots.robot_base import RobotSpherical
+from graphik.graphs import RobotSphericalGraph
+from graphik.robots import RobotSpherical
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.dgp import (
     dist_to_gram,

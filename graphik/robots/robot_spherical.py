@@ -2,14 +2,13 @@ from typing import Dict, List, Any
 import numpy as np
 import networkx as nx
 from graphik.robots.robot_base import Robot
+from graphik.robots import RobotRevolute
 from graphik.utils.constants import *
 from liegroups.numpy import SE3, SO3
-from graphik.utils.geometry import cross_symb, rot_axis, roty, skew, trans_axis
-from graphik.utils.kinematics import fk_3d, fk_3d_sph, modified_fk_3d
+from graphik.utils.geometry import roty, trans_axis
+from graphik.utils.kinematics import fk_3d_sph
 from graphik.utils.utils import (
-    flatten,
     level2_descendants,
-    list_to_variable_dict,
     spherical_angle_bounds_to_revolute,
     wraptopi,
 )

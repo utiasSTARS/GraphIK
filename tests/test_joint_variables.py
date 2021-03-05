@@ -6,12 +6,12 @@ import graphik
 from numpy.testing import assert_allclose
 from numpy.random import rand, randint
 from numpy import pi
-from graphik.graphs.graph_base import (
+from graphik.graphs import (
     RobotPlanarGraph,
     RobotRevoluteGraph,
     RobotSphericalGraph,
 )
-from graphik.robots.robot_base import RobotPlanar, RobotRevolute, RobotSpherical
+from graphik.robots import RobotPlanar, RobotRevolute, RobotSpherical
 from graphik.utils.roboturdf import RobotURDF
 from graphik.utils.utils import (
     list_to_variable_dict,

@@ -4,12 +4,12 @@ from numpy import pi
 from numpy.testing import assert_array_less
 import unittest
 import networkx as nx
-from graphik.graphs.graph_base import (
+from graphik.graphs import (
     RobotPlanarGraph,
     RobotRevoluteGraph,
     RobotSphericalGraph,
 )
-from graphik.robots.robot_base import RobotRevolute, RobotSpherical, RobotPlanar
+from graphik.robots import RobotRevolute, RobotSpherical, RobotPlanar
 from graphik.utils.dgp import pos_from_graph, graph_from_pos, bound_smoothing
 from graphik.utils.utils import list_to_variable_dict
 from graphik.utils.geometry import trans_axis

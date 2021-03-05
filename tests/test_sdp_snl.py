@@ -2,9 +2,10 @@ import numpy as np
 import unittest
 import networkx as nx
 from numpy.testing import assert_allclose
-from graphik.graphs.graph_base import RobotRevoluteGraph
+from graphik.graphs import RobotRevoluteGraph
 
-from graphik.robots.robot_base import Robot, RobotRevolute
+from graphik.robots.robot_base import Robot
+from graphik.robots import RobotRevolute
 from graphik.solvers.constraints import get_full_revolute_nearest_point
 from graphik.solvers.sdp_snl import (
     distance_constraints,

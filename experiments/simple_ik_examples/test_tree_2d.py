@@ -2,8 +2,8 @@
 import numpy as np
 from numpy.testing import assert_array_less
 import networkx as nx
-from graphik.graphs.graph_base import RobotPlanarGraph
-from graphik.robots.robot_base import RobotPlanar
+from graphik.graphs import RobotPlanarGraph
+from graphik.robots import RobotPlanar
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.utils import best_fit_transform, list_to_variable_dict
 from graphik.utils.dgp import (

@@ -220,8 +220,3 @@ class Robot(ABC):
             for node in ee:
                 goals[node] = self.get_pose(q, node).trans
         return goals
-
-
-from graphik.robots.robot_planar import RobotPlanar
-from graphik.robots.robot_spherical import RobotSpherical
-from graphik.robots.robot_revolute import RobotRevolute

@@ -3,12 +3,12 @@ import unittest
 import networkx as nx
 from numpy.testing import assert_allclose
 from numpy import pi
-from graphik.graphs.graph_base import (
+from graphik.graphs import (
     RobotPlanarGraph,
     RobotRevoluteGraph,
     RobotSphericalGraph,
 )
-from graphik.robots.robot_base import RobotRevolute, RobotSpherical, RobotPlanar
+from graphik.robots import RobotRevolute, RobotSpherical, RobotPlanar
 from graphik.utils.dgp import dist_to_gram, MDS, pos_from_graph
 from graphik.utils.utils import (
     best_fit_transform,

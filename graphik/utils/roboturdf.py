@@ -5,8 +5,8 @@ from liegroups import SE3, SO3
 import numpy as np
 import trimesh
 import pyrender
-from graphik.graphs.graph_base import RobotRevoluteGraph
-from graphik.robots.robot_base import RobotRevolute
+from graphik.graphs import RobotRevoluteGraph
+from graphik.robots import RobotRevolute
 import graphik
 from operator import itemgetter
 

@@ -3,9 +3,9 @@ import numpy as np
 from numpy.testing import assert_array_less
 import networkx as nx
 import time
-from graphik.graphs.graph_base import RobotPlanarGraph
+from graphik.graphs import RobotPlanarGraph
 
-from graphik.robots.robot_base import RobotPlanar
+from graphik.robots import RobotPlanar
 
 from graphik.solvers.riemannian_solver import RiemannianSolver
 

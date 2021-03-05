@@ -4,13 +4,13 @@ from numpy import pi
 from numpy.testing import assert_array_equal
 import unittest
 
-from graphik.graphs.graph_base import RobotPlanarGraph
-from graphik.robots.robot_base import RobotPlanar
+from graphik.graphs import RobotPlanarGraph
+from graphik.robots import RobotPlanar
 
 from graphik.utils.dgp import adjacency_matrix_from_graph
 from graphik.utils.utils import list_to_variable_dict
 
-
+# FIXME currently there are only tests for the planar case - should include spherical and revolute
 class TestAdjacencyMatrices(unittest.TestCase):
     def test_planar_chain_pose_goal(self):
         n = 3
