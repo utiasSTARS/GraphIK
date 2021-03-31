@@ -95,28 +95,25 @@ def frobenius_norm_sq(X: np.ndarray):
 
 
 class RiemannianSolver:
-    def __init__(self, graph: RobotGraph, params=None):
+    def __init__(self, graph: RobotGraph, params={}):
 
-        if params is None:
-            params = {
-                "solver": "TrustRegions",
-                # "solver": "ConjugateGradient",
-                "logverbosity": 0,
-                "mingradnorm": 1e-9,
-                "maxiter": 3e3,
-            }
+
         self.params = params
         self.graph = graph
         self.dim = graph.dim
         self.N = graph.n_nodes
 
-        if params["solver"] == "TrustRegions":
+        solver_type = params.get("solver", "TrustRegions")
+
+        if solver_type == "TrustRegions":
             self.solver = TrustRegions(
-                mingradnorm=params["mingradnorm"],
-                logverbosity=params["logverbosity"],
-                maxiter=params["maxiter"],
+                mingradnorm= params.get("mingradnorm", 1e-9),
+                logverbosity=params.get("logverbosity", 0),
+                maxiter=params.get("maxiter", 3000),
+                theta=params.get("theta", 1.0),
+                kappa=params.get("kappa", 0.05),
             )
-        elif params["solver"] == "ConjugateGradient":
+        elif solver_type == "ConjugateGradient":
             self.solver = ConjugateGradient(
                 # maxiter=params["maxiter"],
                 maxiter=10e4,

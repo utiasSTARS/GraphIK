@@ -21,6 +21,34 @@ from pymanopt.manifolds.manifold import Manifold
 
 sfunction = lambda x: None
 
+# def lyap(A, Q):
+#     """
+#     Solves the continuous Lyapunov equation :math:`AX + XA^H = Q`.
+#     Uses the Bartels-Stewart algorithm to find :math:`X`.
+#     Parameters
+#     ----------
+#     a : array_like
+#         A square matrix
+#     q : array_like
+#         Right-hand side square matrix
+#     Returns
+#     -------
+#     x : ndarray
+#         Solution to the continuous Lyapunov equation
+#     See Also
+#     --------
+#     Notes
+#     -----
+#     https://www.manopt.org/reference/manopt/tools/lyapunov_symmetric_eig.html
+#     """
+
+#     A = A.T + A / 2
+#     D, V = np.linalg.eig(A)
+#     M = (V.T.dot(Q)).dot(V)
+#     W = D[:,np.newaxis] + D
+#     Y = M.dot(np.linalg.pinv(W, hermitian = True))
+
+#     return (V.dot(Y)).dot(V.T)
 
 def lyap(a, q):
     """
@@ -132,8 +160,8 @@ class PSDFixedRank(Manifold):
         return np.einsum("ij,ji->", U, V.T)
 
     def norm(self, Y, U):
-        # return la.norm(U, "fro")
-        return np.sqrt(np.einsum("ij,ij->", U, U))
+        return la.norm(U, "fro")
+        # return np.sqrt(np.einsum("ij,ij->", U, U))
 
     def dist(self, U, V):
         raise NotImplementedError

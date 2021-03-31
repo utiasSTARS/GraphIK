@@ -31,7 +31,7 @@ def dist_to_gram(D) -> np.ndarray:
 
 
 def distance_matrix_from_gram(X: np.ndarray) -> np.ndarray:
-    return (np.diagonal(X)[:, np.newaxis] + np.diagonal(X)) - 2 * X
+    return (X.diagonal()[:, np.newaxis] + X.diagonal()) - 2 * X
 
 
 def distance_matrix_from_pos(Y: np.ndarray) -> np.ndarray:
