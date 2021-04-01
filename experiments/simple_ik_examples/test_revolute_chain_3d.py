@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import graphik
+from experiments.simple_ik_examples.problem_generation import generate_revolute_problem
 import numpy as np
 from graphik.graphs import RobotRevoluteGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
@@ -10,7 +10,7 @@ from graphik.utils.dgp import (
     pos_from_graph,
 )
 from graphik.utils.geometry import trans_axis
-from graphik.utils.roboturdf import RobotURDF
+from graphik.utils.roboturdf import load_kuka, load_ur10
 from graphik.utils.utils import best_fit_transform, list_to_variable_dict, safe_arccos
 from numpy import pi
 from numpy.linalg import norm
@@ -18,25 +18,10 @@ from numpy.linalg import norm
 
 def solve_random_problem(graph: RobotRevoluteGraph, solver: RiemannianSolver):
     n = graph.robot.n
-    axis_len = graph.robot.axis_length
-    q_goal = graph.robot.random_configuration()
-    G_goal = graph.realization(q_goal)
-    X_goal = pos_from_graph(G_goal)
-    D_goal = graph.distance_matrix_from_joints(q_goal)
-    T_goal = robot.get_pose(list_to_variable_dict(q_goal), f"p{n}")
-    q_rand = list_to_variable_dict(graph.robot.n * [0])
-    G_rand = graph.realization(q_rand)
-    X_rand = pos_from_graph(G_rand)
-    X_init = X_rand
 
-    goals = {
-        f"p{n}": T_goal.trans,
-        f"q{n}": T_goal.dot(trans_axis(axis_len, "z")).trans,
-    }
-    G = graph.complete_from_pos(goals)
+    G, T_goal, D_goal, X_goal = generate_revolute_problem(graph)
+
     lb, ub = bound_smoothing(G)
-    # print(ajdacency_matrix_from_graph(G))
-
     omega = adjacency_matrix_from_graph(G)
 
     # sol_info = solver.solve(D_goal, omega, use_limits=False, Y_init=X_init)
@@ -45,8 +30,9 @@ def solve_random_problem(graph: RobotRevoluteGraph, solver: RiemannianSolver):
     t_sol = sol_info["time"]
 
     align_ind = list(np.arange(graph.dim + 1))
-    for name in goals.keys():
-        align_ind.append(graph.node_ids.index(name))
+    for u, v in graph.robot.end_effectors:
+        align_ind.append(graph.node_ids.index(u))
+        align_ind.append(graph.node_ids.index(v))
 
     R, t = best_fit_transform(Y[align_ind, :], X_goal[align_ind, :])
     P_e = (R @ Y.T + t.reshape(3, 1)).T
@@ -62,8 +48,6 @@ def solve_random_problem(graph: RobotRevoluteGraph, solver: RiemannianSolver):
     z_goal = T_goal.as_matrix()[:3, 2]
     z_riemannian = T_riemannian.as_matrix()[:3, 2]
     err_riemannian_rot = abs(safe_arccos(z_riemannian.dot(z_goal)))
-    # err_riemannian_rot = norm((T_goal.rot.dot(T_riemannian.rot.inv())).log())
-    # print((T_goal.rot.dot(T_riemannian.rot.inv())).log())
 
     fail = False
     if err_riemannian_pos > 0.01 or err_riemannian_rot > 0.01:
@@ -80,114 +64,36 @@ if __name__ == "__main__":
 
     np.random.seed(21)
 
-    ### UR10 DH
-    n = 6
-    a = [0, -0.612, -0.5723, 0, 0, 0]
-    d = [0.1273, 0, 0, 0.1639, 0.1157, 0.0922]
-    al = [pi / 2, 0, 0, pi / 2, -pi / 2, 0]
-    th = [0, pi, 0, 0, 0, 0]
-    ub = (pi) * np.ones(n)
-    lb = -ub
-    modified_dh = False
-
-    ### Schunk Powerball
-    # n = 6
-    # L1 = 0.205
-    # L2 = 0.350
-    # L3 = 0.305
-    # L4 = 0.075
-    # a = [0, L2, 0, 0, 0, 0]
-    # d = [L1, 0, 0, L3, 0, L4]
-    # al = [-pi / 2, pi, -pi / 2, pi / 2, -pi / 2, 0]
-    # th = [0, -pi/2, -pi/2, 0, 0, 0]
-    # ub = (pi) * np.ones(n)
-    # lb = -ub
-    # modified_dh = False
-
-    ## KUKA LWR-IW
-    # n = 7
-    # a = [0, 0, 0, 0, 0, 0, 0]
-    # d = [0, 0, 0.4, 0, 0.39, 0, 0]
-    # al = [pi / 2, -pi / 2, -pi / 2, pi / 2, pi / 2, -pi / 2, 0]
-    # th = [0, 0, 0, 0, 0, 0, 0]
-    # angular_limits = np.minimum(np.random.rand(n) * pi + pi / 4, pi)
-    # ub = angular_limits
-    # lb = -angular_limits
-    # modified_dh = True
-
-    ### Jaco Arm
-    # n = 6
-    # D1 = 0.2755
-    # D2 = 0.2050
-    # D3 = 0.2050
-    # D4 = 0.2073
-    # D5 = 0.1038
-    # D6 = 0.1038
-    # D7 = 0.1600
-    # e2 = 0.0098
-    # a = [0, D2, 0, 0, 0, 0]
-    # d = [D1, 0, -e2, -(D3 + D4), 0, -(D5 + D6)]
-    # al = [pi / 2, pi, pi / 2, pi / 2, pi / 2, 0]
-    # th = [0, 0, 0, 0, 0, 0]
-    # ub = pi * np.ones(n)
-    # lb = -ub
-    # modified_dh = True
-
-    ### Franka Emika Panda
-    # n = 7
-    # a = [0, 0, 0, 0.0825, -0.0825, 0, 0.088]
-    # d = [0.333, 0, 0.316, 0, 0.384, 0, 0]
-    # al = [0, -pi / 2, pi / 2, pi / 2, -pi / 2, pi / 2, pi / 2]
-    # th = [0, 0, 0, 0, 0, 0]
-    # ub = (pi) * np.ones(n)
-    # lb = -ub
-    # modified_dh = True
-
-    # params = {
-    #     "a": a[:n],
-    #     "alpha": al[:n],
-    #     "d": d[:n],
-    #     "theta": th[:n],
-    #     "lb": lb[:n],
-    #     "ub": ub[:n],
-    #     "modified_dh": modified_dh,
-    # }
-
-    # robot = RobotRevolute(params)
-
-    # n = 7
-    # ub = (pi) * np.ones(n)
-    # lb = -ub
-    fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
-    # fname = graphik.__path__[0] + "/robots/urdfs/lwa4p.urdf"
-    # fname = graphik.__path__[0] + "/robots/urdfs/lwa4d.urdf"
-    # fname = graphik.__path__[0] + "/robots/urdfs/panda_arm.urdf"
-    # fname = graphik.__path__[0] + "/robots/urdfs/kuka_iiwr.urdf"
-    # fname = graphik.__path__[0] + "/robots/urdfs/kuka_lwr.urdf"
-    # fname = graphik.__path__[0] + "/robots/urdfs/jaco2arm6DOF_no_hand.urdf"
-    #
-    urdf_robot = RobotURDF(fname)
-    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
-
-    graph = RobotRevoluteGraph(robot)
-    # graph.distance_bounds_from_sampling()
-    solver = RiemannianSolver(graph)
+    robot, graph = load_kuka()
+    params = {
+        "solver": "TrustRegions",
+        "mingradnorm": 1e-9,
+        "maxiter": 3e3,
+        "theta": 0.5,
+        "logverbosity": 0,
+    }
+    params = {"solver":"ConjugateGradient"}
+    solver = RiemannianSolver(graph, params)
     num_tests = 100
     e_pos = []
     e_rot = []
     t = []
     fails = []
+    nit = []
     for _ in range(num_tests):
-        e_r_pos, e_r_rot, t_sol, fail, _ = solve_random_problem(graph, solver)
+        e_r_pos, e_r_rot, t_sol, fail, sol_info = solve_random_problem(graph, solver)
         e_pos += [e_r_pos]
         e_rot += [e_r_rot]
         t += [t_sol]
         fails += [fail]
+        nit += [sol_info["iterations"]]
 
     t = np.array(t)
     t = t[abs(t - np.mean(t)) < 2 * np.std(t)]
     print("Average solution time {:}".format(np.average(t)))
+    print("Median solution time {:}".format(np.median(t)))
     print("Standard deviation of solution time {:}".format(np.std(np.array(t))))
+    print("Average iterations {:}".format(np.average(nit)))
     print("Average pos error {:}".format(np.average(np.array(e_pos))))
     print("Average rot error {:}".format(np.average(np.array(e_rot))))
     print("Number of fails {:}".format(sum(fails)))

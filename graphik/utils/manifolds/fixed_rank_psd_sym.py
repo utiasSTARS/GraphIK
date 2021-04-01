@@ -11,6 +11,7 @@ from scipy.linalg.decomp_schur import schur
 from scipy.linalg import solve_sylvester
 from numba import njit
 
+from scipy.linalg import solve_continuous_lyapunov as lyap
 # Workaround for SciPy bug: https://github.com/scipy/scipy/pull/8082
 # try:
 #     from scipy.linalg import solve_continuous_lyapunov as lyap
@@ -20,86 +21,6 @@ from numba import njit
 from pymanopt.manifolds.manifold import Manifold
 
 sfunction = lambda x: None
-
-# def lyap(A, Q):
-#     """
-#     Solves the continuous Lyapunov equation :math:`AX + XA^H = Q`.
-#     Uses the Bartels-Stewart algorithm to find :math:`X`.
-#     Parameters
-#     ----------
-#     a : array_like
-#         A square matrix
-#     q : array_like
-#         Right-hand side square matrix
-#     Returns
-#     -------
-#     x : ndarray
-#         Solution to the continuous Lyapunov equation
-#     See Also
-#     --------
-#     Notes
-#     -----
-#     https://www.manopt.org/reference/manopt/tools/lyapunov_symmetric_eig.html
-#     """
-
-#     A = A.T + A / 2
-#     D, V = np.linalg.eig(A)
-#     M = (V.T.dot(Q)).dot(V)
-#     W = D[:,np.newaxis] + D
-#     Y = M.dot(np.linalg.pinv(W, hermitian = True))
-
-#     return (V.dot(Y)).dot(V.T)
-
-def lyap(a, q):
-    """
-    Solves the continuous Lyapunov equation :math:`AX + XA^H = Q`.
-    Uses the Bartels-Stewart algorithm to find :math:`X`.
-    Parameters
-    ----------
-    a : array_like
-        A square matrix
-    q : array_like
-        Right-hand side square matrix
-    Returns
-    -------
-    x : ndarray
-        Solution to the continuous Lyapunov equation
-    See Also
-    --------
-    solve_discrete_lyapunov : computes the solution to the discrete-time
-        Lyapunov equation
-    solve_sylvester : computes the solution to the Sylvester equation
-    Notes
-    -----
-    The continuous Lyapunov equation is a special form of the Sylvester
-    equation, hence this solver relies on LAPACK routine ?TRSYL.
-    .. versionadded:: 0.11.0
-    """
-
-    # Compute the Schur decomposition form of a
-    # r, u = schur(a, output="real", check_finite=False, overwrite_a=True)
-    (gees,) = get_lapack_funcs(("gees",), (a,))
-    # t = time.time()
-    # result = gees(lambda x: None, a, lwork=-1)
-    # print(time.time() - t)
-    # lwork = result[-2][0].real.astype(np.int_)
-    # result = gees(sfunction, a, lwork=lwork, overwrite_a=True,
-    #               sort_t=0)
-    result = gees(sfunction, a, overwrite_a=True, sort_t=0)
-    r = result[0]
-    u = result[-3]
-    # Construct f = u'*q*u
-    f = u.T.dot(q.dot(u))
-
-    # Call the Sylvester equation solver
-    trsyl = get_lapack_funcs("trsyl", (r, f))
-
-    y, scale, info = trsyl(r, r, f, tranb="T")
-
-    y *= scale
-
-    return u.dot(y).dot(u.T)
-
 
 class PSDFixedRank(Manifold):
     """
@@ -156,11 +77,11 @@ class PSDFixedRank(Manifold):
 
     def inner(self, Y, U, V):
         # Euclidean metric on the total space.
-        # return float(np.tensordot(U, V))
+        # return float(np.tensordot(U, V)) # VERY SLOW
         return np.einsum("ij,ji->", U, V.T)
 
     def norm(self, Y, U):
-        return la.norm(U, "fro")
+        return la.norm(U, "fro") # SLOW
         # return np.sqrt(np.einsum("ij,ij->", U, U))
 
     def dist(self, U, V):
@@ -168,17 +89,11 @@ class PSDFixedRank(Manifold):
 
     def proj(self, Y, H):
         # Projection onto the horizontal space
-        # t = time.time()
-        YtY = Y.T.dot(Y)
-        YtH = Y.T.dot(H)
-        AS = YtH - YtH.T
+        return H
+        # YtY = Y.T.dot(Y)
         # AS = Y.T.dot(H) - H.T.dot(Y)
-        Omega = lyap(YtY, AS)
-        # Omega[np.abs(Omega)<1e-16] = 0
-        # print(Omega)
-        # Omega = solve_sylvester(YtY, YtY, AS.T).T
-        # self.proj_sum += time.time() - t
-        return H - Y.dot(Omega)
+        # Omega = lyap(YtY, AS)
+        # return H - Y.dot(Omega)
 
     def egrad2rgrad(self, Y, egrad):
         return egrad

@@ -6,6 +6,10 @@ import numpy as np
 from pymanopt import tools
 from graphik.utils.manifolds.fixed_rank_psd_sym import PSDFixedRank
 from graphik.utils.dgp import (
+    pos_from_graph,
+    adjacency_matrix_from_graph,
+    distance_matrix_from_gram,
+    distance_matrix_from_pos,
     MDS,
     linear_projection,
     dist_to_gram,
@@ -97,7 +101,6 @@ def frobenius_norm_sq(X: np.ndarray):
 class RiemannianSolver:
     def __init__(self, graph: RobotGraph, params={}):
 
-
         self.params = params
         self.graph = graph
         self.dim = graph.dim
@@ -107,23 +110,20 @@ class RiemannianSolver:
 
         if solver_type == "TrustRegions":
             self.solver = TrustRegions(
-                mingradnorm= params.get("mingradnorm", 1e-9),
+                mingradnorm=params.get("mingradnorm", 0.5*1e-9),
                 logverbosity=params.get("logverbosity", 0),
                 maxiter=params.get("maxiter", 3000),
                 theta=params.get("theta", 1.0),
-                kappa=params.get("kappa", 0.05),
+                kappa=params.get("kappa", 0.1),
             )
         elif solver_type == "ConjugateGradient":
             self.solver = ConjugateGradient(
-                # maxiter=params["maxiter"],
-                maxiter=10e4,
-                minstepsize=1e-10,
-                mingradnorm=params["mingradnorm"],
-                beta_type=BetaTypes[3],
-                orth_value=4,  # 4
-                logverbosity=params["logverbosity"]
-                # linesearch=LineSearchBackTracking(suff_decr=0.001, initial_stepsize=0.001),
-                # linesearch=LineSearchBackTracking(suff_decr=0.0001, initial_stepsize=0.1),
+                mingradnorm=params.get("mingradnorm",1e-9),
+                logverbosity=params.get("logverbosity", 0),
+                maxiter=params.get("maxiter", 10e4),
+                minstepsize=params.get("minstepsize", 1e-10),
+                orth_value=params.get("orth_value", 10e10),
+                beta_type=params.get("beta_type", BetaTypes[3]),
             )
         else:
             raise (
@@ -144,12 +144,6 @@ class RiemannianSolver:
         return 0.5 * cost
 
     @staticmethod
-    def jcost_no_jit(Y, D_goal, omega):
-        D = distmat(Y)
-        R = omega * (D_goal - D)
-        return frobenius_norm_sq(R)
-
-    @staticmethod
     @njit(cache=True, fastmath=True)
     def jgrad(Y, D_goal, inds):
         num_el = Y.shape[0]
@@ -163,15 +157,7 @@ class RiemannianSolver:
                 grad[idx, kdx] += (
                     -4 * (D_goal[idx, jdx] - nrm) * (Y[idx, kdx] - Y[jdx, kdx])
                 )
-        return grad
-
-    @staticmethod
-    def jgrad_no_jit(Y, D_goal, omega):
-        D = distmat(Y)
-        R = omega * (D_goal - D)
-        add_to_diagonal_fast(R)
-        dfdY = 4 * R.dot(Y)
-        return dfdY
+        return 0.5 * grad
 
     @staticmethod
     @njit(cache=True, fastmath=True)
@@ -190,18 +176,7 @@ class RiemannianSolver:
                     2 * sc * (Y[idx, kdx] - Y[jdx, kdx])
                     + (nrm - D_goal[idx, jdx]) * (w[idx, kdx] - w[jdx, kdx])
                 )
-        return hess
-
-    @staticmethod
-    def jhess_no_jit(Y, w, D_goal, omega):
-        D = distmat(Y)
-        R = omega * (D_goal - D)
-        dDdZ = -distmat_gram(Y.dot(w.T) + w.dot(Y.T))  # directional der of dist matrix
-        FdDdZ = omega * dDdZ
-        add_to_diagonal_fast(FdDdZ)
-        add_to_diagonal_fast(R)
-        Hw = 4 * (FdDdZ.dot(Y) + R.dot(w))
-        return Hw
+        return 0.5 * hess
 
     @staticmethod
     @njit(cache=True, fastmath=True)
@@ -369,18 +344,40 @@ class RiemannianSolver:
             def ehess(Y, v):
                 return self.jhess(Y, v, D_goal, inds)
 
+            return cost, egrad, ehess
+
         else:
 
             def cost(Y):
-                return self.jcost_no_jit(Y, D_goal, omega)
+                D = distance_matrix_from_pos(Y)
+                S = omega * (D_goal - D)
+                f = np.linalg.norm(S) ** 2
+                return 0.5 * f
 
             def egrad(Y):
-                return self.jgrad_no_jit(Y, D_goal, omega)
+                D = distance_matrix_from_pos(Y)
+                S = omega * (D_goal - D)
+                dfdY = 4 * (S - np.diag(np.sum(S, axis=1))).dot(Y)
+                return 0.5 * dfdY
 
-            def ehess(Y, v):
-                return self.jhess_no_jit(Y, v, D_goal, omega)
+            def ehess(Y, Z):
+                D = distance_matrix_from_pos(Y)
+                S = omega * (D_goal - D)
+                dDdZ = distance_matrix_from_gram(Y.dot(Z.T) + Z.dot(Y.T))
+                dSdZ = -omega * dDdZ
+                d1 = 4 * (dSdZ - np.diag(np.sum(dSdZ, axis=1))).dot(Y)
+                d2 = 4 * (S - np.diag(np.sum(S, axis=1))).dot(Z)
+                HZ = d1 + d2
+                return 0.5 * HZ
 
-        return cost, egrad, ehess
+            # def cost_and_egrad(Y):
+            #     D = distance_matrix_from_pos(Y)
+            #     S = omega * (D_goal - D)
+            #     f = np.linalg.norm(S) ** 2
+            #     dfdY = 4 * (S - np.diag(np.sum(S, axis=1))).dot(Y)
+            #     return f, dfdY
+
+            return cost, egrad, ehess
 
     def create_cost_limits(self, D_goal, omega, psi_L, psi_U):
         def cost(Y):
@@ -401,7 +398,6 @@ class RiemannianSolver:
         use_limits=False,
         bounds=None,
         Y_init=None,
-        max_attempts=0,
         output_log=True,
     ):
 
@@ -487,3 +483,65 @@ class RiemannianSolver:
         # self.solver.linesearch = None
 
         return Y_sol, optlog
+
+
+if __name__ == "__main__":
+    from graphik.utils.roboturdf import load_ur10
+    from graphik.utils.geometry import trans_axis
+    import timeit
+
+    robot, graph = load_ur10()
+    n = 6
+    solver = RiemannianSolver(graph)
+    q_goal = graph.robot.random_configuration()
+    G_goal = graph.realization(q_goal)
+    X_goal = pos_from_graph(G_goal)
+    D_goal = graph.distance_matrix_from_joints(q_goal)
+    T_goal = robot.get_pose(q_goal, f"p{n}")
+
+    goals = {
+        f"p{n}": T_goal.trans,
+        f"q{n}": T_goal.dot(trans_axis(1, "z")).trans,
+    }
+    G = graph.complete_from_pos(goals)
+    omega = adjacency_matrix_from_graph(G)
+    inds = np.nonzero(omega)
+    cost, egrad, ehess = solver.create_cost(D_goal, omega, False)
+    cost2, egrad2, ehess2 = solver.create_cost(D_goal, omega, True)
+    Y = pos_from_graph(graph.realization(robot.random_configuration()))
+    Z = np.random.rand(Y.shape[0], Y.shape[1])
+
+    print(ehess(Y, Z) - ehess2(Y, Z))
+    # print(egrad(Y) - egrad2(Y))
+    # print(cost(Y) - cost2(Y))
+
+    print(
+        np.average(
+            timeit.repeat(
+                "cost2(Y)",
+                globals=globals(),
+                number=1,
+                repeat=10000,
+            )
+        )
+    )
+    print(
+        np.average(
+            timeit.repeat(
+                "egrad2(Y)",
+                globals=globals(),
+                number=1,
+                repeat=10000,
+            )
+        )
+    )
+    print(
+        np.average(
+            timeit.repeat(
+                "ehess2(Y, Y)",
+                globals=globals(),
+                number=1,
+                repeat=10000,
+            )
+        )
+    )
