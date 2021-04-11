@@ -86,7 +86,7 @@ if __name__ == "__main__":
         graph.add_spherical_obstacle(f"o{idx}", obs[0], obs[1])
 
     # graph.distance_bounds_from_sampling()
-    solver = EuclideanSolver(graph, {"method":"trust-krylov", "options": {"gtol":10e-9}})
+    solver = EuclideanSolver(graph, {"method":"trust-krylov", "options": {"gtol":10e-9, "ftol": 10e-8}})
     num_tests = 100
     e_pos = []
     e_rot = []

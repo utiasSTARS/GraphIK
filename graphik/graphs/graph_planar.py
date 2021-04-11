@@ -36,6 +36,7 @@ class RobotPlanarGraph(RobotGraph):
             base[u][v][DIST] = la.norm(base.nodes[u][POS] - base.nodes[v][POS])
             base[u][v][LOWER] = base[u][v][DIST]
             base[u][v][UPPER] = base[u][v][DIST]
+            base[u][v][BOUNDED] = []
 
         return base
 

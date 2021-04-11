@@ -115,7 +115,7 @@ class EuclideanSolver:
         N = self.graph.n_nodes
         dim = self.graph.dim
         ind = {}
-        for u,v in pairs:
+        for u,v in pairs: # hash the indices
             ind[u] = self.graph.node_ids.index(u)
             ind[v] = self.graph.node_ids.index(v)
 
@@ -184,7 +184,6 @@ class EuclideanSolver:
             constraints=self.g,
             hessp=hessv,
             method=self.method,
-            # options={"gtol": 1e-11},
             options=self.options,
         )
         t = time.time() - t
