@@ -22,6 +22,14 @@ from pymanopt.manifolds.manifold import Manifold
 
 sfunction = lambda x: None
 
+def proj(Y, H):
+    # Projection onto the horizontal space
+    # return H
+    YtY = Y.T.dot(Y)
+    AS = Y.T.dot(H) - H.T.dot(Y)
+    Omega = lyap(YtY, AS)
+    return H - Y.dot(Omega)
+
 class PSDFixedRank(Manifold):
     """
     Manifold of n-by-n symmetric positive semidefinite matrices of rank k.
