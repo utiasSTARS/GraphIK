@@ -9,7 +9,7 @@ from graphik.graphs import (
     RobotSphericalGraph,
 )
 from graphik.robots import RobotRevolute, RobotSpherical, RobotPlanar
-from graphik.utils.dgp import dist_to_gram, MDS, pos_from_graph
+from graphik.utils.dgp import gram_from_distance_matrix, MDS, pos_from_graph
 from graphik.utils.utils import (
     best_fit_transform,
     list_to_variable_dict,
@@ -244,7 +244,7 @@ class TestDistanceMatrix(unittest.TestCase):
             D = graph.distance_matrix_from_joints(q)
 
             # Reconstruct points
-            G = dist_to_gram(D)
+            G = gram_from_distance_matrix(D)
             u, s, vh = np.linalg.svd(G, full_matrices=True)
             X = (
                 np.concatenate(
@@ -291,7 +291,7 @@ class TestDistanceMatrix(unittest.TestCase):
             D = graph.distance_matrix_from_joints(q)
 
             # Reconstruct points
-            G = dist_to_gram(D)
+            G = gram_from_distance_matrix(D)
             u, s, vh = np.linalg.svd(G, full_matrices=True)
             X = (
                 np.concatenate(

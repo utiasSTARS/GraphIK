@@ -23,7 +23,7 @@ def orthogonal_procrustes(G1: nx.DiGraph, G2: nx.DiGraph) -> nx.DiGraph:
     return graph_from_pos(P_e, list(G2))  # not really order-dependent
 
 
-def dist_to_gram(D) -> np.ndarray:
+def gram_from_distance_matrix(D) -> np.ndarray:
     # TODO rename to gram_from_distance_matrix
     J = np.identity(D.shape[0]) - (1 / (D.shape[0])) * np.ones(D.shape)
     G = -0.5 * J @ D @ J  # Gram matrix

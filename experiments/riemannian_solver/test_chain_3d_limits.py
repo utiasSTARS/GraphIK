@@ -8,7 +8,7 @@ from graphik.graphs import RobotSphericalGraph
 from graphik.robots import RobotSpherical
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.dgp import (
-    dist_to_gram,
+    gram_from_distance_matrix,
     adjacency_matrix_from_graph,
     pos_from_graph,
     graph_from_pos,

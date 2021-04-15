@@ -11,7 +11,7 @@ from graphik.robots.robot_base import RobotPlanar
 from graphik.solvers.riemannian_solver import RiemannianSolver
 
 from graphik.utils.dgp import (
-    dist_to_gram,
+    gram_from_distance_matrix,
     adjacency_matrix_from_graph,
     distance_matrix_from_graph,
     orthogonal_procrustes,

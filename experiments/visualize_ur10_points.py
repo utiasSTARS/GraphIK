@@ -25,7 +25,7 @@ from graphik.utils.utils import (
     safe_arccos,
 )
 
-from graphik.utils.dgp import dist_to_gram, distance_matrix_from_graph
+from graphik.utils.dgp import gram_from_distance_matrix, distance_matrix_from_graph
 
 if __name__ == "__main__":
     np.random.seed(21)

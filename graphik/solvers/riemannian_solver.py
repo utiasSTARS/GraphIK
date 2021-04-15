@@ -12,7 +12,7 @@ from graphik.utils.dgp import (
     distance_matrix_from_pos,
     MDS,
     linear_projection,
-    dist_to_gram,
+    gram_from_distance_matrix,
 )
 from pymanopt.solvers import ConjugateGradient
 from graphik.solvers.trust_region import TrustRegions
@@ -326,7 +326,7 @@ class RiemannianSolver:
         # D_rand = sample_matrix(lb, ub) ** 2
         D_rand = (lb + 0.9 * (ub - lb)) ** 2
         # Y_rand = PCA(dist_to_gram(D_rand), dim)
-        X_rand = MDS(dist_to_gram(D_rand), eps=1e-8)
+        X_rand = MDS(gram_from_distance_matrix(D_rand), eps=1e-8)
         Y_rand = linear_projection(X_rand, omega, dim)
         return Y_rand
 
