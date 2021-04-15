@@ -164,6 +164,12 @@ class RobotGraph(ABC):
                 self.directed[node][name][LOWER] = radius
                 self.directed[node][name][UPPER] = 100
 
+    def clear_obstacles(self):
+        # Clears all obstacles from the graph
+        node_types = nx.get_node_attributes(self.directed, TYPE)
+        obstacles = [node for node, typ in node_types.items() if typ == OBSTACLE]
+        self.directed.remove_nodes_from(obstacles)
+
     def check_distance_limits(
         self, G: nx.DiGraph, tol=1e-10
     ) -> List[Dict[str, List[Any]]]:
