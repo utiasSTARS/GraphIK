@@ -59,19 +59,16 @@ def distance_matrix_from_graph(G: nx.Graph, weight=DIST, nonedge=0) -> np.ndarra
     return A
 
 
-def adjacency_matrix_from_graph(G: nx.DiGraph, label: str = DIST) -> np.ndarray:
+def adjacency_matrix_from_graph(G: nx.DiGraph, label: str = DIST) -> ArrayLike:
     """
-    Returns the adjacency matrix representing the edges that are known,
-    given the kinematic and base structure, as well as the end-effector targets.
+    Returns the adjacency matrix of the graph, but only for edges with label.
     :returns: Adjacency matrix
     """
-    if not isinstance(G, nx.DiGraph):
-        raise TypeError("Input must a DiGraph.")
+    if isinstance(G, nx.DiGraph):
+        G = G.to_undirected(as_view = True)
 
     selected_edges = [(u, v) for u, v, d in G.edges(data=True) if label in d]
-    return nx.to_numpy_array(
-        nx.to_undirected(G.edge_subgraph(selected_edges)), weight=""
-    )
+    return nx.to_numpy_array(G.edge_subgraph(selected_edges), weight="")
 
 
 def pos_from_graph(G: nx.DiGraph, node_ids=None) -> np.ndarray:
