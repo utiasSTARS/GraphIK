@@ -310,8 +310,3 @@ class TestDistanceMatrix(unittest.TestCase):
 
             self.assertIsNone(assert_allclose(P_e, Y, atol=1e-8))
 
-
-if __name__ == "__main__":
-
-    test = TestDistanceMatrix()
-    test.test_random_params_2d_tree()

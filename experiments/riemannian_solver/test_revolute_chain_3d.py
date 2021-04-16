@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-from experiments.simple_ik_examples.problem_generation import generate_revolute_problem
+from experiments.riemannian_solver.problem_generation import generate_revolute_problem
 import numpy as np
 from graphik.graphs import RobotRevoluteGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
-from graphik.utils.dgp import (
+from graphik.utils import (
     adjacency_matrix_from_graph,
     bound_smoothing,
     graph_from_pos,
     pos_from_graph,
+    best_fit_transform,
+    list_to_variable_dict,
+    safe_arccos
 )
-from graphik.utils.geometry import trans_axis
 from graphik.utils.roboturdf import load_kuka, load_ur10
-from graphik.utils.utils import best_fit_transform, list_to_variable_dict, safe_arccos
 from numpy import pi
 from numpy.linalg import norm
 
@@ -72,7 +73,6 @@ if __name__ == "__main__":
         "theta": 0.5,
         "logverbosity": 0,
     }
-    params = {"solver":"ConjugateGradient"}
     solver = RiemannianSolver(graph, params)
     num_tests = 100
     e_pos = []

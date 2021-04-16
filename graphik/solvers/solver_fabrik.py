@@ -6,7 +6,8 @@ import math
 import time
 
 from graphik.robots.robot_base import Robot
-from graphik.utils.utils import generate_rotation_matrix, list_to_variable_dict
+from graphik.utils.utils import list_to_variable_dict
+from graphik.utils.geometry import generate_rotation_matrix
 
 from liegroups.numpy import SO2
 from liegroups.numpy import SO3

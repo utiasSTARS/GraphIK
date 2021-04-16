@@ -1,17 +1,59 @@
 import numpy as np
 import networkx as nx
+import random
 from numpy import pi
 from numpy.testing import assert_array_equal
 import unittest
-
+from graphik.utils.constants import *
+from itertools import combinations, groupby
 from graphik.graphs import RobotPlanarGraph
 from graphik.robots import RobotPlanar
 
 from graphik.utils.dgp import adjacency_matrix_from_graph
 from graphik.utils.utils import list_to_variable_dict
 
-# FIXME currently there are only tests for the planar case - should include spherical and revolute
+def gnp_random_connected_graph(n, p):
+    """
+    Generates a random undirected graph, similarly to an Erdős-Rényi
+    graph, but enforcing that the resulting graph is conneted
+    """
+    edges = combinations(range(n), 2)
+    G = nx.Graph()
+    G.add_nodes_from(range(n))
+    if p <= 0:
+        return G
+    if p >= 1:
+        return nx.complete_graph(n, create_using=G)
+    for _, node_edges in groupby(edges, key=lambda x: x[0]):
+        node_edges = list(node_edges)
+        random_edge = random.choice(node_edges)
+        G.add_edge(*random_edge)
+        for e in node_edges:
+            if random.random() < p:
+                G.add_edge(*e)
+    return G
+
 class TestAdjacencyMatrices(unittest.TestCase):
+    def test_random_graph(self):
+        NUM_TESTS = 100
+
+        # pre-generate a list of random graph sizes
+        n = np.random.randint(4,30,size=NUM_TESTS)
+
+        for idx in range(NUM_TESTS):
+            # generate random ladder graph and set distances to 1
+            G = gnp_random_connected_graph(n[idx],0.2)
+            nx.set_edge_attributes(G, 1, DIST)
+
+            # get adjacency with networkx
+            F_gt = nx.adjacency_matrix(G, weight = DIST).todense()
+
+            # get adjacency matrix using our library
+            F = adjacency_matrix_from_graph(nx.DiGraph(G))
+
+            assert_array_equal(F, F_gt)
+
+
     def test_planar_chain_pose_goal(self):
         n = 3
         a = list_to_variable_dict(np.ones(n))

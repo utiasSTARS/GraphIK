@@ -2,38 +2,9 @@ import numpy as np
 import scipy as sp
 import networkx as nx
 from numpy import pi
-import math
-from liegroups import SO3
 
 dZ = 1
 
-def rotmat_from_two_vector_matches(a_1, a_2, b_1, b_2):
-    """ Returns C in SO(3), such that b_1 = C*a_1 and b_2 = C*a_2"""
-    ## Construct orthonormal basis of 'a' frame
-    a_1_u = a_1/(np.linalg.norm(a_1))
-    a_2_u = a_2/(np.linalg.norm(a_2))
-    alpha = a_1_u.dot(a_2_u)
-
-    a_basis_1 = a_1_u
-    a_basis_2 = a_2_u - alpha*a_1_u
-    a_basis_2 /= np.linalg.norm(a_basis_2)
-    a_basis_3 = np.cross(a_basis_1, a_basis_2)
-
-    ## Construct basis of 'b' frame
-    b_basis_1 = b_1/np.linalg.norm(b_1)
-    b_basis_2 = b_2/np.linalg.norm(b_2) - alpha*b_basis_1
-    b_basis_2 /= np.linalg.norm(b_basis_2)
-    b_basis_3 = np.cross(b_basis_1, b_basis_2)
-
-    #Basis of 'a' frame as column vectors
-    M_a = np.array([a_basis_1, a_basis_2, a_basis_3])
-
-    #Basis of 'b' frame as row vectors
-    M_b = np.array([b_basis_1, b_basis_2, b_basis_3]).T
-
-    #Direction cosine matrix from a to b!
-    C = M_b.dot(M_a)
-    return SO3.from_matrix(C)
 
 def perpendicular_vector(v):
     """ Returns arbitrary perpendicular vector """
@@ -146,35 +117,6 @@ def best_fit_transform(A: np.ndarray, B: np.ndarray) -> (np.ndarray, np.ndarray)
     t = centroid_B.T - np.dot(R, centroid_A.T)
     return R, t
 
-
-def generate_rotation_matrix(theta, axis):
-    R = np.array([])
-
-    c = math.cos(theta)
-    s = math.sin(theta)
-
-    if type(axis).__name__ == "str":
-        if axis == "x":
-            R = np.array([[1, 0, 0], [0, c, -s], [0, s, c]])
-        elif axis == "y":
-            R = np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
-        elif axis == "z":
-            R = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
-        else:
-            R = np.array([False])
-    else:
-        x = axis[0]
-        y = axis[1]
-        z = axis[2]
-
-        R = [
-            [c + x ** 2 * (1 - c), x * y * (1 - c) - z * s, x * z * (1 - c) + y * s],
-            [y * x * (1 - c) + z * s, c + y ** 2 * (1 - c), y * z * (1 - c) - x * s],
-            [z * x * (1 - c) - y * s, z * y * (1 - c) + x * s, c + z ** 2 * (1 - c)],
-        ]
-        R = np.array(R)
-
-    return R
 
 
 def make_save_string(save_properties: list) -> str:

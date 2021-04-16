@@ -1,24 +1,9 @@
 import numpy as np
 import sympy as sp
-from scipy.optimize import fsolve
 
 from liegroups.numpy import SO2, SE2, SO3, SE3
 from numpy import sin, cos
 
-
-def sph_to_se3(alpha: float, d: float, theta: float) -> SE3:
-    """Transform a single set of DH parameters into an SE3 matrix
-    :param a: displacement along x
-    :param alpha: rotation about x
-    :param d: translation along new z
-    :param theta: rotation around new z
-    :returns: SE3 matrix
-    :rtype: lie.SE3Matrix
-    """
-    RotX = rot_axis(alpha, "x")
-    TransZ = trans_axis(d, "z")
-    RotZ = rot_axis(theta, "z")
-    return RotZ.dot(RotX.dot(TransZ))
 
 
 def angle_to_se2(a: float, theta: float) -> SE2:
@@ -33,98 +18,6 @@ def angle_to_se2(a: float, theta: float) -> SE2:
     return SE2(R, R.dot(np.array([a, 0.0])))  # TODO: rotate the translation or not?
 
 
-def dh_to_se3(a: float, alpha: float, d: float, theta: float) -> SE3:
-    """Transform a single set of DH parameters into an SE3 matrix
-    :param a: displacement along x
-    :param alpha: rotation about x
-    :param d: translation along new z
-    :param theta: rotation around new z
-    :returns: SE3 matrix
-    :rtype: lie.SE3Matrix
-    """
-
-    TransX = SE3(SO3.identity(), np.array([a, 0, 0]))
-    RX = SO3(rotx(alpha))
-    RotX = SE3(RX, np.zeros(3))
-    TransZ = SE3(SO3.identity(), np.array([0, 0, d]))
-    RZ = SO3(rotz(theta))
-    RotZ = SE3(RZ, np.zeros(3))
-    return TransZ.dot(RotZ.dot(TransX.dot(RotX)))
-
-
-def modified_dh_to_se3(a: float, alpha: float, d: float, theta: float) -> SE3:
-    """Transform a single set of modified DH parameters into an SE3 matrix
-    :param a: displacement along x
-    :param alpha: rotation about x
-    :param d: translation along new z
-    :param theta: rotation around new z
-    :returns: SE3 matrix
-    :rtype: lie.SE3Matrix
-    """
-
-    TransX = SE3(SO3.identity(), np.array([a, 0, 0]))
-    # RX = SO3.rotx(alpha)
-    RX = SO3(rotx(alpha))
-    RotX = SE3(RX, np.zeros(3))
-    TransZ = SE3(SO3.identity(), np.array([0, 0, d]))
-    # RZ = SO3.rotz(theta)
-    RZ = SO3(rotz(theta))
-    RotZ = SE3(RZ, np.zeros(3))
-
-    return TransX.dot(RotX.dot(TransZ.dot(RotZ)))
-
-
-def inverse_dh_frame(q: np.ndarray, a: float, d: float, alpha, tol=1e-6) -> float:
-    """
-    Compute the approximate least-squares DH frame IK when given the other three DH parameters (a, d, alpha) and the
-    origin of the next frame.
-
-    :param q: value of the z-axis (i.e. q) for the link we are trying to localize.
-    :param a: DH parameter a
-    :param d: DH parameter d
-    :param alpha: DH parameter alpha
-    :return: float representing the DH parameter theta for this link
-    """
-    c_alpha = np.cos(alpha)
-    s_alpha = np.sin(alpha)
-    A = np.array([[a, s_alpha], [-s_alpha, a], [0.0, 0.0]])
-    b = q - np.array([0.0, 0.0, c_alpha + d])
-    sol_candidate = np.linalg.pinv(A) @ b
-    # print("\n\n---------------------------------------------")
-    # print("Solution candidate: {:}".format(sol_candidate))
-
-    if sum(np.abs(sol_candidate)) < 1e-9:
-        # print("Unobservable angle! Returning 0.")
-        # print("A matrix: {:}".format(A))
-        # print("q1: {:}".format(q))
-        # print("alpha: {:}".format(alpha))
-        # print("d: {:}".format(d))
-        # print("b vector: {:}".format(b))
-        return 0.0, dh_to_se3(a, alpha, d, 0.0).as_matrix()
-
-    residual = np.abs(np.linalg.norm(sol_candidate) - 1.0)
-    # print("Residual: {:}".format(residual))
-    if residual <= tol:
-        sol = sol_candidate / np.linalg.norm(sol_candidate)
-    else:
-        # Iterative least squares
-        # print("Noise detected! Using iterative solver on the Lagrangian.")
-        f_lam = (
-            lambda lam: np.linalg.norm(
-                np.linalg.inv(A.T @ A + lam * np.eye(2)) @ A.T @ b
-            )
-            - 1.0
-        )
-        lam_opt = fsolve(f_lam, x0=0.0)
-        sol = np.linalg.inv(A.T @ A + lam_opt * np.eye(2)) @ A.T @ b
-
-    # print("Solution: {:}".format(sol))
-    theta = np.arctan2(sol[1], sol[0])
-    T_dh = dh_to_se3(a, alpha, d, theta).as_matrix()
-
-    return theta, T_dh
-
-
 def extract_relative_angle_Z(T_source: np.ndarray, T_target: np.ndarray) -> float:
     """
 
@@ -134,21 +27,6 @@ def extract_relative_angle_Z(T_source: np.ndarray, T_target: np.ndarray) -> floa
     """
     T_rel = np.linalg.inv(T_source).dot(T_target)
     return np.arctan2(T_rel[1, 0], T_rel[0, 0])
-
-
-def inverse_modified_dh_frame(p: np.ndarray, a: float, d: float, alpha) -> float:
-    """
-    Compute the least-squares DH frame IK when given the other three DH parameters (a, d, alpha) and the origin of the
-    next frame.
-
-    :param p: Origin point for the link we are trying to localize.
-    :param a:
-    :param d:
-    :param alpha:
-    :return: float representing the DH parameter theta for this link
-    """
-    pass
-
 
 def skew(x):
     """
@@ -188,6 +66,33 @@ def from_angle(angle_in_radians):
     """
     return exp(angle_in_radians)
 
+def rotmat_from_two_vector_matches(a_1, a_2, b_1, b_2):
+    """ Returns C in SO(3), such that b_1 = C*a_1 and b_2 = C*a_2"""
+    ## Construct orthonormal basis of 'a' frame
+    a_1_u = a_1/(np.linalg.norm(a_1))
+    a_2_u = a_2/(np.linalg.norm(a_2))
+    alpha = a_1_u.dot(a_2_u)
+
+    a_basis_1 = a_1_u
+    a_basis_2 = a_2_u - alpha*a_1_u
+    a_basis_2 /= np.linalg.norm(a_basis_2)
+    a_basis_3 = np.cross(a_basis_1, a_basis_2)
+
+    ## Construct basis of 'b' frame
+    b_basis_1 = b_1/np.linalg.norm(b_1)
+    b_basis_2 = b_2/np.linalg.norm(b_2) - alpha*b_basis_1
+    b_basis_2 /= np.linalg.norm(b_basis_2)
+    b_basis_3 = np.cross(b_basis_1, b_basis_2)
+
+    #Basis of 'a' frame as column vectors
+    M_a = np.array([a_basis_1, a_basis_2, a_basis_3])
+
+    #Basis of 'b' frame as row vectors
+    M_b = np.array([b_basis_1, b_basis_2, b_basis_3]).T
+
+    #Direction cosine matrix from a to b!
+    C = M_b.dot(M_a)
+    return SO3.from_matrix(C)
 
 def rotx(angle_in_radians):
     """Form a rotation matrix given an angle in rad about the x-axis.
@@ -261,6 +166,35 @@ def rot_axis(x, axis="z"):
     if axis == "x":
         return SE3(SO3(rotx(x)), np.array([0, 0, 0]))
     raise Exception("Invalid Axis")
+
+def generate_rotation_matrix(theta, axis):
+    R = np.array([])
+
+    c = math.cos(theta)
+    s = math.sin(theta)
+
+    if type(axis).__name__ == "str":
+        if axis == "x":
+            R = np.array([[1, 0, 0], [0, c, -s], [0, s, c]])
+        elif axis == "y":
+            R = np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
+        elif axis == "z":
+            R = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+        else:
+            R = np.array([False])
+    else:
+        x = axis[0]
+        y = axis[1]
+        z = axis[2]
+
+        R = [
+            [c + x ** 2 * (1 - c), x * y * (1 - c) - z * s, x * z * (1 - c) + y * s],
+            [y * x * (1 - c) + z * s, c + y ** 2 * (1 - c), y * z * (1 - c) - x * s],
+            [z * x * (1 - c) - y * s, z * y * (1 - c) + x * s, c + z ** 2 * (1 - c)],
+        ]
+        R = np.array(R)
+
+    return R
 
 
 def cross_symb(x, y):

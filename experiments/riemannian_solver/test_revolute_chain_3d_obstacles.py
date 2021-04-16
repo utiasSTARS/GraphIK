@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 import graphik
 import numpy as np
-from graphik.graphs.graph_base import RobotGraph, RobotRevoluteGraph
+from graphik.graphs.graph_base import RobotGraph
+from graphik.graphs import RobotRevoluteGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
-from graphik.utils.dgp import (
+from graphik.utils import (
     adjacency_matrix_from_graph,
     bound_smoothing,
     graph_from_pos,
     pos_from_graph,
     distance_matrix_from_graph,
     orthogonal_procrustes,
+    list_to_variable_dict,
+    safe_arccos
 )
-from graphik.utils.geometry import trans_axis
 from graphik.utils.roboturdf import RobotURDF
-from graphik.utils.utils import best_fit_transform, list_to_variable_dict, safe_arccos
 from numpy import pi
 from numpy.linalg import norm
 

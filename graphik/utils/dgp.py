@@ -2,6 +2,7 @@
 import numpy as np
 import networkx as nx
 import math
+from numpy.typing import ArrayLike
 from graphik.utils.constants import *
 from graphik.utils.utils import best_fit_transform
 
@@ -23,41 +24,33 @@ def orthogonal_procrustes(G1: nx.DiGraph, G2: nx.DiGraph) -> nx.DiGraph:
     return graph_from_pos(P_e, list(G2))  # not really order-dependent
 
 
-def gram_from_distance_matrix(D) -> np.ndarray:
-    # TODO rename to gram_from_distance_matrix
+def gram_from_distance_matrix(D: ArrayLike) -> ArrayLike:
     J = np.identity(D.shape[0]) - (1 / (D.shape[0])) * np.ones(D.shape)
     G = -0.5 * J @ D @ J  # Gram matrix
     return G
 
 
-def distance_matrix_from_gram(X: np.ndarray) -> np.ndarray:
+def distance_matrix_from_gram(X: ArrayLike) -> ArrayLike:
     return (X.diagonal()[:, np.newaxis] + X.diagonal()) - 2 * X
 
 
-def distance_matrix_from_pos(Y: np.ndarray) -> np.ndarray:
+def distance_matrix_from_pos(Y: ArrayLike) -> ArrayLike:
     return distance_matrix_from_gram(Y @ Y.T)
 
 
-def distance_matrix_from_graph(G: nx.Graph, weight=DIST, nonedge=0) -> np.ndarray:
+def distance_matrix_from_graph(G: nx.Graph, label=DIST, nonedge=0) -> ArrayLike:
+    """
+    Returns the distance matrix of the graph, where distance is the attribute with label.
+    :returns: Adjacency matrix
+    """
     if isinstance(G, nx.DiGraph):
-        G = nx.to_undirected(G)
+        G = G.to_undirected(as_view=True)
 
-    nodelist = list(G)
-    nlen = len(nodelist)
-    index = dict(zip(nodelist, range(nlen)))
-
-    A = np.full((nlen, nlen), np.nan)
-    for u, nbrdict in G.adjacency():
-        for v, d in nbrdict.items():
-            try:
-                A[index[u], index[v]] = d.get(weight, np.nan) ** 2
-            except KeyError:
-                pass
-
-    A[np.isnan(A)] = nonedge
-    A = np.asarray(A)
-    return A
-
+    selected_edges = [(u, v) for u, v, d in G.edges(data=True) if label in d]
+    return (
+        nx.to_numpy_array(G.edge_subgraph(selected_edges), weight=DIST, nonedge=nonedge)
+        ** 2
+    )
 
 def adjacency_matrix_from_graph(G: nx.DiGraph, label: str = DIST) -> ArrayLike:
     """
@@ -65,13 +58,13 @@ def adjacency_matrix_from_graph(G: nx.DiGraph, label: str = DIST) -> ArrayLike:
     :returns: Adjacency matrix
     """
     if isinstance(G, nx.DiGraph):
-        G = G.to_undirected(as_view = True)
+        G = G.to_undirected(as_view=True)
 
     selected_edges = [(u, v) for u, v, d in G.edges(data=True) if label in d]
     return nx.to_numpy_array(G.edge_subgraph(selected_edges), weight="")
 
 
-def pos_from_graph(G: nx.DiGraph, node_ids=None) -> np.ndarray:
+def pos_from_graph(G: nx.DiGraph, node_ids=None) -> ArrayLike:
     """
     Returns an n x m matrix of node positions from a given graph,
     where n is the number of nodes and m is the point dimension.
@@ -88,7 +81,7 @@ def pos_from_graph(G: nx.DiGraph, node_ids=None) -> np.ndarray:
     return np.array(X)
 
 
-def graph_from_pos(P: np.ndarray, node_ids: list = None, dist=True) -> nx.DiGraph:
+def graph_from_pos(P: ArrayLike, node_ids: list = None, dist=True) -> nx.DiGraph:
     """
     Generates an nx.DiGraph object of the subclass type given
     an n x m matrix where n is the number of nodes and m is the dimension.
@@ -150,7 +143,7 @@ def graph_complete_edges(G: nx.DiGraph) -> nx.DiGraph:
     return G
 
 
-def factor(A):
+def factor(A: ArrayLike):
     n = A.shape[0]
     (evals, evecs) = np.linalg.eigh(A)
     evals[evals < 0] = 0  # closest SDP matrix
@@ -163,7 +156,7 @@ def factor(A):
 
 
 ## perform classic Multidimensional scaling
-def MDS(B, eps=1e-5):
+def MDS(B: ArrayLike, eps: float=1e-5):
     n = B.shape[0]
     x = factor(B)
     (evals, evecs) = np.linalg.eigh(x)
@@ -174,7 +167,7 @@ def MDS(B, eps=1e-5):
     return x
 
 
-def linear_projection(P, F, dim):
+def linear_projection(P: ArrayLike, F: ArrayLike, dim):
     S = 0
     I = np.nonzero(F)
     for kdx in range(len(I[0])):
@@ -186,7 +179,7 @@ def linear_projection(P, F, dim):
     return P @ np.fliplr(eigvec)[:, :dim]
 
 
-def linear_projection_randomized(P, F, dim):
+def linear_projection_randomized(P: ArrayLike, F: ArrayLike, dim):
     S = 0
     I = np.nonzero(F)
     for kdx in range(len(I[0])):

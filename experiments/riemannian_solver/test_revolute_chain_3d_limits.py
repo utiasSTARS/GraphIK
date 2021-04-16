@@ -8,17 +8,15 @@ from numpy.linalg import norm
 
 from graphik.graphs import RobotRevoluteGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
-from graphik.utils.dgp import (
+from graphik.utils import (
     adjacency_matrix_from_graph,
     pos_from_graph,
     graph_from_pos,
     bound_smoothing,
-)
-from graphik.utils.geometry import trans_axis
-from graphik.utils.utils import (
     best_fit_transform,
     list_to_variable_dict,
     safe_arccos,
+    trans_axis
 )
 
 
