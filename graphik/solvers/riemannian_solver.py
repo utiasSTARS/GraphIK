@@ -4,8 +4,8 @@ import pymanopt
 from numba import njit
 import numpy as np
 from pymanopt import tools
-from graphik.utils.manifolds.fixed_rank_psd_sym import PSDFixedRank
-from graphik.utils.dgp import (
+from pymanopt.solvers import ConjugateGradient
+from graphik.utils import (
     pos_from_graph,
     adjacency_matrix_from_graph,
     distance_matrix_from_gram,
@@ -14,27 +14,27 @@ from graphik.utils.dgp import (
     linear_projection,
     gram_from_distance_matrix,
 )
-from pymanopt.solvers import ConjugateGradient
+from graphik.utils.manifolds.fixed_rank_psd_sym import PSDFixedRank
 from graphik.solvers.trust_region import TrustRegions
 from graphik.graphs.graph_base import RobotGraph
-
+from graphik.solvers.costgrd import jcost, jgrad, jhess, lcost, lgrad, lhess
 BetaTypes = tools.make_enum(
     "BetaTypes", "FletcherReeves PolakRibiere HestenesStiefel HagerZhang".split()
 )
 
 
-# @njit(cache=True, fastmath=True)
+@njit(cache=True, fastmath=True)
 def add_to_diagonal_fast(X: np.ndarray):
-    # num_atoms = X.shape[0]
-    # for i in range(num_atoms):
-    #     rowsum = 0
-    #     for j in range(num_atoms):
-    #         rowsum += X[i, j]
-    #     X[i, i] += -rowsum
-    # return X
-    # Non-numba
-    X.ravel()[:: X.shape[1] + 1] += -np.sum(X, axis=0)
+    num_atoms = X.shape[0]
+    for i in range(num_atoms):
+        rowsum = 0
+        for j in range(num_atoms):
+            rowsum += X[i, j]
+        X[i, i] += -rowsum
     return X
+    # Non-numba
+    # X.ravel()[:: X.shape[1] + 1] += -np.sum(X, axis=0)
+    # return X
 
 
 @njit(cache=True, fastmath=True)
@@ -97,6 +97,38 @@ def frobenius_norm_sq(X: np.ndarray):
             nrm += X[i, j] ** 2
     return nrm
 
+# def lcost(self, Y, D_goal, F, Bl, L):
+#     D = distmat(Y)
+#     E1 = F * (D_goal - D)
+#     E2 = np.maximum(Bl - L * D, 0)
+#     return frobenius_norm_sq(E1) + frobenius_norm_sq(E2)
+
+# def lgrad(self, Y, D_goal, F, Bl, L):
+#     D = distmat(Y)
+#     R = F * (D_goal - D)
+#     add_to_diagonal_fast(R)
+#     dfdY = R.dot(Y)
+#     Rb = np.maximum(Bl - L * D, 0)
+#     add_to_diagonal_fast(Rb)
+#     dfdYb = Rb.dot(Y)
+#     return 4 * (dfdY + dfdYb)
+
+# def lhess(self, Y, w, D_goal, F, Bl, L):
+#     D = distmat(Y)
+#     R = F * (D_goal - D)
+#     dDdZ = distmat_gram(Y @ w.T + w @ Y.T)  # directional der of dist matrix
+#     FdDdZ = F * dDdZ
+#     add_to_diagonal_fast(FdDdZ)
+#     add_to_diagonal_fast(R)
+#     Hw = 4 * (-FdDdZ.dot(Y) + R.dot(w))
+
+#     Rb = np.maximum(Bl - L * D, 0)
+#     dDdZb = np.where(Rb > 0, 1, 0) * (-L * dDdZ)
+#     add_to_diagonal_fast(dDdZb)
+#     add_to_diagonal_fast(Rb)
+#     Hwb = 4 * (dDdZb.dot(Y) + Rb.dot(w))
+#     return Hw + Hwb
+
 
 class RiemannianSolver:
     def __init__(self, graph: RobotGraph, params={}):
@@ -131,191 +163,6 @@ class RiemannianSolver:
                 "params[\"solver\"] must be one of 'ConjugateGradient', 'TrustRegions'",
             )
 
-    @staticmethod
-    @njit(cache=True, fastmath=True)
-    def jcost(Y, D_goal, inds):
-        cost = 0
-        dim = Y.shape[1]
-        for (idx, jdx) in zip(*inds):
-            nrm = 0
-            for kdx in range(dim):
-                nrm += (Y[idx, kdx] - Y[jdx, kdx]) ** 2
-            cost += (D_goal[idx, jdx] - nrm) ** 2
-        return 0.5 * cost
-
-    @staticmethod
-    @njit(cache=True, fastmath=True)
-    def jgrad(Y, D_goal, inds):
-        num_el = Y.shape[0]
-        dim = Y.shape[1]
-        grad = np.zeros((num_el, dim))
-        for (idx, jdx) in zip(*inds):
-            nrm = 0
-            for kdx in range(dim):
-                nrm += (Y[idx, kdx] - Y[jdx, kdx]) ** 2
-            for kdx in range(dim):
-                grad[idx, kdx] += (
-                    -4 * (D_goal[idx, jdx] - nrm) * (Y[idx, kdx] - Y[jdx, kdx])
-                )
-        return 0.5 * grad
-
-    @staticmethod
-    @njit(cache=True, fastmath=True)
-    def jhess(Y, w, D_goal, inds):
-        num_el = Y.shape[0]
-        dim = Y.shape[1]
-        hess = np.zeros((num_el, dim))
-        for (idx, jdx) in zip(*inds):
-            nrm = 0
-            sc = 0
-            for kdx in range(dim):
-                sc += (Y[idx, kdx] - Y[jdx, kdx]) * (w[idx, kdx] - w[jdx, kdx])
-                nrm += (Y[idx, kdx] - Y[jdx, kdx]) ** 2
-            for kdx in range(dim):
-                hess[idx, kdx] += 4 * (
-                    2 * sc * (Y[idx, kdx] - Y[jdx, kdx])
-                    + (nrm - D_goal[idx, jdx]) * (w[idx, kdx] - w[jdx, kdx])
-                )
-        return 0.5 * hess
-
-    @staticmethod
-    @njit(cache=True, fastmath=True)
-    def lcost(Y, D_goal, omega, psi_L, psi_U):
-        cost = 0
-        num_el = Y.shape[0]
-        dim = Y.shape[1]
-        for idx in range(num_el):
-            for jdx in range(idx + 1, num_el):
-                if omega[idx, jdx]:
-                    nrm = 0
-                    for kdx in range(dim):
-                        nrm += (Y[idx, kdx] - Y[jdx, kdx]) ** 2
-                    cost += 2 * (D_goal[idx, jdx] - nrm) ** 2
-                if psi_L[idx, jdx]:
-                    nrm = 0
-                    for kdx in range(dim):
-                        nrm += (Y[idx, kdx] - Y[jdx, kdx]) ** 2
-                    cost += 2 * max((psi_L[idx, jdx] - nrm), 0) ** 2
-                if psi_U[idx, jdx]:
-                    nrm = 0
-                    for kdx in range(dim):
-                        nrm += (Y[idx, kdx] - Y[jdx, kdx]) ** 2
-                    cost += 2 * max((-psi_U[idx, jdx] + nrm), 0) ** 2
-
-        return 0.5 * cost
-
-    # def lcost(self, Y, D_goal, F, Bl, L):
-    #     D = distmat(Y)
-    #     E1 = F * (D_goal - D)
-    #     E2 = np.maximum(Bl - L * D, 0)
-    #     return frobenius_norm_sq(E1) + frobenius_norm_sq(E2)
-
-    @staticmethod
-    @njit(cache=True, fastmath=True)
-    def lgrad(Y, D_goal, omega, psi_L, psi_U):
-        num_el = Y.shape[0]
-        dim = Y.shape[1]
-        grad = np.zeros((num_el, dim))
-        D = distmat(Y, omega + psi_L + psi_U)
-        for idx in range(num_el):
-            for jdx in range(num_el):
-                if omega[idx, jdx] and idx != jdx:
-                    for kdx in range(dim):
-                        grad[idx, kdx] += (
-                            4
-                            * (D[idx, jdx] - D_goal[idx, jdx])
-                            * (Y[idx, kdx] - Y[jdx, kdx])
-                        )
-                if psi_L[idx, jdx] and idx != jdx:
-                    if max(psi_L[idx, jdx] - D[idx, jdx], 0) > 0:
-                        for kdx in range(dim):
-                            grad[idx, kdx] += (
-                                4
-                                * (D[idx, jdx] - psi_L[idx, jdx])
-                                * (Y[idx, kdx] - Y[jdx, kdx])
-                            )
-                if psi_U[idx, jdx] and idx != jdx:
-                    if max(-psi_U[idx, jdx] + D[idx, jdx], 0) > 0:
-                        for kdx in range(dim):
-                            grad[idx, kdx] += (
-                                4
-                                * (D[idx, jdx] - psi_U[idx, jdx])
-                                * (Y[idx, kdx] - Y[jdx, kdx])  # might be wrong
-                            )
-        return grad
-
-    # def lgrad(self, Y, D_goal, F, Bl, L):
-    #     D = distmat(Y)
-    #     R = F * (D_goal - D)
-    #     add_to_diagonal_fast(R)
-    #     dfdY = R.dot(Y)
-    #     Rb = np.maximum(Bl - L * D, 0)
-    #     add_to_diagonal_fast(Rb)
-    #     dfdYb = Rb.dot(Y)
-    #     return 4 * (dfdY + dfdYb)
-
-    @staticmethod
-    @njit(cache=True, fastmath=True)
-    def lhess(Y, w, D_goal, omega, psi_L, psi_U):
-        num_el = Y.shape[0]
-        dim = Y.shape[1]
-        hess = np.zeros((num_el, dim))
-        D = distmat(Y, omega + psi_L + psi_U)
-        for idx in range(num_el):  # first hess
-            for jdx in range(num_el):  # second hess
-                if omega[idx, jdx] and idx != jdx:
-                    sc = 0
-                    for kdx in range(dim):
-                        sc += (Y[idx, kdx] - Y[jdx, kdx]) * (w[idx, kdx] - w[jdx, kdx])
-                    for kdx in range(dim):
-                        hess[idx, kdx] += 4 * (
-                            2 * sc * (Y[idx, kdx] - Y[jdx, kdx])
-                            + (D[idx, jdx] - D_goal[idx, jdx])
-                            * (w[idx, kdx] - w[jdx, kdx])
-                        )
-                if psi_L[idx, jdx] and idx != jdx:
-                    if max(psi_L[idx, jdx] - D[idx, jdx], 0) > 0:
-                        sc = 0
-                        for kdx in range(dim):
-                            sc += (Y[idx, kdx] - Y[jdx, kdx]) * (
-                                w[idx, kdx] - w[jdx, kdx]
-                            )
-                        for kdx in range(dim):
-                            hess[idx, kdx] += 4 * (
-                                2 * sc * (Y[idx, kdx] - Y[jdx, kdx])
-                                + (D[idx, jdx] - psi_L[idx, jdx])
-                                * (w[idx, kdx] - w[jdx, kdx])
-                            )
-                if psi_U[idx, jdx] and idx != jdx:
-                    if max(-psi_U[idx, jdx] + D[idx, jdx], 0) > 0:
-                        sc = 0
-                        for kdx in range(dim):
-                            sc += (Y[idx, kdx] - Y[jdx, kdx]) * (
-                                w[idx, kdx] - w[jdx, kdx]
-                            )
-                        for kdx in range(dim):
-                            hess[idx, kdx] += 4 * (
-                                2 * sc * (Y[idx, kdx] - Y[jdx, kdx])
-                                + (D[idx, jdx] - psi_U[idx, jdx])
-                                * (w[idx, kdx] - w[jdx, kdx])
-                            )
-        return hess
-
-    # def lhess(self, Y, w, D_goal, F, Bl, L):
-    #     D = distmat(Y)
-    #     R = F * (D_goal - D)
-    #     dDdZ = distmat_gram(Y @ w.T + w @ Y.T)  # directional der of dist matrix
-    #     FdDdZ = F * dDdZ
-    #     add_to_diagonal_fast(FdDdZ)
-    #     add_to_diagonal_fast(R)
-    #     Hw = 4 * (-FdDdZ.dot(Y) + R.dot(w))
-
-    #     Rb = np.maximum(Bl - L * D, 0)
-    #     dDdZb = np.where(Rb > 0, 1, 0) * (-L * dDdZ)
-    #     add_to_diagonal_fast(dDdZb)
-    #     add_to_diagonal_fast(Rb)
-    #     Hwb = 4 * (dDdZb.dot(Y) + Rb.dot(w))
-    #     return Hw + Hwb
 
     @staticmethod
     def generate_initialization(bounds, dim, omega, psi_L, psi_U):
@@ -331,18 +178,18 @@ class RiemannianSolver:
         return Y_rand
 
     def create_cost(self, D_goal, omega, jit=True):
-        inds = np.nonzero(omega)
+        inds = np.nonzero(np.triu(omega))
 
         if jit:
 
             def cost(Y):
-                return self.jcost(Y, D_goal, inds)
+                return jcost(Y,D_goal,inds)
 
             def egrad(Y):
-                return self.jgrad(Y, D_goal, inds)
+                return jgrad(Y, D_goal, inds)
 
             def ehess(Y, v):
-                return self.jhess(Y, v, D_goal, inds)
+                return jhess(Y, v, D_goal, inds)
 
             return cost, egrad, ehess
 
@@ -379,15 +226,20 @@ class RiemannianSolver:
 
             return cost, egrad, ehess
 
-    def create_cost_limits(self, D_goal, omega, psi_L, psi_U):
-        def cost(Y):
-            return self.lcost(Y, D_goal, omega, psi_L, psi_U)
+    def create_cost_limits(self, D_goal, omega, psi_L, psi_U, jit=True):
+        inds = np.nonzero(np.triu(omega) + np.triu(psi_L>0) + np.triu(psi_U>0))
 
-        def egrad(Y):
-            return self.lgrad(Y, D_goal, omega, psi_L, psi_U)
+        if jit:
+            def cost(Y):
+                return lcost(Y, D_goal, omega, psi_L, psi_U, inds)
 
-        def ehess(Y, v):
-            return self.lhess(Y, v, D_goal, omega, psi_L, psi_U)
+            def egrad(Y):
+                return lgrad(Y, D_goal, omega, psi_L, psi_U, inds)
+
+            def ehess(Y, v):
+                return lhess(Y, v, D_goal, omega, psi_L, psi_U, inds)
+        else:
+            raise NotImplementedError
 
         return cost, egrad, ehess
 
@@ -489,9 +341,12 @@ if __name__ == "__main__":
     from graphik.utils.roboturdf import load_ur10
     from graphik.utils.geometry import trans_axis
     import timeit
-
-    robot, graph = load_ur10()
+    np.random.seed(22)
     n = 6
+    angular_limits = np.minimum(np.random.rand(n) * (np.pi / 2) + np.pi / 2, np.pi)
+    ub = angular_limits
+    lb = -angular_limits
+    robot, graph = load_ur10(limits=(lb,ub))
     solver = RiemannianSolver(graph)
     q_goal = graph.robot.random_configuration()
     G_goal = graph.realization(q_goal)
@@ -511,10 +366,9 @@ if __name__ == "__main__":
     Y = pos_from_graph(graph.realization(robot.random_configuration()))
     Z = np.random.rand(Y.shape[0], Y.shape[1])
 
-    print(ehess(Y, Z) - ehess2(Y, Z))
-    # print(egrad(Y) - egrad2(Y))
-    # print(cost(Y) - cost2(Y))
-
+    psi_L, psi_U = solver.graph.distance_bound_matrices()
+    # cost2, egrad2, ehess2 = solver.create_cost_limits(D_goal, omega, psi_L, psi_U)
+    print("Cost JIT")
     print(
         np.average(
             timeit.repeat(
@@ -525,6 +379,7 @@ if __name__ == "__main__":
             )
         )
     )
+    print("Grad JIT")
     print(
         np.average(
             timeit.repeat(
@@ -535,10 +390,11 @@ if __name__ == "__main__":
             )
         )
     )
+    print("Hess JIT")
     print(
         np.average(
             timeit.repeat(
-                "ehess2(Y, Y)",
+                "ehess2(Y, Z)",
                 globals=globals(),
                 number=1,
                 repeat=10000,

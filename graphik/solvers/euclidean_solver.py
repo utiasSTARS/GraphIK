@@ -19,6 +19,7 @@ from graphik.utils.constants import *
 from graphik.graphs.graph_base import RobotGraph
 from graphik.utils.manifolds.fixed_rank_psd_sym import proj
 from scipy.optimize import NonlinearConstraint
+from graphik.solvers.costgrd import jcost_and_grad, jhess
 
 def add_to_diagonal_fast(X: npt.ArrayLike):
     X.ravel()[:: X.shape[1] + 1] += -np.sum(X, axis=0)
@@ -64,35 +65,40 @@ class EuclideanSolver:
 
     def gen_cost_and_grad(self, D_goal: npt.ArrayLike):
         omega = self.omega
+        inds = np.nonzero(np.triu(omega))
         N = self.graph.n_nodes
         dim = self.graph.dim
 
         def cost_and_grad(Y: npt.ArrayLike):
             Y = Y.reshape(N, dim)
-            D = distance_matrix_from_pos(Y)
-            S = omega * (D_goal - D)
-            f = np.linalg.norm(S) ** 2
-            dfdY = 4 * (S - np.diag(np.sum(S, axis=1))).dot(Y)
-            return f, dfdY.flatten()
+            cost, grad = jcost_and_grad(Y, D_goal,inds)
+            return cost, grad.flatten()
+            # D = distance_matrix_from_pos(Y)
+            # S = omega * (D_goal - D)
+            # f = np.linalg.norm(S) ** 2
+            # dfdY = 4 * (S - np.diag(np.sum(S, axis=1))).dot(Y)
+            # return f, dfdY.flatten()
 
         return cost_and_grad
 
     def gen_hessv(self, D_goal: npt.ArrayLike):
         omega = self.omega
+        inds = np.nonzero(np.triu(omega))
         N = self.graph.n_nodes
         dim = self.graph.dim
 
         def hessv(Y: npt.ArrayLike, Z: npt.ArrayLike):
             Y = Y.reshape(N, dim)
             Z = Z.reshape(N, dim)
-            D = distance_matrix_from_pos(Y)
+            HZ = jhess(Y,Z,D_goal,inds)
+            # D = distance_matrix_from_pos(Y)
 
-            S = omega * (D_goal - D)
-            dDdZ = distance_matrix_from_gram(Y.dot(Z.T) + Z.dot(Y.T))
-            dSdZ = -omega * dDdZ
-            d1 = 4 * (dSdZ - np.diag(np.sum(dSdZ, axis=1))).dot(Y)
-            d2 = 4 * (S - np.diag(np.sum(S, axis=1))).dot(Z)
-            HZ = d1 + d2
+            # S = omega * (D_goal - D)
+            # dDdZ = distance_matrix_from_gram(Y.dot(Z.T) + Z.dot(Y.T))
+            # dSdZ = -omega * dDdZ
+            # d1 = 4 * (dSdZ - np.diag(np.sum(dSdZ, axis=1))).dot(Y)
+            # d2 = 4 * (S - np.diag(np.sum(S, axis=1))).dot(Z)
+            # HZ = d1 + d2
             return HZ.flatten()
 
         def hessv_rtr(Y: npt.ArrayLike, Z: npt.ArrayLike):

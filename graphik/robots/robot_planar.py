@@ -47,7 +47,6 @@ class RobotPlanar(Robot):
         chain_graph.add_weighted_edges_from(edg_lst)
         nx.set_node_attributes(chain_graph, "robot", TYPE)
         nx.set_edge_attributes(chain_graph, [], BOUNDED)
-        # nx.set_node_attributes(chain_graph, None, POS)
         return chain_graph
 
     def tree_graph(self, parents: dict) -> nx.DiGraph:
@@ -60,7 +59,6 @@ class RobotPlanar(Robot):
             tree_graph.edges[parent, child][DIST] = self.a[child]
         nx.set_node_attributes(tree_graph, "robot", TYPE)
         nx.set_edge_attributes(tree_graph, [], BOUNDED)
-        # nx.set_node_attributes(tree_graph, None, POS)
         return tree_graph
 
     def generate_structure_graph(self):

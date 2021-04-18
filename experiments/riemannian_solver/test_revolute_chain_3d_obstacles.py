@@ -20,8 +20,6 @@ from numpy.linalg import norm
 
 
 def solve_random_problem(graph: RobotGraph, solver: RiemannianSolver):
-    # q_goal = graph.robot.random_configuration()
-    # T_goal = robot.get_pose(q_goal, f"p{n}")
 
     feasible = False
     while not feasible:

@@ -7,10 +7,9 @@ from graphik.utils import (
     adjacency_matrix_from_graph,
     bound_smoothing,
     graph_from_pos,
-    pos_from_graph,
-    best_fit_transform,
     list_to_variable_dict,
-    safe_arccos
+    safe_arccos,
+    orthogonal_procrustes
 )
 from graphik.utils.roboturdf import load_kuka, load_ur10
 from numpy import pi
@@ -30,18 +29,10 @@ def solve_random_problem(graph: RobotRevoluteGraph, solver: RiemannianSolver):
     Y = sol_info["x"]
     t_sol = sol_info["time"]
 
-    align_ind = list(np.arange(graph.dim + 1))
-    for u, v in graph.robot.end_effectors:
-        align_ind.append(graph.node_ids.index(u))
-        align_ind.append(graph.node_ids.index(v))
+    G_raw = graph_from_pos(Y, graph.node_ids)  # not really order-dependent
 
-    R, t = best_fit_transform(Y[align_ind, :], X_goal[align_ind, :])
-    P_e = (R @ Y.T + t.reshape(3, 1)).T
-
-    G_sol = graph_from_pos(P_e, graph.node_ids)
-
-    T_g = {f"p{n}": T_goal}
-    q_sol = robot.joint_variables(G_sol, T_g)
+    G_sol = orthogonal_procrustes(graph.base, G_raw)
+    q_sol = robot.joint_variables(G_sol, {f"p{n}": T_goal})
 
     T_riemannian = robot.get_pose(list_to_variable_dict(q_sol), "p" + str(n))
     err_riemannian_pos = norm(T_goal.trans - T_riemannian.trans)
@@ -65,12 +56,12 @@ if __name__ == "__main__":
 
     np.random.seed(21)
 
-    robot, graph = load_kuka()
+    robot, graph = load_ur10()
     params = {
         "solver": "TrustRegions",
         "mingradnorm": 1e-9,
         "maxiter": 3e3,
-        "theta": 0.5,
+        "theta": 1,
         "logverbosity": 0,
     }
     solver = RiemannianSolver(graph, params)

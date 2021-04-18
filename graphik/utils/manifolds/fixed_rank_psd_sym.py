@@ -5,10 +5,6 @@ import time
 import numpy as np
 import numpy.linalg as la
 import numpy.random as rnd
-import scipy.linalg as sl
-from scipy.linalg.lapack import get_lapack_funcs
-from scipy.linalg.decomp_schur import schur
-from scipy.linalg import solve_sylvester
 from numba import njit
 
 from scipy.linalg import solve_continuous_lyapunov as lyap
@@ -19,16 +15,10 @@ from scipy.linalg import solve_continuous_lyapunov as lyap
 #     from scipy.linalg import solve_lyapunov as lyap
 
 from pymanopt.manifolds.manifold import Manifold
+# from graphik.utils.manifolds.proj import proj_new
 
 sfunction = lambda x: None
 
-def proj(Y, H):
-    # Projection onto the horizontal space
-    # return H
-    YtY = Y.T.dot(Y)
-    AS = Y.T.dot(H) - H.T.dot(Y)
-    Omega = lyap(YtY, AS)
-    return H - Y.dot(Omega)
 
 class PSDFixedRank(Manifold):
     """
@@ -66,7 +56,6 @@ class PSDFixedRank(Manifold):
     def __init__(self, n, k):
         self._n = n
         self._k = k
-        # self.proj_sum = 0
 
     def __str__(self):
         return "YY' quotient manifold of {:d}x{:d} psd matrices of " "rank {:d}".format(
@@ -83,21 +72,50 @@ class PSDFixedRank(Manifold):
     def typicaldist(self):
         return 10 + self._k
 
-    def inner(self, Y, U, V):
+    @staticmethod
+    @njit(cache=True)
+    def inner(Y, U, V):
         # Euclidean metric on the total space.
-        # return float(np.tensordot(U, V)) # VERY SLOW
-        return np.einsum("ij,ji->", U, V.T)
+        return np.trace(np.dot(U,V.T))
 
-    def norm(self, Y, U):
-        return la.norm(U, "fro") # SLOW
-        # return np.sqrt(np.einsum("ij,ij->", U, U))
+    # def inner(self, Y, U, V):
+    #     # Euclidean metric on the total space.
+    #     # return float(np.tensordot(U, V)) # VERY SLOW
+    #     return np.einsum("ij,ji->", U, V.T)
+
+    @staticmethod
+    @njit(cache=True)
+    def norm(Y, U):
+        return np.linalg.norm(U) # SLOW
+
+    # def norm(self, Y, U):
+    #     return la.norm(U, "fro") # SLOW
+    #     # return np.sqrt(np.einsum("ij,ij->", U, U))
 
     def dist(self, U, V):
         raise NotImplementedError
 
-    def proj(self, Y, H):
+    @staticmethod
+    @njit(cache=True)
+    def proj(Y, Z):
+        dim = Y.shape[1]
+        X = Y.T.dot(Y)
+        A = np.asarray([[X[0,0] + X[0,0], X[0,1] , X[0,2], X[1,0], 0, 0, X[2,0], 0, 0],
+                        [X[1,0], X[1,1] + X[0,0], X[1,2], 0, X[1,0], 0, 0, X[2,0], 0],
+                        [X[2,0], X[2,1], X[2,2] + X[0,0], 0, 0, X[1,0], 0, 0, X[2,0]],
+                        [X[0,1], 0, 0, X[0,0] + X[1,1], X[0,1] , X[0,2], X[2,1], 0, 0],
+                        [0, X[0,1], 0, X[1,0], X[1,1] + X[1,1], X[1,2], 0, X[2,1], 0],
+                        [0, 0, X[0,1], X[2,0], X[2,1], X[2,2] + X[1,1], 0, 0, X[2,1]],
+                        [X[0,2], 0, 0, X[1,2], 0, 0, X[0,0] + X[2,2], X[0,1] , X[0,2]],
+                        [0, X[0,2], 0, 0, X[1,2], 0, X[1,0], X[1,1] + X[2,2], X[1,2]],
+                        [0, 0, X[0,2], 0, 0, X[1,2], X[2,0], X[2,1], X[2,2] + X[2,2]]])
+        C = np.dot(Y.T,Z)- np.dot(Z.T,Y)
+        Omega = np.linalg.solve(A,C.flatten()).reshape(dim,dim)
+        return Z - Y.dot(Omega)
+
+    # def proj(self, Y, H):
+    #     return H
         # Projection onto the horizontal space
-        return H
         # YtY = Y.T.dot(Y)
         # AS = Y.T.dot(H) - H.T.dot(Y)
         # Omega = lyap(YtY, AS)

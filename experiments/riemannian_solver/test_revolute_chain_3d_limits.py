@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from experiments.riemannian_solver.problem_generation import generate_revolute_problem
 import graphik
 from graphik.utils.roboturdf import RobotURDF
 import numpy as np
@@ -10,47 +11,30 @@ from graphik.graphs import RobotRevoluteGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils import (
     adjacency_matrix_from_graph,
-    pos_from_graph,
     graph_from_pos,
     bound_smoothing,
-    best_fit_transform,
     list_to_variable_dict,
     safe_arccos,
-    trans_axis
+    orthogonal_procrustes
 )
 
 
 def solve_random_problem(graph: RobotRevoluteGraph, solver: RiemannianSolver):
     n = graph.robot.n
-    axis_len = graph.robot.axis_length
     fail = False
-    q_goal = graph.robot.random_configuration()
-    G_goal = graph.realization(q_goal)
-    X_goal = pos_from_graph(G_goal)
-    D_goal = graph.distance_matrix_from_joints(q_goal)
-    T_goal = robot.get_pose(list_to_variable_dict(q_goal), "p" + str(n))
+    G, T_goal, D_goal, X_goal = generate_revolute_problem(graph)
 
-    q_rand = list_to_variable_dict(graph.robot.n * [0])
-    G_rand = graph.realization(q_rand)
-    X_rand = pos_from_graph(G_rand)
-    X_init = X_rand
-
-    G = graph.complete_from_pos(
-        {f"p{n}": T_goal.trans, f"q{n}": T_goal.dot(trans_axis(axis_len, "z")).trans}
-    )
     lb, ub = bound_smoothing(G)
-    F = adjacency_matrix_from_graph(G)
-    # print(D_goal - lb ** 2)
+    omega = adjacency_matrix_from_graph(G)
 
-    sol_info = solver.solve(D_goal, F, use_limits=True, bounds=(lb, ub))
+    sol_info = solver.solve(D_goal, omega, use_limits=True, bounds=(lb, ub))
     # sol_info = solver.solve(D_goal, F, Y_init=X_init, use_limits=True)
     Y = sol_info["x"]
     t_sol = sol_info["time"]
-    R, t = best_fit_transform(Y[[0, 1, 2, 3], :], X_goal[[0, 1, 2, 3], :])
-    P_e = (R @ Y.T + t.reshape(3, 1)).T
-    X_e = P_e @ P_e.T
 
-    G_sol = graph_from_pos(P_e, graph.node_ids)
+    G_raw = graph_from_pos(Y, graph.node_ids)  # not really order-dependent
+    G_sol = orthogonal_procrustes(graph.base, G_raw)
+
     T_g = {f"p{n}": T_goal}
     q_sol = robot.joint_variables(G_sol, T_g)
     T_riemannian = robot.get_pose(list_to_variable_dict(q_sol), "p" + str(n))
@@ -59,17 +43,15 @@ def solve_random_problem(graph: RobotRevoluteGraph, solver: RiemannianSolver):
     z_goal = T_goal.as_matrix()[:3, 2]
     z_riemannian = T_riemannian.as_matrix()[:3, 2]
     err_riemannian_rot = abs(safe_arccos(z_riemannian.dot(z_goal)))
-    # err_riemannian_rot = norm((T_goal.rot.dot(T_riemannian.rot.inv())).log())
-    # q_abs = np.abs(np.array(list(q_sol.values())))
+
+
     if err_riemannian_pos > 0.01 or err_riemannian_rot > 0.01:
         fail = True
 
-    broken_limits = {}
-    for key in robot.limited_joints:
-        if abs(q_sol[key]) > (graph.robot.ub[key] * 1.01):
-            fail = True
-            broken_limits[key] = abs(q_sol[key]) - (graph.robot.ub[key])
-            print(key, broken_limits[key])
+    broken_limits = graph.check_distance_limits(graph.realization(q_sol))
+    if len(broken_limits)> 0:
+        print(broken_limits)
+        fail = True
 
     # e_sol = np.sqrt(norm_sq((T_goal.dot(T_riemannian.inv())).log()))
     print(

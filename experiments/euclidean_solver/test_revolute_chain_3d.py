@@ -65,6 +65,7 @@ if __name__ == "__main__":
 
     robot, graph = load_ur10()
     # graph.distance_bounds_from_sampling()
+    # solver = EuclideanSolver(graph, {"method":"trust-krylov", "options": {"gtol":0.5e-9, "ftol": 10e-10}})
     solver = EuclideanSolver(graph, {})
     num_tests = 100
     e_pos = []
