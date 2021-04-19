@@ -17,13 +17,9 @@ from graphik.utils.dgp import (
 )
 from graphik.utils.constants import *
 from graphik.graphs.graph_base import RobotGraph
-from graphik.utils.manifolds.fixed_rank_psd_sym import proj
+from graphik.utils.manifolds.fixed_rank_psd_sym import PSDFixedRank
 from scipy.optimize import NonlinearConstraint
 from graphik.solvers.costgrd import jcost_and_grad, jhess
-
-def add_to_diagonal_fast(X: npt.ArrayLike):
-    X.ravel()[:: X.shape[1] + 1] += -np.sum(X, axis=0)
-    return X
 
 class EuclideanSolver:
     def __init__(self, robot_graph: RobotGraph, params: Dict["str", Any]):
@@ -113,7 +109,7 @@ class EuclideanSolver:
             d2 = 4 * (S - np.diag(np.sum(S, axis=1))).dot(Z)
             H = d1 + d2
 
-            return proj(Y,H).flatten()
+            return PSDFixedRank.proj(Y,H).flatten()
 
         return hessv, hessv_rtr
 

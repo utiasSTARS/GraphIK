@@ -114,7 +114,8 @@ class TrustRegions(Solver):
         problem,
         x=None,
         mininner=1,
-        maxinner=None,
+        # maxinner=None,
+        maxinner=10000,
         Delta_bar=None,
         Delta0=None,
         mincost=1e-12,
@@ -139,6 +140,9 @@ class TrustRegions(Solver):
         cost = problem.cost
         grad = problem.grad
         hess = problem.hess
+        norm = man.norm
+        inner = man.inner
+        retr = man.retr
 
         # If no starting point is specified, generate one at random.
         if x is None:
@@ -185,7 +189,7 @@ class TrustRegions(Solver):
                 # Random vector in T_x M (this has to be very small)
                 eta = 1e-6 * man.randvec(x)
                 # Must be inside trust region
-                while man.norm(x, eta) > Delta:
+                while norm(x, eta) > Delta:
                     eta = np.sqrt(np.sqrt(np.spacing(1)))
 
             # Solve TR subproblem approximately
@@ -225,9 +229,9 @@ class TrustRegions(Solver):
 
                 # Now that we have computed the Cauchy point in addition to the
                 # returned eta, we might as well keep the best of them.
-                mdle = fx + man.inner(x, fgradx, eta) + 0.5 * man.inner(x, Heta, eta)
+                mdle = fx + inner(x, fgradx, eta) + 0.5 * inner(x, Heta, eta)
                 mdlec = (
-                    fx + man.inner(x, fgradx, eta_c) + 0.5 * man.inner(x, Heta_c, eta_c)
+                    fx + inner(x, fgradx, eta_c) + 0.5 * inner(x, Heta_c, eta_c)
                 )
                 if mdlec < mdle:
                     eta = eta_c
@@ -241,7 +245,7 @@ class TrustRegions(Solver):
             # norm_eta = man.norm(x, eta)
 
             # Compute the tentative next iterate (the proposal)
-            x_prop = man.retr(x, eta)
+            x_prop = retr(x, eta)
 
             # Compute the function value of the proposal
             fx_prop = cost(x_prop)
@@ -249,7 +253,7 @@ class TrustRegions(Solver):
             # Will we accept the proposal or not? Check the performance of the
             # quadratic model against the actual cost.
             rhonum = fx - fx_prop
-            rhoden = -man.inner(x, fgradx, eta) - 0.5 * man.inner(x, eta, Heta)
+            rhoden = -inner(x, fgradx, eta) - 0.5 * inner(x, eta, Heta)
 
             # rhonum could be anything.
             # rhoden should be nonnegative, as guaranteed by tCG, baring
@@ -381,7 +385,7 @@ class TrustRegions(Solver):
                 x = x_prop
                 fx = fx_prop
                 fgradx = grad(x)
-                norm_grad = man.norm(x, fgradx)
+                norm_grad = norm(x, fgradx)
             else:
                 # accept = False
                 accstr = "REJ"
@@ -417,10 +421,11 @@ class TrustRegions(Solver):
                     print("")
                 break
 
-            # if fx <= mincost:
-            #     if verbosity >= 1:
-            #         print("Reached acceptable cost!")
-            #     break
+            if fx <= mincost:
+                # if verbosity >= 1:
+                #     print("Reached acceptable cost!")
+                self._stop_optlog(x, fx, stop_reason, time0, gradnorm=norm_grad, iter=k)
+                return x, self._optlog
 
         if self._logverbosity <= 0:
             return x
@@ -476,19 +481,18 @@ class TrustRegions(Solver):
         # and return the previous (the best-so-far) iterate. The variable below
         # will hold the model value.
 
-        def model_fun(eta, Heta):
-            return inner(x, eta, fgradx) + 0.5 * inner(x, eta, Heta)
-
         if not self.use_rand:
             model_value = 0
         else:
-            model_value = model_fun(eta, Heta)
+            # model_value = model_fun(eta, Heta)
+            model_value = inner(x, eta, fgradx) + 0.5 * inner(x, eta, Heta)
 
         # Pre-assume termination because j == end.
         stop_tCG = self.MAX_INNER_ITER
 
         # Begin inner/tCG loop.
-        for j in xrange(0, int(maxinner)):
+        # for j in xrange(0, int(maxinner)):
+        for j in range(int(maxinner)):
             # This call is the computationally intensive step
             Hdelta = hess(x, delta)
 
@@ -543,7 +547,8 @@ class TrustRegions(Solver):
             # we return the previous eta (which necessarily is the best reached
             # so far, according to the model cost). Otherwise, we accept the
             # new eta and go on.
-            new_model_value = model_fun(new_eta, new_Heta)
+            # new_model_value = model_fun(new_eta, new_Heta)
+            new_model_value = inner(x, new_eta, fgradx) + 0.5 * inner(x, new_eta, new_Heta)
             if new_model_value >= model_value:
                 stop_tCG = self.MODEL_INCREASED
                 break

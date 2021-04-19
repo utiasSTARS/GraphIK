@@ -76,21 +76,14 @@ class PSDFixedRank(Manifold):
     @njit(cache=True)
     def inner(Y, U, V):
         # Euclidean metric on the total space.
-        return np.trace(np.dot(U,V.T))
-
-    # def inner(self, Y, U, V):
-    #     # Euclidean metric on the total space.
-    #     # return float(np.tensordot(U, V)) # VERY SLOW
-    #     return np.einsum("ij,ji->", U, V.T)
+        return np.dot(U.ravel(), V.ravel())
+        # return np.trace(np.dot(U.T,V))
+        # return np.einsum("ij,ji->", U, V.T)
 
     @staticmethod
     @njit(cache=True)
     def norm(Y, U):
         return np.linalg.norm(U) # SLOW
-
-    # def norm(self, Y, U):
-    #     return la.norm(U, "fro") # SLOW
-    #     # return np.sqrt(np.einsum("ij,ij->", U, U))
 
     def dist(self, U, V):
         raise NotImplementedError
@@ -110,11 +103,10 @@ class PSDFixedRank(Manifold):
                         [0, X[0,2], 0, 0, X[1,2], 0, X[1,0], X[1,1] + X[2,2], X[1,2]],
                         [0, 0, X[0,2], 0, 0, X[1,2], X[2,0], X[2,1], X[2,2] + X[2,2]]])
         C = np.dot(Y.T,Z)- np.dot(Z.T,Y)
-        Omega = np.linalg.solve(A,C.flatten()).reshape(dim,dim)
+        Omega = np.linalg.solve(A,C.ravel()).reshape(dim,dim)
         return Z - Y.dot(Omega)
 
     # def proj(self, Y, H):
-    #     return H
         # Projection onto the horizontal space
         # YtY = Y.T.dot(Y)
         # AS = Y.T.dot(H) - H.T.dot(Y)

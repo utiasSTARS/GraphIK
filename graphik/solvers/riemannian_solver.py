@@ -177,13 +177,14 @@ class RiemannianSolver:
         Y_rand = linear_projection(X_rand, omega, dim)
         return Y_rand
 
-    def create_cost(self, D_goal, omega, jit=True):
+    @staticmethod
+    def create_cost(D_goal, omega, jit=True):
         inds = np.nonzero(np.triu(omega))
 
         if jit:
 
             def cost(Y):
-                return jcost(Y,D_goal,inds)
+                return jcost(Y, D_goal, inds)
 
             def egrad(Y):
                 return jgrad(Y, D_goal, inds)
@@ -252,7 +253,6 @@ class RiemannianSolver:
         Y_init=None,
         output_log=True,
     ):
-
         # Generate cost, gradient and hessian-vector product
         if not use_limits:
             [psi_L, psi_U] = [0 * omega, 0 * omega]
