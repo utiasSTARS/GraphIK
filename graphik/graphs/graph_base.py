@@ -117,7 +117,7 @@ class RobotGraph(ABC):
         """
         return adjacency_matrix_from_graph(self.directed)
 
-    def complete_from_pos(self, P: dict, dist: bool = True) -> nx.DiGraph:
+    def complete_from_pos(self, P: dict, dist: bool = True, overwrite = False) -> nx.DiGraph:
         """
         Given a dictionary of node name and position key-value pairs,
         generate a copy of the problem graph and fill the POS attributes of
@@ -135,7 +135,7 @@ class RobotGraph(ABC):
                 G.nodes[name][POS] = pos
 
         if dist:
-            G = graph_complete_edges(G)
+            G = graph_complete_edges(G, overwrite = overwrite)
 
         return G
 

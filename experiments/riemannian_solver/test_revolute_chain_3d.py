@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from experiments.riemannian_solver.problem_generation import generate_revolute_problem
+from experiments.problem_generation import generate_revolute_problem
 import numpy as np
 from graphik.graphs import RobotRevoluteGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
@@ -29,10 +29,9 @@ def solve_random_problem(graph: RobotRevoluteGraph, solver: RiemannianSolver):
     Y = sol_info["x"]
     t_sol = sol_info["time"]
 
-    G_raw = graph_from_pos(Y, graph.node_ids)  # not really order-dependent
+    G = graph_from_pos(Y, graph.node_ids)  # not really order-dependent
 
-    G_sol = orthogonal_procrustes(graph.base, G_raw)
-    q_sol = robot.joint_variables(G_sol, {f"p{n}": T_goal})
+    q_sol = robot.joint_variables(G, {f"p{n}": T_goal})
 
     T_riemannian = robot.get_pose(list_to_variable_dict(q_sol), "p" + str(n))
     err_riemannian_pos = norm(T_goal.trans - T_riemannian.trans)
@@ -59,8 +58,8 @@ if __name__ == "__main__":
     robot, graph = load_ur10()
     params = {
         "solver": "TrustRegions",
-        "mingradnorm": 1e-9,
-        "maxiter": 3e3,
+        "mingradnorm": 1e-10,
+        "maxiter": 1000,
         "theta": 1,
         "logverbosity": 0,
     }
@@ -83,8 +82,9 @@ if __name__ == "__main__":
     t = t[abs(t - np.mean(t)) < 2 * np.std(t)]
     print("Average solution time {:}".format(np.average(t)))
     print("Median solution time {:}".format(np.median(t)))
-    print("Standard deviation of solution time {:}".format(np.std(np.array(t))))
+    print("Standard deviation of solution time {:}".format(np.std(np.asarray(t))))
     print("Average iterations {:}".format(np.average(nit)))
-    print("Average pos error {:}".format(np.average(np.array(e_pos))))
-    print("Average rot error {:}".format(np.average(np.array(e_rot))))
+    print("Median iterations {:}".format(np.median(nit)))
+    print("Average pos error {:}".format(np.average(np.asarray(e_pos))))
+    print("Average rot error {:}".format(np.average(np.asarray(e_rot))))
     print("Number of fails {:}".format(sum(fails)))

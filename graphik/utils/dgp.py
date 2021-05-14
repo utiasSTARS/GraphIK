@@ -120,7 +120,7 @@ def graph_from_pos_dict(P: dict, dist=True) -> nx.DiGraph:
     return G
 
 
-def graph_complete_edges(G: nx.DiGraph) -> nx.DiGraph:
+def graph_complete_edges(G: nx.DiGraph, overwrite = False) -> nx.DiGraph:
     """
     Given a graph with some defined node positions, calculate all possible distances.
     :param G: Graph with some unknown edges
@@ -132,6 +132,15 @@ def graph_complete_edges(G: nx.DiGraph) -> nx.DiGraph:
     for idx, u in enumerate(pos.keys()):
         for jdx, v in enumerate(pos.keys()):
             if jdx > idx and (v, u) not in dst:
+                d = np.linalg.norm(pos[u] - pos[v])
+                G.add_edges_from(
+                    [
+                        (u, v, {DIST: d}),
+                        (u, v, {LOWER: d}),
+                        (u, v, {UPPER: d}),
+                    ]
+                )
+            elif jdx > idx and overwrite:
                 d = np.linalg.norm(pos[u] - pos[v])
                 G.add_edges_from(
                     [
@@ -244,3 +253,14 @@ def bound_smoothing(G: nx.DiGraph) -> tuple:
             upper_bounds[ids.index(u), ids.index(v)] = bounds[u][v]
 
     return lower_bounds, upper_bounds
+
+def normalize_positions(Y: ArrayLike, scale = False):
+    Y_c = Y - Y.mean(0)
+    C = Y_c.T.dot(Y_c)
+    e, v = np.linalg.eig(C)
+    Y_cr = Y_c.dot(v)
+    if scale:
+        Y_crs = Y_cr/(1/abs(Y_cr).max())
+        return Y_crs
+    else:
+        return Y_cr

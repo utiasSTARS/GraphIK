@@ -1,16 +1,27 @@
 from typing import Any, Dict, Union, List
+from liegroups.numpy.se3 import SE3Matrix
+from liegroups.numpy.so3 import SO3Matrix
 from numpy.typing import ArrayLike
 
 import networkx as nx
 import numpy as np
 from graphik.robots.robot_base import Robot, SEMatrix
-from graphik.utils.constants import *
-from graphik.utils.geometry import cross_symb, rot_axis, skew, trans_axis
-from graphik.utils.kinematics import fk_3d, modified_fk_3d
-from graphik.utils.utils import list_to_variable_dict
+from graphik.utils import *
+
+# from graphik.utils.constants import *
+# from graphik.utils.geometry import cross_symb, rot_axis, skew, trans_axis
+# from graphik.utils.kinematics import fk_3d, modified_fk_3d
+# from graphik.utils.utils import list_to_variable_dict
 from liegroups.numpy import SE3
 from numpy import arctan2, cos, cross, pi, sin
 from numpy.linalg import norm
+
+
+def normalize(v):
+    norm = np.linalg.norm(v)
+    if norm == 0:
+        return v
+    return v / norm
 
 
 class RobotRevolute(Robot):
@@ -285,6 +296,30 @@ class RobotRevolute(Robot):
 
         T = {}
         T[ROOT] = self.T_base
+
+        # resolve scale
+        x_hat = G.nodes["x"][POS] - G.nodes["p0"][POS]
+        y_hat = G.nodes["y"][POS] - G.nodes["p0"][POS]
+        z_hat = G.nodes["q0"][POS] - G.nodes["p0"][POS]
+        scale = np.roots(
+            [
+                x_hat.dot(x_hat) + y_hat.dot(y_hat) + z_hat.dot(z_hat),
+                -2*(np.linalg.norm(x_hat) + np.linalg.norm(y_hat) + np.linalg.norm(z_hat)),
+                3,
+            ]
+        )
+        scale = scale[0].real
+
+        # resolve rotation and translation
+        x = normalize(x_hat)
+        y = normalize(y_hat)
+        z = normalize(z_hat)
+        R = np.vstack((x, -y, z)).T
+        # e,v = np.linalg.eig(R_hat)
+        # R = v.dot(v.T)
+        # R = R.real
+        B = SE3Matrix(SO3Matrix(R), scale*G.nodes[ROOT][POS])
+
         theta = {}
 
         for ee in self.end_effectors:
@@ -301,10 +336,10 @@ class RobotRevolute(Robot):
                 T_0_q = get_pose(q_zero, cur).dot(trans_axis(axis_length, "z"))
                 T_rel_q = T_prev_0.inv().dot(T_0_q)
 
-                p = G.nodes[cur][POS] - T_prev.trans
-                q = G.nodes[aux_cur][POS] - T_prev.trans
-                ps = T_prev.inv().as_matrix()[:3, :3].dot(p)
-                qs = T_prev.inv().as_matrix()[:3, :3].dot(q)
+                p = B.inv().dot(scale*G.nodes[cur][POS]) - T_prev.trans
+                q = B.inv().dot(scale*G.nodes[aux_cur][POS]) - T_prev.trans
+                ps = T_prev.inv().as_matrix()[:3, :3].dot(p)  # in prev. joint frame
+                qs = T_prev.inv().as_matrix()[:3, :3].dot(q)  # in prev. joint frame
 
                 zs = skew(np.array([0, 0, 1]))
                 cp = (T_rel.trans - ps) + zs.dot(zs).dot(T_rel.trans)

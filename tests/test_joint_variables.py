@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from graphik.utils.dgp import graph_from_pos, pos_from_graph
 import numpy as np
 import networkx as nx
 import unittest
@@ -16,9 +17,44 @@ from graphik.utils.roboturdf import RobotURDF
 from graphik.utils.utils import (
     list_to_variable_dict,
 )
+from graphik.utils.geometry import normalize_positions
 
 
 class TestJointVariables(unittest.TestCase):
+    def test_scale_invariance(self):
+        n = 7
+        ub = (pi) * np.ones(n)
+        lb = -ub
+        # fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
+        fname = graphik.__path__[0] + "/robots/urdfs/panda_arm.urdf"
+        # fname = graphik.__path__[0] + "/robots/urdfs/kuka_iiwr.urdf"
+        # fname = graphik.__path__[0] + "/robots/urdfs/kuka_lwr.urdf"
+        # fname = graphik.__path__[0] + "/robots/urdfs/jaco2arm6DOF_no_hand.urdf"
+        urdf_robot = RobotURDF(fname)
+        robot_urdf = urdf_robot.make_Revolute3d(
+            ub, lb
+        )  # make the Revolute class from a URDF
+        params = {
+            "lb": lb[:n],
+            "ub": ub[:n],
+            "T_zero": robot_urdf.T_zero,
+        }
+        robot = RobotRevolute(params)
+
+        graph = RobotRevoluteGraph(robot)
+        for _ in range(100):
+            q_goal = robot.random_configuration()
+            T_goal = {}
+            T_goal[f"p{n}"] = robot.get_pose(
+                list_to_variable_dict(q_goal), "p" + str(n)
+            )
+            X = graph.realization(q_goal)
+            P = normalize_positions(X)
+            q_rec = robot.joint_variables(graph_from_pos(P, node_ids=list(X)), T_goal)
+            self.assertIsNone(
+                assert_allclose(list(q_goal.values()), list(q_rec.values()), rtol=1e-5)
+            )
+
     def test_urdf_params_3d_chain(self):
         n = 7
         ub = (pi) * np.ones(n)

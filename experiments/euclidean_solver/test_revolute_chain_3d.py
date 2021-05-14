@@ -1,30 +1,25 @@
 #!/usr/bin/env python3
-import graphik
-import time
 import numpy as np
 from graphik.graphs import RobotRevoluteGraph
 from graphik.solvers.euclidean_solver import EuclideanSolver
-from graphik.utils.dgp import (
+from graphik.utils import (
     graph_from_pos,
     pos_from_graph,
+    best_fit_transform,
+    list_to_variable_dict,
+    safe_arccos
 )
 from graphik.utils.roboturdf import RobotURDF, load_ur10
-from graphik.utils.utils import best_fit_transform, list_to_variable_dict, safe_arccos
+from experiments.problem_generation import generate_revolute_problem
 from numpy import pi
 from numpy.linalg import norm
 
 
 def solve_random_problem(graph: RobotRevoluteGraph, solver: EuclideanSolver):
     n = graph.robot.n
-    q_goal = graph.robot.random_configuration()
-    G_goal = graph.realization(q_goal)
-    X_goal = pos_from_graph(G_goal)
-    D_goal = graph.distance_matrix_from_joints(q_goal)
-    T_goal = robot.get_pose(list_to_variable_dict(q_goal), f"p{n}")
+    G, T_goal, D_goal, X_goal = generate_revolute_problem(graph)
     q_rand = list_to_variable_dict(graph.robot.n * [0])
-    G_rand = graph.realization(q_rand)
-    X_rand = pos_from_graph(G_rand)
-    X_init = X_rand
+    X_init = pos_from_graph(graph.realization(q_rand))
 
     Y, t_sol, num_iter = solver.solve(D_goal, Y_init=X_init)
 
@@ -38,10 +33,9 @@ def solve_random_problem(graph: RobotRevoluteGraph, solver: EuclideanSolver):
 
     G_sol = graph_from_pos(P_e, graph.node_ids)
 
-    T_g = {f"p{n}": T_goal}
-    q_sol = robot.joint_variables(G_sol, T_g)
+    q_sol = robot.joint_variables(G_sol, {f"p{n}": T_goal})
 
-    T_euclidean = robot.get_pose(list_to_variable_dict(q_sol), "p" + str(n))
+    T_euclidean = robot.get_pose(q_sol, "p" + str(n))
     err_euclidean_pos = norm(T_goal.trans - T_euclidean.trans)
 
     z_goal = T_goal.as_matrix()[:3, 2]
@@ -65,8 +59,8 @@ if __name__ == "__main__":
 
     robot, graph = load_ur10()
     # graph.distance_bounds_from_sampling()
-    # solver = EuclideanSolver(graph, {"method":"trust-krylov", "options": {"gtol":0.5e-9, "ftol": 10e-10}})
-    solver = EuclideanSolver(graph, {})
+    solver = EuclideanSolver(graph, {"method":"trust-ncg", "options": {"gtol":0.5e-9, "ftol": 10e-10}})
+    # solver = EuclideanSolver(graph, {})
     num_tests = 100
     e_pos = []
     e_rot = []
@@ -84,8 +78,10 @@ if __name__ == "__main__":
     t = np.array(t)
     t = t[abs(t - np.mean(t)) < 2 * np.std(t)]
     print("Average solution time {:}".format(np.average(t)))
-    print("Standard deviation of solution time {:}".format(np.std(np.array(t))))
+    print("Median solution time {:}".format(np.median(t)))
+    print("Standard deviation of solution time {:}".format(np.std(np.asarray(t))))
     print("Average iterations {:}".format(np.average(nit)))
-    print("Average pos error {:}".format(np.average(np.array(e_pos))))
-    print("Average rot error {:}".format(np.average(np.array(e_rot))))
+    print("Median iterations {:}".format(np.median(nit)))
+    print("Average pos error {:}".format(np.average(np.asarray(e_pos))))
+    print("Average rot error {:}".format(np.average(np.asarray(e_rot))))
     print("Number of fails {:}".format(sum(fails)))
