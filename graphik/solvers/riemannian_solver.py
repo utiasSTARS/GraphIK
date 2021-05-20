@@ -97,39 +97,6 @@ def frobenius_norm_sq(X: np.ndarray):
             nrm += X[i, j] ** 2
     return nrm
 
-# def lcost(self, Y, D_goal, F, Bl, L):
-#     D = distmat(Y)
-#     E1 = F * (D_goal - D)
-#     E2 = np.maximum(Bl - L * D, 0)
-#     return frobenius_norm_sq(E1) + frobenius_norm_sq(E2)
-
-# def lgrad(self, Y, D_goal, F, Bl, L):
-#     D = distmat(Y)
-#     R = F * (D_goal - D)
-#     add_to_diagonal_fast(R)
-#     dfdY = R.dot(Y)
-#     Rb = np.maximum(Bl - L * D, 0)
-#     add_to_diagonal_fast(Rb)
-#     dfdYb = Rb.dot(Y)
-#     return 4 * (dfdY + dfdYb)
-
-# def lhess(self, Y, w, D_goal, F, Bl, L):
-#     D = distmat(Y)
-#     R = F * (D_goal - D)
-#     dDdZ = distmat_gram(Y @ w.T + w @ Y.T)  # directional der of dist matrix
-#     FdDdZ = F * dDdZ
-#     add_to_diagonal_fast(FdDdZ)
-#     add_to_diagonal_fast(R)
-#     Hw = 4 * (-FdDdZ.dot(Y) + R.dot(w))
-
-#     Rb = np.maximum(Bl - L * D, 0)
-#     dDdZb = np.where(Rb > 0, 1, 0) * (-L * dDdZ)
-#     add_to_diagonal_fast(dDdZb)
-#     add_to_diagonal_fast(Rb)
-#     Hwb = 4 * (dDdZb.dot(Y) + Rb.dot(w))
-#     return Hw + Hwb
-
-
 class RiemannianSolver:
     def __init__(self, graph: RobotGraph, params={}):
 
@@ -229,6 +196,8 @@ class RiemannianSolver:
 
     def create_cost_limits(self, D_goal, omega, psi_L, psi_U, jit=True):
         inds = np.nonzero(np.triu(omega) + np.triu(psi_L>0) + np.triu(psi_U>0))
+        L = np.triu(psi_L>0)
+        U = np.triu(psi_U>0)
 
         if jit:
             def cost(Y):
@@ -240,7 +209,39 @@ class RiemannianSolver:
             def ehess(Y, v):
                 return lhess(Y, v, D_goal, omega, psi_L, psi_U, inds)
         else:
-            raise NotImplementedError
+            # NOTE not tested
+            def cost(Y):
+                D = distmat(Y)
+                E0 = omega * (D_goal - D)
+                E1 = np.maximum(psi_L - L * D, 0)
+                E2 = np.maximum(-psi_U + U * D, 0)
+                return 0.5 * (np.linalg.norm(E0)**2 + np.linalg.norm(E1)**2 + np.linalg.norm(E2)**2)
+
+            def egrad(Y):
+                D = distmat(Y)
+                E0 = omega * (D_goal - D)
+                dE0dY = 4 * (E0 - np.diag(np.sum(E0, axis=1))).dot(Y)
+                E1 = np.maximum(psi_L - L * D, 0)
+                dE1dY = 4 * (E1 - np.diag(np.sum(E1, axis=1))).dot(Y)
+                E2 = np.maximum(-psi_U + U * D, 0)
+                dE2dY = 4 * (E2 - np.diag(np.sum(E2, axis=1))).dot(Y)
+                return 0.5 * (dE0dY + dE1dY + dE2dY)
+
+            def ehess(Y, Z):
+                D = distance_matrix_from_pos(Y)
+                E0 = omega * (D_goal - D)
+                dDdZ = distance_matrix_from_gram(Y.dot(Z.T) + Z.dot(Y.T))
+                dE0dZ = -omega * dDdZ
+                d1 = 4 * (dE0dZ - np.diag(np.sum(dE0dZ, axis=1))).dot(Y)
+                d2 = 4 * (E0 - np.diag(np.sum(E0, axis=1))).dot(Z)
+                HE0 = d1 + d2
+
+                E1 = np.maximum(psi_L - L * D, 0)
+                dE1dZ1 = np.where(E1 > 0, 1, 0) * (-L * dDdZ)
+                d1 = 4 * (dE1dZ1 - np.diag(np.sum(dE1dZ1, axis=1))).dot(Y)
+                d2 = 4 * (E1 - np.diag(np.sum(E1, axis=1))).dot(Z)
+                HE1 = 4 * (dDdZb.dot(Y) + E1.dot(w))
+                return HE0
 
         return cost, egrad, ehess
 
@@ -272,7 +273,7 @@ class RiemannianSolver:
 
         # Define problem
         problem = pymanopt.Problem(
-            manifold, cost=cost, egrad=egrad, ehess=ehess, verbosity=1
+            manifold, cost=cost, egrad=egrad, ehess=ehess, verbosity=0
         )
 
         # Solve problem

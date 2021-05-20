@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from experiments.riemannian_solver.problem_generation import generate_revolute_problem
 import graphik
 from graphik.utils.roboturdf import RobotURDF
 import numpy as np
@@ -8,16 +7,9 @@ from numpy import pi
 from numpy.linalg import norm
 
 from graphik.graphs import RobotRevoluteGraph
+from experiments.problem_generation import generate_revolute_problem
 from graphik.solvers.riemannian_solver import RiemannianSolver
-from graphik.utils import (
-    adjacency_matrix_from_graph,
-    graph_from_pos,
-    bound_smoothing,
-    list_to_variable_dict,
-    safe_arccos,
-    orthogonal_procrustes
-)
-
+from graphik.utils import *
 
 def solve_random_problem(graph: RobotRevoluteGraph, solver: RiemannianSolver):
     n = graph.robot.n
@@ -33,10 +25,9 @@ def solve_random_problem(graph: RobotRevoluteGraph, solver: RiemannianSolver):
     t_sol = sol_info["time"]
 
     G_raw = graph_from_pos(Y, graph.node_ids)  # not really order-dependent
-    G_sol = orthogonal_procrustes(graph.base, G_raw)
 
     T_g = {f"p{n}": T_goal}
-    q_sol = robot.joint_variables(G_sol, T_g)
+    q_sol = robot.joint_variables(G_raw, T_g)
     T_riemannian = robot.get_pose(list_to_variable_dict(q_sol), "p" + str(n))
     err_riemannian_pos = norm(T_goal.trans - T_riemannian.trans)
 

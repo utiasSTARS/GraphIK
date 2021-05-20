@@ -18,20 +18,12 @@ from numpy.linalg import norm
 def solve_random_problem(graph: RobotRevoluteGraph, solver: EuclideanSolver):
     n = graph.robot.n
     G, T_goal, D_goal, X_goal = generate_revolute_problem(graph)
-    q_rand = list_to_variable_dict(graph.robot.n * [0])
+    q_rand = list_to_variable_dict(n * [0])
     X_init = pos_from_graph(graph.realization(q_rand))
 
     Y, t_sol, num_iter = solver.solve(D_goal, Y_init=X_init)
 
-    align_ind = list(np.arange(graph.dim + 1))
-    for u, v in robot.end_effectors:
-        align_ind.append(graph.node_ids.index(u))
-        align_ind.append(graph.node_ids.index(v))
-
-    R, t = best_fit_transform(Y[align_ind, :], X_goal[align_ind, :])
-    P_e = (R @ Y.T + t.reshape(3, 1)).T
-
-    G_sol = graph_from_pos(P_e, graph.node_ids)
+    G_sol = graph_from_pos(Y, graph.node_ids)
 
     q_sol = robot.joint_variables(G_sol, {f"p{n}": T_goal})
 

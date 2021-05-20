@@ -1,38 +1,18 @@
 #!/usr/bin/env python3
 import graphik
 import numpy as np
-from graphik.graphs.graph_base import RobotGraph
+from experiments.problem_generation import generate_revolute_problem
 from graphik.graphs import RobotRevoluteGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
-from graphik.utils import (
-    adjacency_matrix_from_graph,
-    bound_smoothing,
-    graph_from_pos,
-    pos_from_graph,
-    distance_matrix_from_graph,
-    orthogonal_procrustes,
-    list_to_variable_dict,
-    safe_arccos
-)
-from graphik.utils.roboturdf import RobotURDF
+from graphik.utils import *
+from graphik.utils.roboturdf import load_ur10
 from numpy import pi
 from numpy.linalg import norm
 
 
-def solve_random_problem(graph: RobotGraph, solver: RiemannianSolver):
+def solve_random_problem(graph: RobotRevoluteGraph, solver: RiemannianSolver):
 
-    feasible = False
-    while not feasible:
-        q_goal = robot.random_configuration()
-        G_goal = graph.realization(q_goal)
-        T_goal = robot.get_pose(q_goal, f"p{n}")
-        broken_limits = graph.check_distance_limits(G_goal)
-        if len(broken_limits) == 0:
-            feasible = True
-
-    goals = robot.end_effector_pos(q_goal)
-    G = graph.complete_from_pos(goals)
-    D_goal = distance_matrix_from_graph(G)
+    G, T_goal, D_goal, X_goal = generate_revolute_problem(graph, obstacles=True)
     omega = adjacency_matrix_from_graph(G)
     lb, ub = bound_smoothing(G)
 
@@ -41,10 +21,10 @@ def solve_random_problem(graph: RobotGraph, solver: RiemannianSolver):
     Y = sol_info["x"]
     t_sol = sol_info["time"]
 
-    G_sol = orthogonal_procrustes(graph.base, graph_from_pos(Y, graph.node_ids))
+    G_sol = graph_from_pos(Y, graph.node_ids)
     q_sol = robot.joint_variables(G_sol, {f"p{n}": T_goal})
 
-    T_riemannian = robot.get_pose(list_to_variable_dict(q_sol), "p" + str(n))
+    T_riemannian = robot.get_pose(q_sol, "p" + str(n))
     err_riemannian_pos = norm(T_goal.trans - T_riemannian.trans)
 
     z_goal = T_goal.as_matrix()[:3, 2]
@@ -55,7 +35,8 @@ def solve_random_problem(graph: RobotGraph, solver: RiemannianSolver):
     if err_riemannian_pos > 0.01 or err_riemannian_rot > 0.01:
         fail = True
 
-    broken_limits = graph.check_distance_limits(graph.realization(q_sol))
+    # broken_limits = graph.check_distance_limits(graph.realization(q_sol))
+    broken_limits = graph.check_distance_limits(G_sol)
     print(broken_limits)
     print(
         f"Pos. error: {err_riemannian_pos}\nRot. error: {err_riemannian_rot}\nCost: {sol_info['f(x)']}\nSolution time: {t_sol}."
@@ -67,30 +48,25 @@ def solve_random_problem(graph: RobotGraph, solver: RiemannianSolver):
 if __name__ == "__main__":
 
     np.random.seed(21)
-    n = 7
-    ub = (pi) * np.ones(n)
-    lb = -ub
-    # fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
-    # fname = graphik.__path__[0] + "/robots/urdfs/lwa4p.urdf"
-    fname = graphik.__path__[0] + "/robots/urdfs/lwa4d.urdf"
-    # fname = graphik.__path__[0] + "/robots/urdfs/panda_arm.urdf"
-    # fname = graphik.__path__[0] + "/robots/urdfs/kuka_iiwr.urdf"
-    # fname = graphik.__path__[0] + "/robots/urdfs/kuka_lwr.urdf"
-    # fname = graphik.__path__[0] + "/robots/urdfs/jaco2arm6DOF_no_hand.urdf"
-    urdf_robot = RobotURDF(fname)
-    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
+    n = 6
+    robot, graph = load_ur10()
 
-    graph = RobotRevoluteGraph(robot)
-
+    phi = (1 + np.sqrt(5)) / 2
+    scale = 0.5
+    radius = 0.5
     obstacles = [
-        (np.array([0, 1, 0.75]), 0.75),
-        (np.array([0, 1, -0.75]), 0.75),
-        (np.array([0, -1, 0.75]), 0.75),
-        (np.array([0, -1, -0.75]), 0.75),
-        (np.array([1, 0, 0.75]), 0.75),
-        (np.array([1, 0, -0.75]), 0.75),
-        (np.array([-1, 0, 0.75]), 0.75),
-        (np.array([-1, 0, -0.75]), 0.75),
+        (scale * np.asarray([0, 1, phi]), radius),
+        (scale * np.asarray([0, 1, -phi]), radius),
+        (scale * np.asarray([0, -1, -phi]), radius),
+        (scale * np.asarray([0, -1, phi]), radius),
+        (scale * np.asarray([1, phi, 0]), radius),
+        (scale * np.asarray([1, -phi, 0]), radius),
+        (scale * np.asarray([-1, -phi, 0]), radius),
+        (scale * np.asarray([-1, phi, 0]), radius),
+        (scale * np.asarray([phi, 0, 1]), radius),
+        (scale * np.asarray([-phi, 0, 1]), radius),
+        (scale * np.asarray([-phi, 0, -1]), radius),
+        (scale * np.asarray([phi, 0, -1]), radius),
     ]
     for idx, obs in enumerate(obstacles):
         graph.add_spherical_obstacle(f"o{idx}", obs[0], obs[1])

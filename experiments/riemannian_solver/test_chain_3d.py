@@ -16,7 +16,7 @@ def random_problem_3d_chain():
     e_rot = []
     e_pos = []
     t_sol = []
-    n = 100
+    n = 10
     fails = 0
 
     a = list_to_variable_dict(0 * np.random.rand(n))
@@ -60,7 +60,7 @@ def random_problem_3d_chain():
 
         # sol_info = solver.solve(D_goal, F, use_limits=False, bounds=(lb, ub))
         sol_info = solver.solve(
-            D_goal, F, Y_init=X_init, max_attempts=10, use_limits=False
+            D_goal, F, Y_init=X_init, use_limits=False
         )
         Y = sol_info["x"]
         t_sol += [sol_info["time"]]
@@ -72,19 +72,12 @@ def random_problem_3d_chain():
         q_sol = robot.joint_variables(G_e)
 
         T_riemannian = robot.get_pose(list_to_variable_dict(q_sol), "p" + f"{robot.n}")
-        T_riemannian.rot
-        # err_riemannian = (T_goal.dot(T_riemannian.inv())).log()
         err_riemannian_pos = np.linalg.norm(T_goal.trans - T_riemannian.trans)
-        err_riemannian_rot = np.linalg.norm(
-            T_riemannian.as_matrix()[:3, 2] - T_goal.as_matrix()[:3, 2]
-        )
-        # print(T_riemannian.as_matrix())
-        # print(T_goal.as_matrix())
-        # print(err_riemannian)
-        # print("------------")
+        err_riemannian_rot = np.linalg.norm(T_riemannian.as_matrix()[:3, 2] - T_goal.as_matrix()[:3, 2])
+        # print("------------------------------------")
 
-        e_rot += [err_riemannian_rot]
         e_pos += [err_riemannian_pos]
+        e_rot += [err_riemannian_rot]
         # q_abs = np.abs(np.array(list(q_sol.values())))
         if err_riemannian_pos > 0.01 or err_riemannian_rot > 0.01:
             fails += 1

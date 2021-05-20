@@ -9,14 +9,8 @@ from graphik.robots import RobotPlanar
 
 from graphik.solvers.riemannian_solver import RiemannianSolver
 
-from graphik.utils.dgp import (
-    gram_from_distance_matrix,
-    adjacency_matrix_from_graph,
-    pos_from_graph,
-    graph_from_pos,
-    bound_smoothing,
-)
-from graphik.utils.utils import best_fit_transform, list_to_variable_dict
+from graphik.utils import *
+# from graphik.utils.utils import best_fit_transform, list_to_variable_dict
 
 
 def random_problem_2d_chain():
@@ -46,6 +40,7 @@ def random_problem_2d_chain():
     q_init = list_to_variable_dict(n * [0])
     G_init = graph.realization(q_init)
     X_init = pos_from_graph(G_init)
+
     for idx in range(n_tests):
 
         q_goal = graph.robot.random_configuration()
@@ -74,7 +69,7 @@ def random_problem_2d_chain():
         # G_sol = graph.realization(q_sol)
         # D_sol = graph.distance_matrix_from_joints(q_sol)
 
-        T_riemannian = robot.get_pose(list_to_variable_dict(q_sol), "p" + f"{robot.n}")
+        T_riemannian = robot.get_pose(q_sol, "p" + f"{robot.n}")
         err_riemannian = T_goal.dot(T_riemannian.inv()).log()
         err_riemannian_pos = np.linalg.norm(T_goal.trans - T_riemannian.trans)
         err_riemannian_rot = np.linalg.norm(err_riemannian[2:])

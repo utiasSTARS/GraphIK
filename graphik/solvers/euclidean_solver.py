@@ -9,13 +9,7 @@ from graphik.utils.roboturdf import RobotURDF
 from typing import Dict, List, Any
 from numpy import pi
 from scipy.optimize import minimize
-from graphik.utils.dgp import (
-    adjacency_matrix_from_graph,
-    distance_matrix_from_gram,
-    distance_matrix_from_pos,
-    pos_from_graph,
-)
-from graphik.utils.constants import *
+from graphik.utils import *
 from graphik.graphs.graph_base import RobotGraph
 from graphik.utils.manifolds.fixed_rank_psd_sym import PSDFixedRank
 from scipy.optimize import NonlinearConstraint

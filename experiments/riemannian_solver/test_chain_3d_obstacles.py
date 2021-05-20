@@ -6,21 +6,12 @@ import networkx as nx
 import time
 from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
-from graphik.graphs.graph_base import RobotSphericalGraph
-from graphik.robots.robot_base import RobotSpherical
+from graphik.graphs import RobotSphericalGraph
+from graphik.robots import RobotSpherical
 
 from graphik.solvers.riemannian_solver import RiemannianSolver
+from graphik.utils import *
 
-from graphik.utils.dgp import (
-    gram_from_distance_matrix,
-    adjacency_matrix_from_graph,
-    distance_matrix_from_graph,
-    orthogonal_procrustes,
-    pos_from_graph,
-    graph_from_pos,
-    bound_smoothing,
-)
-from graphik.utils.utils import best_fit_transform, list_to_variable_dict
 
 
 def plot_obstacles(obstacles: list):

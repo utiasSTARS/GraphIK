@@ -191,9 +191,12 @@ def sph_to_se3(alpha: float, d: float, theta: float) -> SE3:
     :returns: SE3 matrix
     :rtype: lie.SE3Matrix
     """
-    RotX = rot_axis(alpha, "x")
-    TransZ = trans_axis(d, "z")
-    RotZ = rot_axis(theta, "z")
+
+    RX = SO3(rotx(alpha))
+    RotX = SE3(RX, np.zeros(3))
+    TransZ = SE3(SO3.identity(), np.array([0, 0, d]))
+    RZ = SO3(rotz(theta))
+    RotZ = SE3(RZ, np.zeros(3))
     return RotZ.dot(RotX.dot(TransZ))
 
 def fk_3d_sph(a: list, alpha: list, d: list, theta: list) -> SE3:

@@ -13,6 +13,7 @@ from graphik.robots import RobotRevolute, RobotSpherical, RobotPlanar
 from graphik.utils.dgp import pos_from_graph, graph_from_pos, bound_smoothing
 from graphik.utils.utils import list_to_variable_dict
 from graphik.utils.geometry import trans_axis
+from graphik.utils.roboturdf import load_ur10
 
 
 TOL = 1e-6
@@ -180,38 +181,23 @@ class TestBoundSmoothing(unittest.TestCase):
             )
 
     def test_random_params_3d_revolute_chain(self):
-        # UR10 DH params theta, d, alpha, a
-        n = 6
-        a = [0, -0.612, -0.5723, 0, 0, 0]
-        d = [0.1273, 0, 0, 0.1639, 0.1157, 0.0922]
-        al = [pi / 2, 0, 0, pi / 2, -pi / 2, 0]
-        th = [0, pi, 0, 0, 0, 0]
-        ub = (pi / 4) * np.ones(n)
-        lb = -ub
-
-        dZ = 1
-
-        params = {
-            "a": a,
-            "alpha": al,
-            "d": d,
-            "theta": th,
-            "modified_dh": False,
-            "lb": lb,
-            "ub": ub,
-        }
-        robot = RobotRevolute(params)  # instantiate robot
-        graph = RobotRevoluteGraph(robot)  # instantiate graph
+        robot, graph = load_ur10()
 
         for _ in range(100):
             q_goal = graph.robot.random_configuration()
             D_goal = graph.distance_matrix_from_joints(q_goal)
-            T_goal = robot.get_pose(list_to_variable_dict(q_goal), "p" + str(n))
+            T_goal = robot.get_pose(list_to_variable_dict(q_goal), "p" + str(robot.n))
+
+            lb, ub = bound_smoothing(graph.directed)
+            print(ub-lb)
+            assert 2<1
 
             G = graph.complete_from_pos(
-                {f"p{n}": T_goal.trans, f"q{n}": T_goal.dot(trans_axis(dZ, "z")).trans}
+                {f"p{robot.n}": T_goal.trans, f"q{robot.n}": T_goal.dot(trans_axis(1, "z")).trans}
             )
             lb, ub = bound_smoothing(G)
+            print(ub-lb)
+            assert 2<1
             self.assertIsNone(
                 assert_array_less(D_goal, ub ** 2 + TOL * np.ones(D_goal.shape))
             )

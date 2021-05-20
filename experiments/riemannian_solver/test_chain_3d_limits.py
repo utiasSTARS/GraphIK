@@ -7,16 +7,9 @@ import time
 from graphik.graphs import RobotSphericalGraph
 from graphik.robots import RobotSpherical
 from graphik.solvers.riemannian_solver import RiemannianSolver
-from graphik.utils.dgp import (
-    gram_from_distance_matrix,
-    adjacency_matrix_from_graph,
-    pos_from_graph,
-    graph_from_pos,
-    bound_smoothing,
-)
-from graphik.utils.utils import best_fit_transform, list_to_variable_dict
+from graphik.utils import *
 
-
+# NOTE needs fixing
 def random_problem_3d_chain():
     e_rot = []
     e_pos = []
