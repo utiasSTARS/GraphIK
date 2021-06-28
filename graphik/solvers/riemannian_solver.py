@@ -15,6 +15,7 @@ from graphik.utils import (
     gram_from_distance_matrix,
 )
 from graphik.utils.manifolds.fixed_rank_psd_sym import PSDFixedRank
+from pymanopt.manifolds import Euclidean
 from graphik.solvers.trust_region import TrustRegions
 from graphik.graphs.graph_base import RobotGraph
 from graphik.solvers.costgrd import jcost, jgrad, jhess, lcost, lgrad, lhess
@@ -185,17 +186,11 @@ class RiemannianSolver:
                 HZ = d1 + d2
                 return 0.5 * HZ
 
-            # def cost_and_egrad(Y):
-            #     D = distance_matrix_from_pos(Y)
-            #     S = omega * (D_goal - D)
-            #     f = np.linalg.norm(S) ** 2
-            #     dfdY = 4 * (S - np.diag(np.sum(S, axis=1))).dot(Y)
-            #     return f, dfdY
-
             return cost, egrad, ehess
 
     def create_cost_limits(self, D_goal, omega, psi_L, psi_U, jit=True):
-        inds = np.nonzero(np.triu(omega) + np.triu(psi_L>0) + np.triu(psi_U>0))
+        # inds = np.nonzero(np.triu(omega) + np.triu(psi_L>0) + np.triu(psi_U>0))
+        inds = np.nonzero(np.triu(omega) + np.triu((psi_L!=psi_U) * (psi_L>0)))
         L = np.triu(psi_L>0)
         U = np.triu(psi_U>0)
 
@@ -270,6 +265,7 @@ class RiemannianSolver:
 
         # Define manifold
         manifold = PSDFixedRank(self.N, self.dim)  # define manifold
+        # manifold = Euclidean(self.N, self.dim)
 
         # Define problem
         problem = pymanopt.Problem(
@@ -285,57 +281,6 @@ class RiemannianSolver:
             Y_sol = self.solver.solve(problem, x=Y_init)
             return Y_sol
 
-    def solve_experiment_wrapper(
-        self,
-        D_goal,
-        omega,
-        use_limits=True,
-        bounds=None,
-        X=None,
-        verbosity=0,
-        max_attempts=10,
-    ):
-        """
-        TODO: Refactor solve() to remove duplication in this method.
-        :param D_goal:
-        :param lower_limits:
-        :param upper_limits:
-        :param X:
-        :param dim:
-        :return:
-        """
-        [N, dim] = [self.N, self.dim]
-        # if not use_limits:
-        #     cost, egrad, ehess = self.create_cost(D_goal, F)
-        # else:
-        #     Bl = self.graph.distance_bound_matrix()
-        #     cost, egrad, ehess = self.create_cost_limits(D_goal, F, Bl)
-        if not use_limits:
-            [psi_L, psi_U] = [0 * omega, 0 * omega]
-            cost, egrad, ehess = self.create_cost(D_goal, omega)
-        else:
-            psi_L, psi_U = self.graph.distance_bound_matrices()
-            cost, egrad, ehess = self.create_cost_limits(D_goal, omega, psi_L, psi_U)
-
-        manifold = PSDFixedRank(self.N, dim)
-        problem = pymanopt.Problem(
-            manifold, cost=cost, egrad=egrad, ehess=ehess, verbosity=verbosity
-        )
-
-        self.solver._logverbosity = 2
-        # Generate initialization
-        if bounds is not None:
-            X = self.generate_initialization(bounds, dim, omega, psi_L, psi_U)
-
-        if self.solver._logverbosity < 2:
-            Y_sol = self.solver.solve(problem, x=X)
-            optlog = None
-        else:
-            Y_sol, optlog = self.solver.solve(problem, x=X)
-
-        # self.solver.linesearch = None
-
-        return Y_sol, optlog
 
 
 if __name__ == "__main__":

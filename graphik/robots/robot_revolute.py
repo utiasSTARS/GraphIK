@@ -8,10 +8,6 @@ import numpy as np
 from graphik.robots.robot_base import Robot, SEMatrix
 from graphik.utils import *
 
-# from graphik.utils.constants import *
-# from graphik.utils.geometry import cross_symb, rot_axis, skew, trans_axis
-# from graphik.utils.kinematics import fk_3d, modified_fk_3d
-# from graphik.utils.utils import list_to_variable_dict
 from liegroups.numpy import SE3
 from numpy import arctan2, cos, cross, pi, sin
 from numpy.linalg import norm
@@ -78,6 +74,73 @@ class RobotRevolute(Robot):
                 if self.parents.out_degree(x) == 0
             ]
         return self._end_effectors
+
+    @property
+    def S(self) -> dict:
+        if not hasattr(self, "_S"):
+            self._S = {}
+            for joint, T in self.T_zero.items():
+                omega = T.as_matrix()[:3,2]
+                q = T.as_matrix()[:3,3]
+                # self._S[joint] = SE3.wedge(np.hstack((np.cross(-omega, q), omega)))
+                self._S[joint] = np.hstack((np.cross(-omega, q), omega))
+        return self._S
+
+    @S.setter
+    def S(self, S: dict):
+        self._S = S
+
+    def get_pose(self, joint_angles: dict, query_node: str) -> SE3:
+        kinematic_map = self.kinematic_map[ROOT][MAIN_PREFIX + query_node[1:]]
+        T = self.T_base
+        for idx in range(len(kinematic_map) - 1):
+            pred, cur = kinematic_map[idx], kinematic_map[idx + 1]
+            T = T.dot(SE3.exp(self.S[pred]*joint_angles[cur]))
+        T = T.dot(self.T_zero[MAIN_PREFIX + query_node[1:]])
+        return T
+
+    def jacobian(
+        self,
+        joint_angles: Dict[str, float],
+        nodes: Union[List[str], str],
+    ) -> Dict[str, ArrayLike]:
+        """
+        Calculate the robot's Jacobian for all end-effectors.
+
+        :param joint_angles: dictionary describing the current joint configuration
+        :param nodes: list of nodes that the Jacobian shoulf be computed for
+        :param Ts: the current list of frame poses for all nodes, speeds up computation
+        :return: dictionary of Jacobians indexed by relevant node
+        """
+        kinematic_map = self.kinematic_map[ROOT]  # get map to all nodes from root
+
+        # find end-effector nodes #FIXME so much code and relies on notation
+        if nodes is None:
+            nodes = []
+            for ee in self.end_effectors:  # get p nodes in end-effectors
+                if ee[0][0] == MAIN_PREFIX:
+                    nodes += [ee[0]]
+                elif ee[1][0] == MAIN_PREFIX:
+                    nodes += [ee[1]]
+
+        J = {}
+        for node in nodes:  # iterate through nodes
+            path = kinematic_map[node]  # find joints that move node
+            T = self.T_base
+
+            J[node] = np.zeros([6, self.n])
+            for idx in range(len(path) - 1):
+                pred, cur = path[idx], path[idx + 1]
+                if idx == 0:
+                    J[node][:,idx] = self.S[pred]
+                else:
+                    ppred = list(self.parents.predecessors(pred))[0]
+                    T = T.dot(SE3.exp(self.S[ppred]*joint_angles[pred]))
+                    Ad = T.adjoint()
+                    J[node][:,idx] = Ad.dot(self.S[pred])
+        return J
+
+
 
     @property
     def T_zero(self) -> dict:
@@ -157,7 +220,7 @@ class RobotRevolute(Robot):
         self.structure = S
         return S
 
-    def get_pose(self, joint_angles: dict, query_node: str) -> SE3:
+    def get_pose_old(self, joint_angles: dict, query_node: str) -> SE3:
         """
         Returns an SE3 element corresponding to the location
         of the query_node in the configuration determined by
@@ -414,7 +477,18 @@ class RobotRevolute(Robot):
                 q[key] = self.lb[key] + (self.ub[key] - self.lb[key]) * np.random.rand()
         return q
 
-    def jacobian(
+    def zero_configuration(self):
+        """
+        Returns zero joint values within the joint limits
+        determined by lb and ub.
+        """
+        q = {}
+        for key in self.joint_ids:
+            if key != ROOT:
+                q[key] = 0
+        return q
+
+    def get_jacobian(
         self,
         joint_angles: Dict[str, float],
         nodes: Union[List[str], str],
@@ -532,3 +606,17 @@ class RobotRevolute(Robot):
 
             H[ee] = H_ee
         return H
+
+if __name__ == '__main__':
+    from graphik.utils.roboturdf import load_ur10
+    robot, graph = load_ur10()
+    q = robot.random_configuration()
+    q = robot.random_configuration()
+    T = robot.get_pose(q, "p6")
+    # print(robot.get_pose(q, "p6"))
+    # print(robot.pose_exp(q, "p6"))
+    print(robot.get_jacobian(q, ["p6"])["p6"])
+    print("---------------------------")
+    print(SE3.adjoint(T.inv()).dot(robot.jacobian(q, ["p6"])["p6"]))
+    print("---------------------------")
+    print(robot.jacobian(q, ["p6"])["p6"] - robot.get_jacobian(q, ["p6"])["p6"])

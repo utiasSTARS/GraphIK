@@ -3,14 +3,7 @@ from experiments.problem_generation import generate_revolute_problem
 import numpy as np
 from graphik.graphs import RobotRevoluteGraph
 from graphik.solvers.riemannian_solver import RiemannianSolver
-from graphik.utils import (
-    adjacency_matrix_from_graph,
-    bound_smoothing,
-    graph_from_pos,
-    list_to_variable_dict,
-    safe_arccos,
-    orthogonal_procrustes
-)
+from graphik.utils import *
 from graphik.utils.roboturdf import load_kuka, load_ur10
 from numpy import pi
 from numpy.linalg import norm
@@ -21,11 +14,12 @@ def solve_random_problem(graph: RobotRevoluteGraph, solver: RiemannianSolver):
 
     G, T_goal, D_goal, X_goal = generate_revolute_problem(graph)
 
-    lb, ub = bound_smoothing(G)
+    # lb, ub = bound_smoothing(G)
     omega = adjacency_matrix_from_graph(G)
 
-    # sol_info = solver.solve(D_goal, omega, use_limits=False, Y_init=X_init)
-    sol_info = solver.solve(D_goal, omega, use_limits=False, bounds=(lb, ub))
+    Y_init = pos_from_graph(graph.realization(graph.robot.zero_configuration()))
+    sol_info = solver.solve(D_goal, omega, use_limits=False, Y_init=Y_init)
+    # sol_info = solver.solve(D_goal, omega, use_limits=False, bounds=(lb, ub))
     Y = sol_info["x"]
     t_sol = sol_info["time"]
 

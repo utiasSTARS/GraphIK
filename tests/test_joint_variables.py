@@ -14,10 +14,7 @@ from graphik.graphs import (
 )
 from graphik.robots import RobotPlanar, RobotRevolute, RobotSpherical
 from graphik.utils.roboturdf import RobotURDF
-from graphik.utils.utils import (
-    list_to_variable_dict,
-)
-from graphik.utils.geometry import normalize_positions
+from graphik.utils import *
 
 
 class TestJointVariables(unittest.TestCase):
@@ -49,7 +46,7 @@ class TestJointVariables(unittest.TestCase):
                 list_to_variable_dict(q_goal), "p" + str(n)
             )
             X = graph.realization(q_goal)
-            P = normalize_positions(X)
+            P = normalize_positions(pos_from_graph(X))
             q_rec = robot.joint_variables(graph_from_pos(P, node_ids=list(X)), T_goal)
             self.assertIsNone(
                 assert_allclose(list(q_goal.values()), list(q_rec.values()), rtol=1e-5)

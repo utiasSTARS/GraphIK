@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-import graphik
-import time
 import numpy as np
 from experiments.problem_generation import generate_revolute_problem
 from graphik.graphs import RobotRevoluteGraph
-from graphik.solvers.euclidean_solver import EuclideanSolver
+
+from graphik.solvers.euclidean_solver_un import EuclideanSolver
+# from graphik.solvers.euclidean_solver import EuclideanSolver
 from graphik.utils import *
 from graphik.utils.roboturdf import RobotURDF, load_ur10
 from numpy import pi
@@ -12,12 +12,11 @@ from numpy.linalg import norm
 
 
 def solve_random_problem(graph: RobotRevoluteGraph, solver: EuclideanSolver):
-    n = graph.robot.n
-    q_rand = list_to_variable_dict(graph.robot.n * [0])
-    G_rand = graph.realization(q_rand)
-    Y_init = pos_from_graph(G_rand)
+    robot = graph.robot
+    n = robot.n
 
     G, T_goal, D_goal, X_goal = generate_revolute_problem(graph, obstacles=False)
+    Y_init = pos_from_graph(graph.realization(graph.robot.zero_configuration()))
 
     Y, t_sol, num_iter = solver.solve(D_goal, Y_init=Y_init)
 
@@ -33,10 +32,14 @@ def solve_random_problem(graph: RobotRevoluteGraph, solver: EuclideanSolver):
     z_euclidean = T_euclidean.as_matrix()[:3, 2]
     err_euclidean_rot = abs(safe_arccos(z_euclidean.dot(z_goal)))
 
-    broken_limits = graph.check_distance_limits(G_sol)
-    print(broken_limits)
+    broken_limits = graph.check_distance_limits(graph.realization(q_sol), tol=1e-6)
+
     fail = False
     if err_euclidean_pos > 0.01 or err_euclidean_rot > 0.01:
+        fail = True
+
+    if len(broken_limits) > 0:
+        print(broken_limits)
         fail = True
 
     print(
@@ -46,10 +49,8 @@ def solve_random_problem(graph: RobotRevoluteGraph, solver: EuclideanSolver):
     return err_euclidean_pos, err_euclidean_rot, t_sol, num_iter, fail
 
 
-if __name__ == "__main__":
-
+def main():
     np.random.seed(21)
-
     robot, graph = load_ur10()
 
     phi = (1 + np.sqrt(5)) / 2
@@ -73,7 +74,9 @@ if __name__ == "__main__":
         graph.add_spherical_obstacle(f"o{idx}", obs[0], obs[1])
 
     # graph.distance_bounds_from_sampling()
-    solver = EuclideanSolver(graph, {"method":"trust-krylov", "options": {"gtol":10e-9, "ftol": 10e-8}})
+    # params = {"method": "trust-ncg", "options": {"gtol": 1e-10, "maxiter": 3000}}
+    params = {"method": "trust-krylov", "options": {"gtol": 1e-10, "maxiter": 3000}}
+    solver = EuclideanSolver(graph, params)
     num_tests = 100
     e_pos = []
     e_rot = []
@@ -91,8 +94,14 @@ if __name__ == "__main__":
     t = np.array(t)
     t = t[abs(t - np.mean(t)) < 2 * np.std(t)]
     print("Average solution time {:}".format(np.average(t)))
+    print("Median solution time {:}".format(np.median(t)))
     print("Standard deviation of solution time {:}".format(np.std(np.array(t))))
     print("Average iterations {:}".format(np.average(nit)))
+    print("Median iterations {:}".format(np.median(nit)))
     print("Average pos error {:}".format(np.average(np.array(e_pos))))
     print("Average rot error {:}".format(np.average(np.array(e_rot))))
     print("Number of fails {:}".format(sum(fails)))
+
+
+if __name__ == "__main__":
+    main()

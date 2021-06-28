@@ -6,12 +6,7 @@ import numpy.linalg as la
 from typing import Dict, List, Any
 from numpy.typing import ArrayLike
 from graphik.robots.robot_base import Robot
-from graphik.utils.constants import *
-from graphik.utils.dgp import (
-    graph_complete_edges,
-    distance_matrix_from_graph,
-    adjacency_matrix_from_graph,
-)
+from graphik.utils import *
 from numpy import cos, pi, sqrt
 
 
@@ -158,7 +153,7 @@ class RobotGraph(ABC):
 
         # Set lower (and upper) distance limits to robot nodes
         for node, node_type in self.directed.nodes(data=TYPE):
-            if node_type == ROBOT and node[0] == "p":
+            if node_type == ROBOT and node[0] == MAIN_PREFIX:
                 self.directed.add_edge(node, name)
                 self.directed[node][name][BOUNDED] = [BELOW]
                 self.directed[node][name][LOWER] = radius
@@ -175,21 +170,20 @@ class RobotGraph(ABC):
     ) -> List[Dict[str, List[Any]]]:
         """Given a graph of the same """
         typ = nx.get_node_attributes(self.directed, name=TYPE)
-        # broken_limits = {"edge": [], "value": [], "type": [], "side": []}
         broken_limits = []
         for u, v, data in self.directed.edges(data=True):
             if BELOW in data[BOUNDED] or ABOVE in data[BOUNDED]:
                 if G[u][v][DIST] < data[LOWER] - tol:
                     broken_limit = {}
-                    if (typ[u] == "robot" and typ[v] == "obstacle") or (
-                        typ[u] == "obstacle" and typ[v] == "robot"
+                    if (typ[u] == ROBOT and typ[v] == OBSTACLE) or (
+                        typ[u] == OBSTACLE and typ[v] == ROBOT
                     ):
                         broken_limit["edge"] = (u, v)
                         broken_limit["value"] = G[u][v][DIST] - data[LOWER]
-                        broken_limit["type"] = "obstacle"
+                        broken_limit["type"] = OBSTACLE
                         broken_limit["side"] = LOWER
                         broken_limits += [broken_limit]
-                    if typ[u] == "robot" and typ[v] == "robot":
+                    if typ[u] == ROBOT and typ[v] == ROBOT:
                         broken_limit["edge"] = (u, v)
                         broken_limit["value"] = G[u][v][DIST] - data[LOWER]
                         broken_limit["type"] = "joint"
@@ -197,15 +191,15 @@ class RobotGraph(ABC):
                         broken_limits += [broken_limit]
                 if G[u][v][DIST] > data[UPPER] + tol:
                     broken_limit = {}
-                    if (typ[u] == "robot" and typ[v] == "obstacle") or (
-                        typ[u] == "obstacle" and typ[v] == "robot"
+                    if (typ[u] == ROBOT and typ[v] == OBSTACLE) or (
+                        typ[u] == OBSTACLE and typ[v] == ROBOT
                     ):
                         broken_limit["edge"] = (u, v)
                         broken_limit["value"] = G[u][v][DIST] - data[UPPER]
-                        broken_limit["type"] = "obstacle"
+                        broken_limit["type"] = OBSTACLE
                         broken_limit["side"] = UPPER
                         broken_limits += [broken_limit]
-                    if typ[u] == "robot" and typ[v] == "robot":
+                    if typ[u] == ROBOT and typ[v] == ROBOT:
                         broken_limit["edge"] = (u, v)
                         broken_limit["value"] = G[u][v][DIST] - data[UPPER]
                         broken_limit["type"] = "joint"
@@ -223,13 +217,12 @@ class RobotGraph(ABC):
         G = self.directed
         for e1, e2, data in G.edges(data=True):
             if BOUNDED in data:
-                # print(e1, e2, data)
                 udx = self.node_ids.index(e1)
                 vdx = self.node_ids.index(e2)
-                if "below" in data[BOUNDED]:
+                if BELOW in data[BOUNDED]:
                     L[udx, vdx] = data[LOWER] ** 2
                     L[vdx, udx] = L[udx, vdx]
-                if "above" in data[BOUNDED]:
+                if ABOVE in data[BOUNDED]:
                     U[udx, vdx] = data[UPPER] ** 2
                     U[vdx, udx] = U[udx, vdx]
         return L, U

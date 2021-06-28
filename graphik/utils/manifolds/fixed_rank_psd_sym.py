@@ -105,6 +105,7 @@ class PSDFixedRank(Manifold):
         C = np.dot(Y.T,Z)- np.dot(Z.T,Y)
         Omega = np.linalg.solve(A,C.ravel()).reshape(dim,dim)
         return Z - Y.dot(Omega)
+        # return Z
 
     # def proj(self, Y, H):
         # Projection onto the horizontal space

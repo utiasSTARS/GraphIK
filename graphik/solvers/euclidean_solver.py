@@ -11,9 +11,17 @@ from numpy import pi
 from scipy.optimize import minimize
 from graphik.utils import *
 from graphik.graphs.graph_base import RobotGraph
-from graphik.utils.manifolds.fixed_rank_psd_sym import PSDFixedRank
 from scipy.optimize import NonlinearConstraint
-from graphik.solvers.costgrd import jcost_and_grad, jhess
+from graphik.solvers.costgrd import jcost_and_grad, jhess, lcost, lgrad, lhess, lcost_and_grad
+
+def get_obstacle_constraint_pairs(G):
+    typ = nx.get_node_attributes(G, name=TYPE)
+    pairs = []
+    for u, v, data in G.edges(data=True):
+        if BELOW in data[BOUNDED]:
+            if typ[u] == ROBOT and typ[v] == OBSTACLE and u != ROOT:
+                pairs += [(u, v)]
+    return pairs
 
 class EuclideanSolver:
     def __init__(self, robot_graph: RobotGraph, params: Dict["str", Any]):
@@ -33,14 +41,9 @@ class EuclideanSolver:
         G = self.graph.complete_from_pos(goals)
         self.omega = adjacency_matrix_from_graph(G)
 
-        typ = nx.get_node_attributes(self.graph.directed, name=TYPE)
-        pairs = []
-        for u, v, data in self.graph.directed.edges(data=True):
-            if "below" in data[BOUNDED]:
-                if typ[u] == ROBOT and typ[v] == OBSTACLE and u != ROOT:
-                    pairs += [(u, v)]
+        pairs = get_obstacle_constraint_pairs(self.graph.directed)
 
-        if self.method is not "trust-exact":
+        if self.method != "trust-constr":
             self.g = []
             if len(pairs) > 0:
                 fun = self.gen_distance_constraints(pairs)
@@ -52,7 +55,6 @@ class EuclideanSolver:
                 jac = self.gen_distance_constraints_gradient(pairs)
                 self.g = NonlinearConstraint(fun,0,np.inf,jac)
 
-
     def gen_cost_and_grad(self, D_goal: npt.ArrayLike):
         omega = self.omega
         inds = np.nonzero(np.triu(omega))
@@ -63,11 +65,6 @@ class EuclideanSolver:
             Y = Y.reshape(N, dim)
             cost, grad = jcost_and_grad(Y, D_goal,inds)
             return cost, grad.flatten()
-            # D = distance_matrix_from_pos(Y)
-            # S = omega * (D_goal - D)
-            # f = np.linalg.norm(S) ** 2
-            # dfdY = 4 * (S - np.diag(np.sum(S, axis=1))).dot(Y)
-            # return f, dfdY.flatten()
 
         return cost_and_grad
 
@@ -81,31 +78,9 @@ class EuclideanSolver:
             Y = Y.reshape(N, dim)
             Z = Z.reshape(N, dim)
             HZ = jhess(Y,Z,D_goal,inds)
-            # D = distance_matrix_from_pos(Y)
-
-            # S = omega * (D_goal - D)
-            # dDdZ = distance_matrix_from_gram(Y.dot(Z.T) + Z.dot(Y.T))
-            # dSdZ = -omega * dDdZ
-            # d1 = 4 * (dSdZ - np.diag(np.sum(dSdZ, axis=1))).dot(Y)
-            # d2 = 4 * (S - np.diag(np.sum(S, axis=1))).dot(Z)
-            # HZ = d1 + d2
             return HZ.flatten()
 
-        def hessv_rtr(Y: npt.ArrayLike, Z: npt.ArrayLike):
-            Y = Y.reshape(N, dim)
-            Z = Z.reshape(N, dim)
-            D = distance_matrix_from_pos(Y)
-
-            S = omega * (D_goal - D)
-            dDdZ = distance_matrix_from_gram(Y.dot(Z.T) + Z.dot(Y.T))
-            dSdZ = -omega * dDdZ
-            d1 = 4 * (dSdZ - np.diag(np.sum(dSdZ, axis=1))).dot(Y)
-            d2 = 4 * (S - np.diag(np.sum(S, axis=1))).dot(Z)
-            H = d1 + d2
-
-            return PSDFixedRank.proj(Y,H).flatten()
-
-        return hessv, hessv_rtr
+        return hessv
 
     def gen_distance_constraints(self, pairs):
         N = self.graph.n_nodes
@@ -169,15 +144,18 @@ class EuclideanSolver:
         Y_init=None,
         output_log=True,
     ):
+
         cost_and_grad = self.gen_cost_and_grad(D_goal)
-        hessv, hessv_rtr = self.gen_hessv(D_goal)
+        hessv = self.gen_hessv(D_goal)
+        cstr = self.g
+        jac = True
 
         t = time.time()
         res = minimize(
             cost_and_grad,
-            Y_init,
-            jac=True,
-            constraints=self.g,
+            Y_init.flatten(),
+            jac=jac,
+            constraints=cstr,
             hessp=hessv,
             method=self.method,
             options=self.options,

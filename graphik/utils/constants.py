@@ -13,4 +13,5 @@ POS = "pos"
 ROOT = "p0"
 MAIN_PREFIX = "p"
 AUX_PREFIX = "q"
+BASE = "base"
 UNDEFINED = None

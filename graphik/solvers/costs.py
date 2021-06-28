@@ -136,6 +136,52 @@ def lgrad(Y, D_goal, omega, psi_L, psi_U, inds):
                     )
     return 0.5*grad
 
+@cc.export("lcost_and_grad", "Tuple((f8, f8[:,:]))(f8[:,:],f8[:,:],f8[:,:],f8[:,:],f8[:,:],UniTuple(u8[:],2))")
+def lcost_and_grad(Y, D_goal, omega, psi_L, psi_U, inds):
+    cost = 0
+    dim = Y.shape[1]
+    num_el = Y.shape[0]
+    grad = np.zeros((num_el, dim))
+
+    for (idx, jdx) in zip(*inds):
+        nrm = 0
+        for kdx in range(dim):
+            nrm += (Y[idx, kdx] - Y[jdx, kdx]) ** 2
+        if omega[idx, jdx]>0:
+            cost += 2 * (D_goal[idx, jdx] - nrm) ** 2
+            for kdx in range(dim):
+                grad[idx, kdx] += (
+                    4 * (nrm - D_goal[idx, jdx]) * (Y[idx, kdx] - Y[jdx, kdx])
+                )
+                grad[jdx, kdx] += (
+                    4 * (nrm - D_goal[jdx, idx]) * (Y[jdx, kdx] - Y[idx, kdx])
+                )
+        if psi_L[idx, jdx]>0:
+            cost += 2 * max((psi_L[idx, jdx] - nrm), 0) ** 2
+            if max(psi_L[idx, jdx] - nrm, 0) > 0:
+                for kdx in range(dim):
+                    grad[idx, kdx] += (
+                        4 * (nrm - psi_L[idx, jdx]) * (Y[idx, kdx] - Y[jdx, kdx])
+                    )
+                    grad[jdx, kdx] += (
+                        4 * (nrm - psi_L[jdx, idx]) * (Y[jdx, kdx] - Y[idx, kdx])
+                    )
+        if psi_U[idx, jdx]>0:
+            cost += 2 * max((-psi_U[idx, jdx] + nrm), 0) ** 2
+            if max(-psi_U[idx, jdx] + nrm, 0) > 0:
+                for kdx in range(dim):
+                    grad[idx, kdx] += (
+                        4
+                        * (nrm - psi_U[idx, jdx])
+                        * (Y[idx, kdx] - Y[jdx, kdx])  # might be wrong
+                    )
+                    grad[jdx, kdx] += (
+                        4
+                        * (nrm - psi_U[jdx, idx])
+                        * (Y[jdx, kdx] - Y[idx, kdx])  # might be wrong
+                    )
+    return 0.5*cost, 0.5*grad
+
 
 @cc.export(
     "lhess",
@@ -184,7 +230,6 @@ def lhess(Y, w, D_goal, omega, psi_L, psi_U, inds):
                         + (nrm - psi_U[jdx, idx]) * (w[jdx, kdx] - w[idx, kdx])
                     )
     return 0.5*hess
-
 
 if __name__ == "__main__":
     cc.compile()

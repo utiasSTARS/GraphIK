@@ -189,15 +189,12 @@ class TestBoundSmoothing(unittest.TestCase):
             T_goal = robot.get_pose(list_to_variable_dict(q_goal), "p" + str(robot.n))
 
             lb, ub = bound_smoothing(graph.directed)
-            print(ub-lb)
-            assert 2<1
 
             G = graph.complete_from_pos(
                 {f"p{robot.n}": T_goal.trans, f"q{robot.n}": T_goal.dot(trans_axis(1, "z")).trans}
             )
             lb, ub = bound_smoothing(G)
-            print(ub-lb)
-            assert 2<1
+
             self.assertIsNone(
                 assert_array_less(D_goal, ub ** 2 + TOL * np.ones(D_goal.shape))
             )

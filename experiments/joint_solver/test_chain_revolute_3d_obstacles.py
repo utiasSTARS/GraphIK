@@ -1,16 +1,14 @@
-import graphik
-import time
 import numpy as np
 from numpy.linalg import norm
 from numpy import pi
-from graphik.utils.roboturdf import RobotURDF
-from graphik.utils.constants import *
-from graphik.graphs.graph_base import RobotGraph, RobotRevoluteGraph
-from graphik.solvers.jacobian_solver import LocalSolver
-from graphik.utils.utils import list_to_variable_dict, safe_arccos
+from graphik.utils.roboturdf import load_ur10
+from graphik.utils import *
+from graphik.graphs import RobotRevoluteGraph
+from graphik.solvers.joint_angle_solver import JointAngleSolver
 
 
-def solve_random_problem(graph: RobotGraph, solver: LocalSolver):
+def solve_random_problem(graph: RobotRevoluteGraph, solver: JointAngleSolver):
+    robot = graph.robot
     n = graph.robot.n
 
     feasible = False
@@ -23,10 +21,7 @@ def solve_random_problem(graph: RobotGraph, solver: LocalSolver):
             feasible = True
 
     goals = {f"p{n}": T_goal}
-    t_sol = time.perf_counter()
-    res = solver.solve(goals, robot.random_configuration())
-    t_sol = time.perf_counter() - t_sol
-    q_sol = list_to_variable_dict(res.x)
+    q_sol, t_sol, nit = solver.solve(goals, robot.zero_configuration())
 
     T_local = robot.get_pose(q_sol, "p" + str(n))
     err_pos = norm(T_goal.trans - T_local.trans)
@@ -39,68 +34,64 @@ def solve_random_problem(graph: RobotGraph, solver: LocalSolver):
     if err_pos > 0.01 or err_rot > 0.01:
         fail = True
 
-    broken_limits = graph.check_distance_limits(graph.realization(q_sol))
+    broken_limits = graph.check_distance_limits(graph.realization(q_sol), tol=1e-6)
     print(broken_limits)
     print(f"Pos. error: {err_pos}\nRot. error: {err_rot}\nSolution time: {t_sol}.")
     print("------------------------------------")
-    return err_pos, err_rot, t_sol, fail
+    return err_pos, err_rot, t_sol, nit, fail
 
-
-if __name__ == "__main__":
-
+def main():
     np.random.seed(21)
 
     ### UR10 DH
-    n = 6
-    ub = (pi) * np.ones(n)
-    lb = -ub
-    modified_dh = False
+    robot, graph = load_ur10()
 
-    fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
-    # fname = graphik.__path__[0] + "/robots/urdfs/lwa4p.urdf"
-    # fname = graphik.__path__[0] + "/robots/urdfs/lwa4d.urdf"
-    # fname = graphik.__path__[0] + "/robots/urdfs/panda_arm.urdf"
-    # fname = graphik.__path__[0] + "/robots/urdfs/kuka_iiwr.urdf"
-    # fname = graphik.__path__[0] + "/robots/urdfs/kuka_lwr.urdf"
-    # fname = graphik.__path__[0] + "/robots/urdfs/jaco2arm6DOF_no_hand.urdf"
-
-    urdf_robot = RobotURDF(fname)
-    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
-
-    graph = RobotRevoluteGraph(robot)
-
+    phi = (1 + np.sqrt(5)) / 2
+    scale = 0.5
+    radius = 0.5
     obstacles = [
-        (np.asarray([0, 1, 0.75]), 0.75),
-        (np.asarray([0, 1, -0.75]), 0.75),
-        (np.asarray([0, -1, 0.75]), 0.75),
-        (np.asarray([0, -1, -0.75]), 0.75),
-        (np.asarray([1, 0, 0.75]), 0.75),
-        (np.asarray([1, 0, -0.75]), 0.75),
-        (np.asarray([-1, 0, 0.75]), 0.75),
-        (np.asarray([-1, 0, -0.75]), 0.75),
+        # (scale * np.asarray([0, 1, phi]), radius),
+        # (scale * np.asarray([0, 1, -phi]), radius),
+        # (scale * np.asarray([0, -1, -phi]), radius),
+        # (scale * np.asarray([0, -1, phi]), radius),
+        (scale * np.asarray([1, phi, 0]), radius),
+        (scale * np.asarray([1, -phi, 0]), radius),
+        (scale * np.asarray([-1, -phi, 0]), radius),
+        (scale * np.asarray([-1, phi, 0]), radius),
+        # (scale * np.asarray([phi, 0, 1]), radius),
+        # (scale * np.asarray([-phi, 0, 1]), radius),
+        # (scale * np.asarray([-phi, 0, -1]), radius),
+        # (scale * np.asarray([phi, 0, -1]), radius),
     ]
-
     for idx, obs in enumerate(obstacles):
         graph.add_spherical_obstacle(f"o{idx}", obs[0], obs[1])
 
-    params = {"W": np.eye(n)}
-    solver = LocalSolver(graph, params)
+    params = {"W": np.eye(robot.n)}
+    solver = JointAngleSolver(graph, params)
     num_tests = 100
     e_pos = []
     e_rot = []
     t = []
     fails = []
+    nit = []
     for _ in range(num_tests):
-        e_r_pos, e_r_rot, t_sol, fail = solve_random_problem(graph, solver)
+        e_r_pos, e_r_rot, t_sol, num_iter, fail = solve_random_problem(graph, solver)
         e_pos += [e_r_pos]
         e_rot += [e_r_rot]
         t += [t_sol]
         fails += [fail]
+        nit += [num_iter]
 
     t = np.asarray(t)
     t = t[abs(t - np.mean(t)) < 2 * np.std(t)]
     print("Average solution time {:}".format(np.average(t)))
+    print("Median solution time {:}".format(np.median(t)))
     print("Standard deviation of solution time {:}".format(np.std(t)))
+    print("Average iterations {:}".format(np.average(nit)))
+    print("Median iterations {:}".format(np.median(nit)))
     print("Average pos error {:}".format(np.average(np.asarray(e_pos))))
     print("Average rot error {:}".format(np.average(np.asarray(e_rot))))
     print("Number of fails {:}".format(sum(fails)))
+
+if __name__ == "__main__":
+    main()

@@ -421,11 +421,11 @@ class TrustRegions(Solver):
                     print("")
                 break
 
-            if fx <= mincost:
-                # if verbosity >= 1:
-                #     print("Reached acceptable cost!")
-                self._stop_optlog(x, fx, stop_reason, time0, gradnorm=norm_grad, iter=k)
-                return x, self._optlog
+            # if fx <= mincost:
+            #     # if verbosity >= 1:
+            #     #     print("Reached acceptable cost!")
+            #     self._stop_optlog(x, fx, stop_reason, time0, gradnorm=norm_grad, iter=k)
+            #     return x, self._optlog
 
         if self._logverbosity <= 0:
             return x

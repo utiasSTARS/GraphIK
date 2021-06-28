@@ -2,13 +2,7 @@
 import numpy as np
 from graphik.graphs import RobotRevoluteGraph
 from graphik.solvers.euclidean_solver import EuclideanSolver
-from graphik.utils import (
-    graph_from_pos,
-    pos_from_graph,
-    best_fit_transform,
-    list_to_variable_dict,
-    safe_arccos
-)
+from graphik.utils import *
 from graphik.utils.roboturdf import RobotURDF, load_ur10
 from experiments.problem_generation import generate_revolute_problem
 from numpy import pi
@@ -18,10 +12,9 @@ from numpy.linalg import norm
 def solve_random_problem(graph: RobotRevoluteGraph, solver: EuclideanSolver):
     n = graph.robot.n
     G, T_goal, D_goal, X_goal = generate_revolute_problem(graph)
-    q_rand = list_to_variable_dict(n * [0])
-    X_init = pos_from_graph(graph.realization(q_rand))
+    Y_init = pos_from_graph(graph.realization(graph.robot.zero_configuration()))
 
-    Y, t_sol, num_iter = solver.solve(D_goal, Y_init=X_init)
+    Y, t_sol, num_iter = solver.solve(D_goal, Y_init=Y_init)
 
     G_sol = graph_from_pos(Y, graph.node_ids)
 
