@@ -97,6 +97,11 @@ class RobotRevolute(Robot):
             pred, cur = kinematic_map[idx], kinematic_map[idx + 1]
             T = T.dot(SE3.exp(self.S[pred]*joint_angles[cur]))
         T = T.dot(self.T_zero[MAIN_PREFIX + query_node[1:]])
+
+        if query_node[0] == AUX_PREFIX:
+            T_trans = trans_axis(self.axis_length, "z")
+            T = T.dot(T_trans)
+
         return T
 
     def jacobian(
@@ -139,8 +144,6 @@ class RobotRevolute(Robot):
                     Ad = T.adjoint()
                     J[node][:,idx] = Ad.dot(self.S[pred])
         return J
-
-
 
     @property
     def T_zero(self) -> dict:
@@ -606,6 +609,7 @@ class RobotRevolute(Robot):
 
             H[ee] = H_ee
         return H
+
 
 if __name__ == '__main__':
     from graphik.utils.roboturdf import load_ur10
