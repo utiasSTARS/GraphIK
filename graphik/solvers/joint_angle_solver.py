@@ -36,16 +36,16 @@ class JointAngleSolver:
 
     # OPTION A
     def gen_cost_and_grad_ee(self, point: str, T_goal: SE3):
-        R_goal = T_goal.rot
+        # R_goal = T_goal.rot
         joints = self.k_map[point][1:]
 
         def cost(q: npt.ArrayLike):
             q_dict = {joints[idx]: q[idx] for idx in range(len(joints))}
-            T_all = self.robot.get_all_poses(q_dict)
-            R = T_all[point].rot
-            e_p = T_goal.trans - T_all[point].trans
+            # T_all = self.robot.get_all_poses(q_dict)
+            # R = T_all[point].rot
+            # e_p = T_goal.trans - T_all[point].trans
 
-            # COST 1
+            # COST 1 body linear + rotation error
             # e_o = 0.5 * (
             #     np.cross(R[0:3, 0], R_goal[0:3, 0])
             #     + np.cross(R[0:3, 1], R_goal[0:3, 1])
@@ -56,23 +56,23 @@ class JointAngleSolver:
             #     # + skew(R_goal[0:3, 1])@skew(R[0:3, 1])
             #     + skew(R_goal.as_matrix()[0:3, 2])@skew(R.as_matrix()[0:3, 2]))
             # J[point] = np.block([[np.eye(3), np.zeros((3,3))], [np.zeros((3,3)), L]])@J[point]
-            e_o = (R_goal.dot(R.inv())).log()
-            # # e_o = np.cross(R.as_matrix()[0:3, 2], R_goal.as_matrix()[0:3, 2])
+            # e_o = np.cross(R.as_matrix()[0:3, 2], R_goal.as_matrix()[0:3, 2])
 
-            # COST 2 only axis
-            v = np.cross(R.as_matrix()[0:3, 2], R_goal.as_matrix()[0:3, 2])
-            s = np.linalg.norm(v)
-            c = R.as_matrix()[0:3, 2]@R_goal.as_matrix()[0:3, 2]
-            R = np.eye(3) + skew(v) + (skew(v)@skew(v))*((1-c)/s**2)
+            # COST 2 body linear + partial rotation error
+            # v = np.cross(R.as_matrix()[0:3, 2], R_goal.as_matrix()[0:3, 2])
+            # s = np.linalg.norm(v)
+            # c = R.as_matrix()[0:3, 2]@R_goal.as_matrix()[0:3, 2]
+            # R = np.eye(3) + skew(v) + (skew(v)@skew(v))*((1-c)/s**2)
             # e_o = SO3(R).log()
-            e = np.hstack([e_p, e_o])
-            J = self.robot.get_jacobian(q_dict, [point], T_all)
+            # e = np.hstack([e_p, e_o])
+            # J = self.robot.get_jacobian(q_dict, [point], T_all)
 
-            # COST 3
-            # e = (T_all[point].inv().dot(T_goal)).log()
-            # e = T_all[point].adjoint().dot(e)
-            # J = self.robot.jacobian(q_dict, [point])
-
+            # COST 3 body screw
+            T = self.robot.get_pose(q_dict, point)
+            J = self.robot.jacobian(q_dict, [point])
+            e = (T.inv().dot(T_goal)).log()
+            Ad = T.adjoint()
+            e = Ad.dot(e)
 
             jac = -2 * J[point].T @ e
             return e.T @ e, jac
@@ -95,17 +95,21 @@ class JointAngleSolver:
         return obstacle_constraint
 
     def gen_obstacle_constraint_gradient(self, pairs: list):
+        ZZ = np.zeros([6,6])
+        ZZ[:3,:3] = np.eye(3)
+        ZZ[3:,3:] = np.eye(3)
         def obstacle_gradient(q: npt.ArrayLike):
             q_dict = list_to_variable_dict(q)
             T_all = self.robot.get_all_poses(q_dict)
-            J_all = self.robot.get_jacobian(q_dict, list(q_dict.keys()), T_all)
+            J_all = self.robot.jacobian(q_dict, list(q_dict.keys()))
 
             jac = []
             for robot_node, obs_node in pairs:
+                R = T_all[robot_node].rot.as_matrix()
+                ZZ[:3,3:] = R.dot(SO3.wedge(T_all[robot_node].inv().trans)).dot(R.T)
                 p = T_all[robot_node].trans
                 c = self.graph.directed.nodes[obs_node][POS]
-                jac += [-2 * (c - p).T @ J_all[robot_node][:3, :]]
-                # jac += [-2 * J_all[robot_node][:3, :].T@(c-p)]
+                jac += [-2 * (c - p).T @ ZZ.dot(J_all[robot_node])[:3, :]]
             return np.vstack(jac)
 
         return obstacle_gradient
@@ -113,21 +117,13 @@ class JointAngleSolver:
 
     # OPTION B
     def gen_ee_constraint(self, point: str, T_goal: SE3):
-        R_goal = T_goal.rot
         joints = self.k_map[point][1:]
         def ee_constraint(q: npt.ArrayLike):
             q_dict = {joints[idx]: q[idx] for idx in range(len(joints))}
-            T_all = self.robot.get_all_poses(q_dict)
-            R = T_all[point]
-            e_p = T_goal.trans - T_all[point].trans
-
-            v = np.cross(R.as_matrix()[0:3, 2], R_goal.as_matrix()[0:3, 2])
-            s = np.linalg.norm(v)
-            c = R.as_matrix()[0:3, 2]@R_goal.as_matrix()[0:3, 2]
-            R = np.eye(3) + skew(v) + (skew(v)@skew(v))*((1-c)/s**2)
-            e_o = SO3(R).log()
-            e = np.hstack([e_p, e_o])
-
+            T = self.robot.get_pose(q_dict, point)
+            e = (T.inv().dot(T_goal)).log()
+            Ad = T.adjoint()
+            e = Ad.dot(e)
 
             constr = np.asarray([e.T@e])
             return constr
@@ -135,21 +131,15 @@ class JointAngleSolver:
         return ee_constraint
 
     def gen_ee_constraint_gradient(self, point: str, T_goal: SE3):
-        R_goal = T_goal.rot
+        # R_goal = T_goal.rot
         joints = self.k_map[point][1:]
         def ee_gradient(q: npt.ArrayLike):
             q_dict = {joints[idx]: q[idx] for idx in range(len(joints))}
-            T_all = self.robot.get_all_poses(q_dict)
-            R = T_all[point]
-            e_p = T_goal.trans - T_all[point].trans
-
-            v = np.cross(R.as_matrix()[0:3, 2], R_goal.as_matrix()[0:3, 2])
-            s = np.linalg.norm(v)
-            c = R.as_matrix()[0:3, 2]@R_goal.as_matrix()[0:3, 2]
-            R = np.eye(3) + skew(v) + (skew(v)@skew(v))*((1-c)/s**2)
-            e_o = SO3(R).log()
-            e = np.hstack([e_p, e_o])
-            J = self.robot.jacobian(q_dict, [point], T_all)
+            T = self.robot.get_pose(q_dict, point)
+            J = self.robot.jacobian(q_dict, [point])
+            e = (T.inv().dot(T_goal)).log()
+            Ad = T.adjoint()
+            e = Ad.dot(e)
             jac = -2 * J[point].T @ e
             return jac
 
@@ -185,8 +175,9 @@ class JointAngleSolver:
             # jac=cost_jac,
             constraints=constr,
             method="SLSQP",
-            options={"ftol": 1e-7, "maxiter":300,"disp":True},
-            # options={"maxiter":3000},
+            options={"ftol": 1e-7, "maxiter":200},
+            # method="BFGS",
+            # options={"maxiter":3000, "gtol":1e-06},
         )
         t = time.time() - t
         return list_to_variable_dict(res.x), t, res.nit
@@ -225,4 +216,5 @@ def main():
     )
 
 if __name__ == "__main__":
+    np.set_printoptions(precision=3, suppress=True)
     main()
