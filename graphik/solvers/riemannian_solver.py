@@ -39,41 +39,54 @@ BetaTypes = tools.make_enum(
     # return X
 
 
-@njit(cache=True, fastmath=True)
-def distmat(Y: np.ndarray, F: np.ndarray = None):
+# @njit(cache=True, fastmath=True)
+# def distmat(Y: np.ndarray, F: np.ndarray = None):
+#     num_atoms = Y.shape[0]
+#     dim = Y.shape[1]
+#     locs = Y
+#     dmat = np.zeros((num_atoms, num_atoms))
+#     if F is None:
+#         F = np.ones((num_atoms, num_atoms))
+#     for i in range(num_atoms):
+#         for j in range(i + 1, num_atoms):
+#             if F[i, j]:
+#                 d = 0
+#                 for k in range(dim):
+#                     d += (locs[i, k] - locs[j, k]) ** 2
+#                 dmat[i, j] = d
+#                 dmat[j, i] = d
+#     return dmat
+
+@njit(cache=True, fastmath=True, error_model='numpy')
+def distmat(Y: np.ndarray):
     num_atoms = Y.shape[0]
     dim = Y.shape[1]
     locs = Y
     dmat = np.zeros((num_atoms, num_atoms))
-    if F is None:
-        F = np.ones((num_atoms, num_atoms))
-    for i in range(num_atoms):
-        for j in range(i + 1, num_atoms):
-            if F[i, j]:
-                d = 0
-                for k in range(dim):
-                    d += (locs[i, k] - locs[j, k]) ** 2
-                dmat[i, j] = d
-                dmat[j, i] = d
+    for i in np.ndindex(*dmat.shape):
+        d = 0
+        for k in range(dim):
+            d += (locs[i[0], k] - locs[i[1], k]) ** 2
+        dmat[i] = d
+        dmat[i] = d
     return dmat
-
     # Non-numba
     # X = Y.dot(Y.T)
     # return (np.diagonal(X)[:, np.newaxis] + np.diagonal(X)) - 2 * X
 
 
-# @njit(cache=True, fastmath=True)
-# def distmat_ind(Y: np.ndarray, inds):
-#     num_atoms = Y.shape[0]
-#     dim = Y.shape[1]
-#     locs = Y
-#     dmat = np.zeros((num_atoms, num_atoms))
-#     for (i, j) in zip(*inds):
-#         d = 0
-#         for k in range(dim):
-#             d += (locs[i, k] - locs[j, k]) ** 2
-#         dmat[i, j] = d
-#     return dmat
+@njit(cache=True, fastmath=True)
+def distmat_ind(Y: np.ndarray, inds):
+    num_atoms = Y.shape[0]
+    dim = Y.shape[1]
+    locs = Y
+    dmat = np.zeros((num_atoms, num_atoms))
+    for (i, j) in zip(*inds):
+        d = 0
+        for k in range(dim):
+            d += (locs[i, k] - locs[j, k]) ** 2
+        dmat[i, j] = d
+    return dmat
 
 
 @njit(cache=True, fastmath=True)
@@ -188,8 +201,8 @@ class RiemannianSolver:
         diff = psi_L!=psi_U
         # inds = np.nonzero(np.triu(omega) + np.triu(psi_L>0) + np.triu(psi_U>0))
         inds = np.nonzero(np.triu(omega) + np.triu( diff * (psi_L>0)) + np.triu(diff * (psi_U>0)) )
-        L = np.triu(psi_L>0)
-        U = np.triu(psi_U>0)
+        L = np.triu(psi_L>0).astype(np.float64)
+        U = np.triu(psi_U>0).astype(np.float64)
         LL = diff*(psi_L>0)
         UU = diff*(psi_U>0)
 
@@ -267,21 +280,15 @@ class RiemannianSolver:
             def ehess(Y, Z):
                 n = Y.shape[0]
                 D = distmat(Y)
-                dDdZ = distance_matrix_from_gram(Y.dot(Z.T) + Z.dot(Y.T))
-                S = omega * (D_goal - D)
-                Sl = np.maximum(psi_L - LL * D, 0)
-                wl = np.where(Sl > 0, 1, 0)
-                Su = np.maximum(-psi_U + UU * D, 0)
-                wu = np.where(Su > 0, 1, 0)
 
                 A = np.zeros([6, n, n])
-                A[0,:,:] = S
-                A[1,:,:] = Sl
-                A[2,:,:] = -Su
+                A[0,:,:] = omega * (D_goal - D)
+                A[1,:,:] = np.maximum(psi_L - LL * D, 0)
+                A[2,:,:] = -np.maximum(-psi_U + UU * D, 0)
                 A[3,:,:] = -omega # dSdZ
-                A[4,:,:] = - wl * LL # dSldZ
-                A[5,:,:] = - wu * UU # dSudZ
-                A[3:,:,:] *= dDdZ
+                A[4,:,:] = - np.where(A[1,:,:] > 0, 1, 0) * LL # dSldZ
+                A[5,:,:] = - np.where(-A[2,:,:] > 0, 1, 0) * UU # dSudZ
+                A[3:,:,:] *= distance_matrix_from_gram(Y.dot(Z.T) + Z.dot(Y.T))
 
                 A = adjoint(A)
 
@@ -366,16 +373,34 @@ if __name__ == "__main__":
     psi_L, psi_U = solver.graph.distance_bound_matrices()
     cost, egrad, ehess = solver.create_cost_limits(D_goal, omega, psi_L, psi_U, False)
     cost2, egrad2, ehess2 = solver.create_cost_limits(D_goal, omega, psi_L, psi_U, True)
+    # cost2, egrad2, ehess2 = solver.create_cost(D_goal, omega, True)
     q = list_to_variable_dict([2,1,2,1,2,3])
     Y = pos_from_graph(graph.realization(q))
     Z = np.random.rand(Y.shape[0], Y.shape[1])
-    D = distmat(Y)
+    inds = np.nonzero(np.triu(omega))
+    # D = distmat(Y)
 
     print(cost(Y) - cost2(Y))
     print(egrad(Y) - egrad2(Y))
     print(ehess(Y,Z) - ehess2(Y,Z))
+    # print(list(zip(*inds)))
 
-    # cost2, egrad2, ehess2 = solver.create_cost_limits(D_goal, omega, psi_L, psi_U)
+
+    # diff = psi_L!=psi_U
+    # inds = np.nonzero(np.triu(omega) + np.triu( diff * (psi_L>0)) + np.triu(diff * (psi_U>0)) )
+    # L = np.triu(psi_L>0).astype(np.float32)
+    # U = np.triu(psi_U>0).astype(np.float32)
+
+    # print(
+    #     np.average(
+    #         timeit.repeat(
+    #             "np.zeros(1)",
+    #             globals=globals(),
+    #             number=1,
+    #             repeat=10000,
+    #         )
+    #     )
+    # )
     print("Cost JIT")
     print(
         np.average(
