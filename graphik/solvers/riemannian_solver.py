@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from graphik.utils.utils import list_to_variable_dict
 import pymanopt
 
 from numba import njit
@@ -24,15 +25,15 @@ BetaTypes = tools.make_enum(
 )
 
 
-@njit(cache=True, fastmath=True)
-def add_to_diagonal_fast(X: np.ndarray):
-    num_atoms = X.shape[0]
-    for i in range(num_atoms):
-        rowsum = 0
-        for j in range(num_atoms):
-            rowsum += X[i, j]
-        X[i, i] += -rowsum
-    return X
+# @njit(cache=True, fastmath=True)
+# def adjoint(X: np.ndarray):
+#     num_atoms = X.shape[0]
+#     for i in range(num_atoms):
+#         rowsum = 0
+#         for j in range(num_atoms):
+#             rowsum += X[i, j]
+#         X[i, i] += -rowsum
+#     return X
     # Non-numba
     # X.ravel()[:: X.shape[1] + 1] += -np.sum(X, axis=0)
     # return X
@@ -61,18 +62,18 @@ def distmat(Y: np.ndarray, F: np.ndarray = None):
     # return (np.diagonal(X)[:, np.newaxis] + np.diagonal(X)) - 2 * X
 
 
-@njit(cache=True, fastmath=True)
-def distmat_ind(Y: np.ndarray, inds):
-    num_atoms = Y.shape[0]
-    dim = Y.shape[1]
-    locs = Y
-    dmat = np.zeros((num_atoms, num_atoms))
-    for (i, j) in zip(*inds):
-        d = 0
-        for k in range(dim):
-            d += (locs[i, k] - locs[j, k]) ** 2
-        dmat[i, j] = d
-    return dmat
+# @njit(cache=True, fastmath=True)
+# def distmat_ind(Y: np.ndarray, inds):
+#     num_atoms = Y.shape[0]
+#     dim = Y.shape[1]
+#     locs = Y
+#     dmat = np.zeros((num_atoms, num_atoms))
+#     for (i, j) in zip(*inds):
+#         d = 0
+#         for k in range(dim):
+#             d += (locs[i, k] - locs[j, k]) ** 2
+#         dmat[i, j] = d
+#     return dmat
 
 
 @njit(cache=True, fastmath=True)
@@ -88,15 +89,10 @@ def distmat_gram(X: np.ndarray):
     # Non-numba
     # return (np.diagonal(X)[:, np.newaxis] + np.diagonal(X)) - 2 * X
 
-
-@njit(cache=True, fastmath=True)
-def frobenius_norm_sq(X: np.ndarray):
-    num_atoms = X.shape[0]
-    nrm = 0
-    for i in range(num_atoms):
-        for j in range(num_atoms):
-            nrm += X[i, j] ** 2
-    return nrm
+def adjoint(X: np.ndarray):
+    D = np.zeros_like(X)
+    np.einsum('ijj->ij',D)[...] = np.sum(X, axis=-1)
+    return X - D
 
 class RiemannianSolver:
     def __init__(self, graph: RobotGraph, params={}):
@@ -189,10 +185,13 @@ class RiemannianSolver:
             return cost, egrad, ehess
 
     def create_cost_limits(self, D_goal, omega, psi_L, psi_U, jit=True):
+        diff = psi_L!=psi_U
         # inds = np.nonzero(np.triu(omega) + np.triu(psi_L>0) + np.triu(psi_U>0))
-        inds = np.nonzero(np.triu(omega) + np.triu((psi_L!=psi_U) * (psi_L>0)))
+        inds = np.nonzero(np.triu(omega) + np.triu( diff * (psi_L>0)) + np.triu(diff * (psi_U>0)) )
         L = np.triu(psi_L>0)
         U = np.triu(psi_U>0)
+        LL = diff*(psi_L>0)
+        UU = diff*(psi_U>0)
 
         if jit:
             def cost(Y):
@@ -208,35 +207,86 @@ class RiemannianSolver:
             def cost(Y):
                 D = distmat(Y)
                 E0 = omega * (D_goal - D)
-                E1 = np.maximum(psi_L - L * D, 0)
-                E2 = np.maximum(-psi_U + U * D, 0)
+                E1 = np.maximum(psi_L - LL * D, 0)
+                E2 = np.maximum(-psi_U + UU * D, 0)
                 return 0.5 * (np.linalg.norm(E0)**2 + np.linalg.norm(E1)**2 + np.linalg.norm(E2)**2)
 
+            # def cost(A):
+            #     n = Y.shape[0]
+            #     D = distmat(Y)
+            #     A = np.zeros([3,n,n])
+            #     A[0,:,:] = omega * (D_goal - D)
+            #     A[1,:,:] = np.maximum(psi_L - LL * D, 0)
+            #     A[2,:,:] = -np.maximum(-psi_U + UU * D, 0)
+            #     return 0.5 * np.sum(np.linalg.norm(A[:3,:,:], axis=(1,2))**2,axis=0)
+
+            # def egrad(Y):
+            #     D = distmat(Y)
+            #     S = omega * (D_goal - D)
+            #     dfdY = 4 * (adjoint(S)).dot(Y)
+            #     Sl = np.maximum(psi_L - LL * D, 0)
+            #     dSldY = 4 * (adjoint(Sl)).dot(Y)
+            #     Su = np.maximum(-psi_U + UU * D, 0)
+            #     dSudY = 4 * (adjoint(-Su)).dot(Y)
+            #     return 0.5 * (dfdY + dSldY + dSudY)
+
             def egrad(Y):
+                n = Y.shape[0]
+                A = np.zeros([3, n, n])
                 D = distmat(Y)
-                E0 = omega * (D_goal - D)
-                dE0dY = 4 * (E0 - np.diag(np.sum(E0, axis=1))).dot(Y)
-                E1 = np.maximum(psi_L - L * D, 0)
-                dE1dY = 4 * (E1 - np.diag(np.sum(E1, axis=1))).dot(Y)
-                E2 = np.maximum(-psi_U + U * D, 0)
-                dE2dY = 4 * (E2 - np.diag(np.sum(E2, axis=1))).dot(Y)
-                return 0.5 * (dE0dY + dE1dY + dE2dY)
+                A[0,:,:] = omega * (D_goal - D)
+                A[1,:,:] = np.maximum(psi_L - LL * D, 0)
+                A[2,:,:] = -np.maximum(-psi_U + UU * D, 0)
+                C = adjoint(A).dot(Y)
+                return 2*np.sum(C,axis=0)
+
+            # def ehess(Y, Z):
+            #     D = distmat(Y)
+            #     S = omega * (D_goal - D)
+            #     dDdZ = distance_matrix_from_gram(Y.dot(Z.T) + Z.dot(Y.T))
+            #     dSdZ = -omega * dDdZ
+            #     d1 = 4 * (dSdZ - np.diag(np.sum(dSdZ, axis=1))).dot(Y)
+            #     d2 = 4 * (S - np.diag(np.sum(S, axis=1))).dot(Z)
+            #     HZ = d1 + d2
+
+            #     Sl = np.maximum(psi_L - LL * D, 0)
+            #     wl = np.where(Sl > 0, 1, 0)
+            #     dSldZ = - wl * (LL * dDdZ) # change only where active
+            #     d1 = 4 * (dSldZ - np.diag(np.sum(dSldZ, axis=1))).dot(Y)
+            #     d2 = 4 * (Sl - np.diag(np.sum(Sl, axis=1))).dot(Z)
+            #     HZl = d1 + d2
+
+            #     Su = np.maximum(-psi_U + UU * D, 0)
+            #     wu = np.where(Su > 0, 1, 0)
+            #     dSudZ = wu * (UU * dDdZ)
+            #     d1 = 4 * (-dSudZ + np.diag(np.sum(dSudZ, axis=1))).dot(Y)
+            #     d2 = 4 * (-Su + np.diag(np.sum(Su, axis=1))).dot(Z)
+            #     HZu = d1 + d2
+            #     return 0.5*(HZ + HZl + HZu)
 
             def ehess(Y, Z):
-                D = distance_matrix_from_pos(Y)
-                E0 = omega * (D_goal - D)
+                n = Y.shape[0]
+                D = distmat(Y)
                 dDdZ = distance_matrix_from_gram(Y.dot(Z.T) + Z.dot(Y.T))
-                dE0dZ = -omega * dDdZ
-                d1 = 4 * (dE0dZ - np.diag(np.sum(dE0dZ, axis=1))).dot(Y)
-                d2 = 4 * (E0 - np.diag(np.sum(E0, axis=1))).dot(Z)
-                HE0 = d1 + d2
+                S = omega * (D_goal - D)
+                Sl = np.maximum(psi_L - LL * D, 0)
+                wl = np.where(Sl > 0, 1, 0)
+                Su = np.maximum(-psi_U + UU * D, 0)
+                wu = np.where(Su > 0, 1, 0)
 
-                E1 = np.maximum(psi_L - L * D, 0)
-                dE1dZ1 = np.where(E1 > 0, 1, 0) * (-L * dDdZ)
-                d1 = 4 * (dE1dZ1 - np.diag(np.sum(dE1dZ1, axis=1))).dot(Y)
-                d2 = 4 * (E1 - np.diag(np.sum(E1, axis=1))).dot(Z)
-                HE1 = 4 * (dDdZb.dot(Y) + E1.dot(w))
-                return HE0
+                A = np.zeros([6, n, n])
+                A[0,:,:] = S
+                A[1,:,:] = Sl
+                A[2,:,:] = -Su
+                A[3,:,:] = -omega # dSdZ
+                A[4,:,:] = - wl * LL # dSldZ
+                A[5,:,:] = - wu * UU # dSudZ
+                A[3:,:,:] *= dDdZ
+
+                A = adjoint(A)
+
+                C = A[3:,:,:].dot(Y) + A[:3,:,:].dot(Z)
+                return 2*(np.sum(C,axis=0))
 
         return cost, egrad, ehess
 
@@ -247,15 +297,16 @@ class RiemannianSolver:
         use_limits=False,
         bounds=None,
         Y_init=None,
+        jit = True,
         output_log=True,
     ):
         # Generate cost, gradient and hessian-vector product
         if not use_limits:
             [psi_L, psi_U] = [0 * omega, 0 * omega]
-            cost, egrad, ehess = self.create_cost(D_goal, omega, jit=True)
+            cost, egrad, ehess = self.create_cost(D_goal, omega, jit=jit)
         else:
             psi_L, psi_U = self.graph.distance_bound_matrices()
-            cost, egrad, ehess = self.create_cost_limits(D_goal, omega, psi_L, psi_U)
+            cost, egrad, ehess = self.create_cost_limits(D_goal, omega, psi_L, psi_U, jit=jit)
 
         # Generate initialization
         if bounds is not None:
@@ -287,9 +338,12 @@ if __name__ == "__main__":
     from graphik.utils.roboturdf import load_ur10
     from graphik.utils.geometry import trans_axis
     import timeit
-    np.random.seed(22)
+    # np.set_printoptions(precision=2,linewidth=np.nan,threshold=np.nan)
+    np.set_printoptions(suppress=True, precision=3, edgeitems=10, linewidth=180)
+    # np.random.seed(22)
     n = 6
-    angular_limits = np.minimum(np.random.rand(n) * (np.pi / 2) + np.pi / 2, np.pi)
+    # angular_limits = np.minimum(np.random.rand(n) * (np.pi / 2) + np.pi / 2, np.pi)
+    angular_limits = np.ones(n) * (np.pi / 100)
     ub = angular_limits
     lb = -angular_limits
     robot, graph = load_ur10(limits=(lb,ub))
@@ -307,18 +361,26 @@ if __name__ == "__main__":
     G = graph.complete_from_pos(goals)
     omega = adjacency_matrix_from_graph(G)
     inds = np.nonzero(omega)
-    cost, egrad, ehess = solver.create_cost(D_goal, omega, False)
-    cost2, egrad2, ehess2 = solver.create_cost(D_goal, omega, True)
-    Y = pos_from_graph(graph.realization(robot.random_configuration()))
-    Z = np.random.rand(Y.shape[0], Y.shape[1])
-
+    # cost, egrad, ehess = solver.create_cost(D_goal, omega, False)
+    # cost2, egrad2, ehess2 = solver.create_cost(D_goal, omega, True)
     psi_L, psi_U = solver.graph.distance_bound_matrices()
+    cost, egrad, ehess = solver.create_cost_limits(D_goal, omega, psi_L, psi_U, False)
+    cost2, egrad2, ehess2 = solver.create_cost_limits(D_goal, omega, psi_L, psi_U, True)
+    q = list_to_variable_dict([2,1,2,1,2,3])
+    Y = pos_from_graph(graph.realization(q))
+    Z = np.random.rand(Y.shape[0], Y.shape[1])
+    D = distmat(Y)
+
+    print(cost(Y) - cost2(Y))
+    print(egrad(Y) - egrad2(Y))
+    print(ehess(Y,Z) - ehess2(Y,Z))
+
     # cost2, egrad2, ehess2 = solver.create_cost_limits(D_goal, omega, psi_L, psi_U)
     print("Cost JIT")
     print(
         np.average(
             timeit.repeat(
-                "cost2(Y)",
+                "cost(Y)",
                 globals=globals(),
                 number=1,
                 repeat=10000,
@@ -329,7 +391,7 @@ if __name__ == "__main__":
     print(
         np.average(
             timeit.repeat(
-                "egrad2(Y)",
+                "egrad(Y)",
                 globals=globals(),
                 number=1,
                 repeat=10000,
@@ -340,7 +402,7 @@ if __name__ == "__main__":
     print(
         np.average(
             timeit.repeat(
-                "ehess2(Y, Z)",
+                "ehess(Y, Z)",
                 globals=globals(),
                 number=1,
                 repeat=10000,
