@@ -157,43 +157,70 @@ class RiemannianSolver:
     @staticmethod
     def create_cost(D_goal, omega, jit=True):
         inds = np.nonzero(np.triu(omega))
+        N = omega.shape[0]
+        # K = 1e5 / N
+        K = 1
+        # np.reciprocal(D_goal, where = omega>0, out=omega)
+        # omega = omega**(0.15)
 
         if jit:
 
             def cost(Y):
-                return jcost(Y, D_goal, inds)
+                return K * jcost(Y, D_goal, inds)
 
             def egrad(Y):
-                return jgrad(Y, D_goal, inds)
+                return K * jgrad(Y, D_goal, inds)
 
             def ehess(Y, v):
-                return jhess(Y, v, D_goal, inds)
+                return K * jhess(Y, v, D_goal, inds)
 
             return cost, egrad, ehess
 
         else:
 
+            # def cost(Y):
+            #     D = distance_matrix_from_pos(Y)
+            #     S = omega * (D - D_goal)
+            #     f = np.linalg.norm(S) ** 2
+            #     return f
+
+            # def egrad(Y):
+            #     D = distance_matrix_from_pos(Y)
+            #     S = omega * (D - D_goal)
+            #     dfdY = 2 * (np.diag(np.sum(S, axis=1)) - S).dot(Y)
+            #     return 2 * dfdY
+
+            # def ehess(Y, Z):
+            #     D = distance_matrix_from_pos(Y)
+            #     S = omega * (D - D_goal)
+            #     dSdZ = omega * distance_matrix_from_gram(Y.dot(Z.T) + Z.dot(Y.T))
+            #     d1 = 2 * (np.diag(np.sum(dSdZ, axis=1)) - dSdZ).dot(Y)
+            #     d2 = 2 * (np.diag(np.sum(S, axis=1)) - S).dot(Z)
+            #     HZ = d1 + d2
+            #     return 2 * HZ
+
+
             def cost(Y):
                 D = distance_matrix_from_pos(Y)
                 S = omega * (D_goal - D)
                 f = np.linalg.norm(S) ** 2
-                return 0.5 * f
+                return K * 0.5 * f
 
             def egrad(Y):
                 D = distance_matrix_from_pos(Y)
                 S = omega * (D_goal - D)
-                dfdY = 4 * (S - np.diag(np.sum(S, axis=1))).dot(Y)
-                return 0.5 * dfdY
+                dfdY = 2 * (S - np.diag(np.sum(S, axis=1))).dot(Y)
+                return K * dfdY
 
             def ehess(Y, Z):
                 D = distance_matrix_from_pos(Y)
                 S = omega * (D_goal - D)
                 dDdZ = distance_matrix_from_gram(Y.dot(Z.T) + Z.dot(Y.T))
                 dSdZ = -omega * dDdZ
-                d1 = 4 * (dSdZ - np.diag(np.sum(dSdZ, axis=1))).dot(Y)
-                d2 = 4 * (S - np.diag(np.sum(S, axis=1))).dot(Z)
+                d1 = 2 * (dSdZ - np.diag(np.sum(dSdZ, axis=1))).dot(Y)
+                d2 = 2 * (S - np.diag(np.sum(S, axis=1))).dot(Z)
                 HZ = d1 + d2
-                return 0.5 * HZ
+                return K * HZ
 
             return cost, egrad, ehess
 
@@ -201,20 +228,21 @@ class RiemannianSolver:
         diff = psi_L!=psi_U
         # inds = np.nonzero(np.triu(omega) + np.triu(psi_L>0) + np.triu(psi_U>0))
         inds = np.nonzero(np.triu(omega) + np.triu( diff * (psi_L>0)) + np.triu(diff * (psi_U>0)) )
-        L = np.triu(psi_L>0).astype(np.float64)
-        U = np.triu(psi_U>0).astype(np.float64)
         LL = diff*(psi_L>0)
         UU = diff*(psi_U>0)
+        N = omega.shape[0]
+        # K = 1 / N
+        K = 1
 
         if jit:
             def cost(Y):
-                return lcost(Y, D_goal, omega, psi_L, psi_U, inds)
+                return K * lcost(Y, D_goal, omega, psi_L, psi_U, inds)
 
             def egrad(Y):
-                return lgrad(Y, D_goal, omega, psi_L, psi_U, inds)
+                return K * lgrad(Y, D_goal, omega, psi_L, psi_U, inds)
 
             def ehess(Y, v):
-                return lhess(Y, v, D_goal, omega, psi_L, psi_U, inds)
+                return K * lhess(Y, v, D_goal, omega, psi_L, psi_U, inds)
         else:
             # NOTE not tested
             def cost(Y):
@@ -222,7 +250,7 @@ class RiemannianSolver:
                 E0 = omega * (D_goal - D)
                 E1 = np.maximum(psi_L - LL * D, 0)
                 E2 = np.maximum(-psi_U + UU * D, 0)
-                return 0.5 * (np.linalg.norm(E0)**2 + np.linalg.norm(E1)**2 + np.linalg.norm(E2)**2)
+                return K * 0.5 * (np.linalg.norm(E0)**2 + np.linalg.norm(E1)**2 + np.linalg.norm(E2)**2)
 
             # def cost(A):
             #     n = Y.shape[0]
@@ -251,7 +279,7 @@ class RiemannianSolver:
                 A[1,:,:] = np.maximum(psi_L - LL * D, 0)
                 A[2,:,:] = -np.maximum(-psi_U + UU * D, 0)
                 C = adjoint(A).dot(Y)
-                return 2*np.sum(C,axis=0)
+                return K * 2*np.sum(C,axis=0)
 
             # def ehess(Y, Z):
             #     D = distmat(Y)
@@ -293,7 +321,7 @@ class RiemannianSolver:
                 A = adjoint(A)
 
                 C = A[3:,:,:].dot(Y) + A[:3,:,:].dot(Z)
-                return 2*(np.sum(C,axis=0))
+                return K * 2*(np.sum(C,axis=0))
 
         return cost, egrad, ehess
 
