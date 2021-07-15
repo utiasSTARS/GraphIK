@@ -245,55 +245,6 @@ class RobotRevolute(Robot):
 
         return T
 
-    def max_min_distance(self, T0: SE3, T1: SE3, T2: SE3):
-        """
-        Given three frames, find the maximum and minimum distances between the
-        frames T0 and T2. It is assumed that the two frames are connected by an
-        unlimited revolute joint with its rotation axis being the z-axis
-        of the frame T1.
-        """
-        tol = 10e-10
-        # T_rel_01 = T0.inv().dot(T1)
-        T_rel_12 = T1.inv().dot(T2)
-
-        p0 = T0.as_matrix()[0:3, 3]
-        z1 = T1.as_matrix()[0:3, 2]
-        x1 = T1.as_matrix()[0:3, 0]
-        p1 = T1.as_matrix()[0:3, 3]
-        p2 = T2.as_matrix()[0:3, 3]
-
-        p0_proj = p0 - (z1.dot(p0 - p1)) * z1  # p0 projected onto T1 plane
-        p2_proj = p2 - (z1.dot(p2 - p1)) * z1  # p2 projected onto T1 plane
-
-        if norm(p1 - p0_proj) < tol or norm(p2_proj - p1) < tol:
-            d = norm(T2.trans - T0.trans)
-            return d, d, False
-
-        r = norm(p2_proj - p1)  # radius of circle p2_proj is on
-        delta_th = arctan2(cross(x1, p2_proj - p1).dot(z1), np.dot(x1, p2_proj - p1))
-
-        # closest and farthest point from p0_proj
-        sol_1 = r * (p0_proj - p1) / norm(p0_proj - p1) + p1
-        sol_2 = -r * (p0_proj - p1) / norm(p0_proj - p1) + p1
-        sol_min = min(sol_1 - p0_proj, sol_2 - p0_proj, key=norm) + p0_proj
-        sol_max = max(sol_1 - p0_proj, sol_2 - p0_proj, key=norm) + p0_proj
-
-        th_max = arctan2(cross(x1, sol_max - p1).dot(z1), np.dot(x1, sol_max - p1))
-        th_min = arctan2(cross(x1, sol_min - p1).dot(z1), np.dot(x1, sol_min - p1))
-
-        rot_min = rot_axis(th_min - delta_th, "z")
-        d_min = norm(T1.dot(rot_min).dot(T_rel_12).trans - T0.trans)
-
-        rot_max = rot_axis(th_max - delta_th, "z")
-        d_max = norm(T1.dot(rot_max).dot(T_rel_12).trans - T0.trans)
-
-        if abs(th_max - delta_th) < tol and d_max > d_min:
-            return d_max, d_min, BELOW
-        elif abs(th_min - delta_th) < tol and d_max > d_min:
-            return d_max, d_min, ABOVE
-        else:
-            return d_max, d_min, False
-
     def set_limits(self):
         """
         Sets known bounds on the distances between joints.
@@ -324,8 +275,22 @@ class RobotRevolute(Robot):
                     if AUX_PREFIX in ids[1]:
                         T2 = T2.dot(T_axis)
 
-                    d_max, d_min, limit = self.max_min_distance(T0, T1, T2)
+                    N = T1.as_matrix()[0:3, 2]
+                    C = T1.trans + (N.dot(T2.trans-T1.trans))*N
+                    r = norm(T2.trans - C)
+                    P = T0.trans
+                    d_max, d_min = max_min_distance_revolute(r, P, C, N))
 
+                    d = norm(T2.trans - T0.trans)
+                    if d_max == d_min:
+                        limit = False
+                    elif d == d_max:
+                        limit = BELOW
+                    elif d == d_min:
+                        limit = ABOVE
+                    else:
+                        raise NotImplementedError
+                    
                     if limit:
 
                         rot_limit = rot_axis(self.ub[cur], "z")
@@ -403,7 +368,9 @@ class RobotRevolute(Robot):
                 T_rel_q = T_prev_0.inv().dot(T_0_q)
 
                 p = B.inv().dot(scale*G.nodes[cur][POS]) - T_prev.trans
-                q = B.inv().dot(scale*G.nodes[aux_cur][POS]) - T_prev.trans
+                qnorm = G.nodes[cur][POS] + (G.nodes[aux_cur][POS] - G.nodes[cur][POS])/np.linalg.norm(G.nodes[aux_cur][POS] - G.nodes[cur][POS])
+                q = B.inv().dot(scale*qnorm) - T_prev.trans
+                # q = B.inv().dot(scale*G.nodes[aux_cur][POS]) - T_prev.trans
                 ps = T_prev.inv().as_matrix()[:3, :3].dot(p)  # in prev. joint frame
                 qs = T_prev.inv().as_matrix()[:3, :3].dot(q)  # in prev. joint frame
 
@@ -612,15 +579,15 @@ class RobotRevolute(Robot):
 
 
 if __name__ == '__main__':
-    from graphik.utils.roboturdf import load_ur10
-    robot, graph = load_ur10()
+    from graphik.utils.roboturdf import load_ur10, load_kuka, load_schunk_lwa4d
+    robot, graph = load_schunk_lwa4d()
     q = robot.random_configuration()
     q = robot.random_configuration()
-    T = robot.get_pose(q, "p6")
+    # T = robot.get_pose(q, "p6")
     # print(robot.get_pose(q, "p6"))
     # print(robot.pose_exp(q, "p6"))
-    print(robot.get_jacobian(q, ["p6"])["p6"])
-    print("---------------------------")
-    print(SE3.adjoint(T.inv()).dot(robot.jacobian(q, ["p6"])["p6"]))
-    print("---------------------------")
-    print(robot.jacobian(q, ["p6"])["p6"] - robot.get_jacobian(q, ["p6"])["p6"])
+    # print(robot.get_jacobian(q, ["p6"])["p6"])
+    # print("---------------------------")
+    # print(SE3.adjoint(T.inv()).dot(robot.jacobian(q, ["p6"])["p6"]))
+    # print("---------------------------")
+    # print(robot.jacobian(q, ["p6"])["p6"] - robot.get_jacobian(q, ["p6"])["p6"])
