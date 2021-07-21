@@ -279,7 +279,7 @@ class RobotRevolute(Robot):
                     C = T1.trans + (N.dot(T2.trans-T1.trans))*N
                     r = norm(T2.trans - C)
                     P = T0.trans
-                    d_max, d_min = max_min_distance_revolute(r, P, C, N))
+                    d_max, d_min = max_min_distance_revolute(r, P, C, N)
 
                     d = norm(T2.trans - T0.trans)
                     if d_max == d_min:
@@ -289,8 +289,8 @@ class RobotRevolute(Robot):
                     elif d == d_min:
                         limit = ABOVE
                     else:
-                        raise NotImplementedError
-                    
+                        limit = None
+
                     if limit:
 
                         rot_limit = rot_axis(self.ub[cur], "z")

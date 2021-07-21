@@ -3,8 +3,7 @@ import numpy as np
 import numpy.linalg as la
 from graphik.robots import RobotRevolute
 from graphik.graphs.graph_base import RobotGraph
-from graphik.utils.constants import *
-from graphik.utils.geometry import rot_axis, trans_axis
+from graphik.utils import *
 from liegroups.numpy import SE3
 import networkx as nx
 from numpy import cos, pi, sqrt
@@ -37,11 +36,25 @@ class RobotRevoluteGraph(RobotGraph):
                 T0 = SE3.from_matrix(np.identity(4))
                 T0.trans = G.nodes[base_node][POS]
                 if node[0] == "p":
-                    d_max, d_min, limit = self.robot.max_min_distance(T0, T1, T["p1"])
+                    T2 = T["p1"]
                 else:
-                    d_max, d_min, limit = self.robot.max_min_distance(
-                        T0, T1, T["p1"].dot(T_axis)
-                    )
+                    T2 = T["p1"].dot(T_axis)
+
+                N = T1.as_matrix()[0:3, 2]
+                C = T1.trans + (N.dot(T2.trans-T1.trans))*N
+                r = np.linalg.norm(T2.trans - C)
+                P = T0.trans
+                d_max, d_min = max_min_distance_revolute(r, P, C, N)
+                d = np.linalg.norm(T2.trans - T0.trans)
+
+                if d_max == d_min:
+                    limit = False
+                elif d == d_max:
+                    limit = BELOW
+                elif d == d_min:
+                    limit = ABOVE
+                else:
+                    limit = None
 
                 if limit:
                     if node[0] == "p":
@@ -54,7 +67,7 @@ class RobotRevoluteGraph(RobotGraph):
                         - T0.trans
                     )
 
-                    if limit == "above":
+                    if limit == ABOVE:
                         d_max = d_limit
                     else:
                         d_min = d_limit
