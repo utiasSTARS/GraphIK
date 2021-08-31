@@ -113,7 +113,7 @@ class RobotRevolute(Robot):
         Calculate the robot's Jacobian for all end-effectors.
 
         :param joint_angles: dictionary describing the current joint configuration
-        :param nodes: list of nodes that the Jacobian shoulf be computed for
+        :param nodes: list of nodes that the Jacobian should be computed for
         :param Ts: the current list of frame poses for all nodes, speeds up computation
         :return: dictionary of Jacobians indexed by relevant node
         """
@@ -184,7 +184,7 @@ class RobotRevolute(Robot):
         trans_z = trans_axis(self.axis_length, "z")
         T = self.T_zero
 
-        S = nx.empty_graph(create_using=nx.DiGraph)
+        structure = nx.empty_graph(create_using=nx.DiGraph)
 
         for ee in self.end_effectors:
             k_map = self.kinematic_map[ROOT][ee[0]]
@@ -194,8 +194,8 @@ class RobotRevolute(Robot):
                 dist = norm(cur_pos - aux_cur_pos)
 
                 # Add nodes for joint and edge between them
-                S.add_nodes_from([(cur, {POS: cur_pos}), (aux_cur, {POS: aux_cur_pos})])
-                S.add_edge(
+                structure.add_nodes_from([(cur, {POS: cur_pos}), (aux_cur, {POS: aux_cur_pos})])
+                structure.add_edge(
                     cur, aux_cur, **{DIST: dist, LOWER: dist, UPPER: dist, BOUNDED: []}
                 )
 
@@ -204,24 +204,24 @@ class RobotRevolute(Robot):
                     pred, aux_pred = (k_map[idx - 1], f"q{k_map[idx-1][1:]}")
                     for u in [pred, aux_pred]:
                         for v in [cur, aux_cur]:
-                            dist = norm(S.nodes[u][POS] - S.nodes[v][POS])
-                            S.add_edge(
+                            dist = norm(structure.nodes[u][POS] - structure.nodes[v][POS])
+                            structure.add_edge(
                                 u,
                                 v,
                                 **{DIST: dist, LOWER: dist, UPPER: dist, BOUNDED: []},
                             )
-                    S[pred][cur][TRANSFORM] = T[pred].inv().dot(T[cur])
+                    structure[pred][cur][TRANSFORM] = T[pred].inv().dot(T[cur])
 
         # Delete positions used for weights
-        for u in S.nodes:
-            del S.nodes[u][POS]
+        for u in structure.nodes:
+            del structure.nodes[u][POS]
 
         # Set node type to robot
-        nx.set_node_attributes(S, ROBOT, TYPE)
+        nx.set_node_attributes(structure, ROBOT, TYPE)
 
         # Set structure graph attribute
-        self.structure = S
-        return S
+        self.structure = structure
+        return structure
 
     def get_pose_old(self, joint_angles: dict, query_node: str) -> SE3:
         """
