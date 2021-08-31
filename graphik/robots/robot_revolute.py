@@ -1,6 +1,4 @@
 from typing import Any, Dict, Union, List
-from liegroups.numpy.se3 import SE3Matrix
-from liegroups.numpy.so3 import SO3Matrix
 from numpy.typing import ArrayLike
 
 import networkx as nx
@@ -10,15 +8,6 @@ from graphik.utils import *
 
 from liegroups.numpy import SE3
 from numpy import arctan2, cos, cross, pi, sin
-from numpy.linalg import norm
-
-
-def normalize(v):
-    norm = np.linalg.norm(v)
-    if norm == 0:
-        return v
-    return v / norm
-
 
 class RobotRevolute(Robot):
     def __init__(self, params):
@@ -53,13 +42,17 @@ class RobotRevolute(Robot):
             except KeyError:
                 raise Exception("Robot description not provided.")
 
-        self.generate_structure_graph()
-
         self.lb = params.get("lb", dict(zip(self.joint_ids, self.n * [-pi])))
         self.ub = params.get("ub", dict(zip(self.joint_ids, self.n * [pi])))
 
-        self.set_limits()
         super(RobotRevolute, self).__init__()
+
+    def joint_variables(
+        self, G: nx.DiGraph, T_final: Dict[str, SE3] = None
+    ) -> Dict[str, Any]:
+        print("joint_variables is not in RevoluteGraph")
+        return {}
+
 
     @property
     def end_effectors(self) -> list:
@@ -95,7 +88,7 @@ class RobotRevolute(Robot):
         T = self.T_base
         for idx in range(len(kinematic_map) - 1):
             pred, cur = kinematic_map[idx], kinematic_map[idx + 1]
-            T = T.dot(SE3.exp(self.S[pred]*joint_angles[cur]))
+            T = T.dot(SE3.exp(self.S[pred] * joint_angles[cur]))
         T = T.dot(self.T_zero[MAIN_PREFIX + query_node[1:]])
 
         if query_node[0] == AUX_PREFIX:
@@ -137,12 +130,12 @@ class RobotRevolute(Robot):
             for idx in range(len(path) - 1):
                 pred, cur = path[idx], path[idx + 1]
                 if idx == 0:
-                    J[node][:,idx] = self.S[pred]
+                    J[node][:, idx] = self.S[pred]
                 else:
                     ppred = list(self.parents.predecessors(pred))[0]
-                    T = T.dot(SE3.exp(self.S[ppred]*joint_angles[pred]))
+                    T = T.dot(SE3.exp(self.S[ppred] * joint_angles[pred]))
                     Ad = T.adjoint()
-                    J[node][:,idx] = Ad.dot(self.S[pred])
+                    J[node][:, idx] = Ad.dot(self.S[pred])
         return J
 
     @property
@@ -180,49 +173,6 @@ class RobotRevolute(Robot):
     def parents(self, parents: nx.DiGraph):
         self._parents = parents
 
-    def generate_structure_graph(self):
-        trans_z = trans_axis(self.axis_length, "z")
-        T = self.T_zero
-
-        structure = nx.empty_graph(create_using=nx.DiGraph)
-
-        for ee in self.end_effectors:
-            k_map = self.kinematic_map[ROOT][ee[0]]
-            for idx in range(len(k_map)):
-                cur, aux_cur = k_map[idx], f"q{k_map[idx][1:]}"
-                cur_pos, aux_cur_pos = T[cur].trans, T[cur].dot(trans_z).trans
-                dist = norm(cur_pos - aux_cur_pos)
-
-                # Add nodes for joint and edge between them
-                structure.add_nodes_from([(cur, {POS: cur_pos}), (aux_cur, {POS: aux_cur_pos})])
-                structure.add_edge(
-                    cur, aux_cur, **{DIST: dist, LOWER: dist, UPPER: dist, BOUNDED: []}
-                )
-
-                # If there exists a preceeding joint, connect it to new
-                if idx != 0:
-                    pred, aux_pred = (k_map[idx - 1], f"q{k_map[idx-1][1:]}")
-                    for u in [pred, aux_pred]:
-                        for v in [cur, aux_cur]:
-                            dist = norm(structure.nodes[u][POS] - structure.nodes[v][POS])
-                            structure.add_edge(
-                                u,
-                                v,
-                                **{DIST: dist, LOWER: dist, UPPER: dist, BOUNDED: []},
-                            )
-                    structure[pred][cur][TRANSFORM] = T[pred].inv().dot(T[cur])
-
-        # Delete positions used for weights
-        for u in structure.nodes:
-            del structure.nodes[u][POS]
-
-        # Set node type to robot
-        nx.set_node_attributes(structure, ROBOT, TYPE)
-
-        # Set structure graph attribute
-        self.structure = structure
-        return structure
-
     def get_pose_old(self, joint_angles: dict, query_node: str) -> SE3:
         """
         Returns an SE3 element corresponding to the location
@@ -244,197 +194,6 @@ class RobotRevolute(Robot):
             T = T.dot(T_trans)
 
         return T
-
-    def set_limits(self):
-        """
-        Sets known bounds on the distances between joints.
-        This is induced by link length and joint limits.
-        """
-        S = self.structure
-        T = self.T_zero
-        self.limited_joints = []  # joint limits that can be enforced
-        kinematic_map = self.kinematic_map
-        T_axis = trans_axis(self.axis_length, "z")
-
-        for ee in self.end_effectors:
-            k_map = self.kinematic_map[ROOT][ee[0]]
-            for idx in range(2, len(k_map)):
-                cur, prev = k_map[idx], k_map[idx - 2]
-                names = [
-                    (MAIN_PREFIX + str(prev[1:]), MAIN_PREFIX + str(cur[1:])),
-                    (MAIN_PREFIX + str(prev[1:]), AUX_PREFIX + str(cur[1:])),
-                    (AUX_PREFIX + str(prev[1:]), MAIN_PREFIX + str(cur[1:])),
-                    (AUX_PREFIX + str(prev[1:]), AUX_PREFIX + str(cur[1:])),
-                ]
-                for ids in names:
-                    path = kinematic_map[prev][cur]
-                    T0, T1, T2 = [T[path[0]], T[path[1]], T[path[2]]]
-
-                    if AUX_PREFIX in ids[0]:
-                        T0 = T0.dot(T_axis)
-                    if AUX_PREFIX in ids[1]:
-                        T2 = T2.dot(T_axis)
-
-                    N = T1.as_matrix()[0:3, 2]
-                    C = T1.trans + (N.dot(T2.trans-T1.trans))*N
-                    r = norm(T2.trans - C)
-                    P = T0.trans
-                    d_max, d_min = max_min_distance_revolute(r, P, C, N)
-
-                    d = norm(T2.trans - T0.trans)
-                    if d_max == d_min:
-                        limit = False
-                    elif d == d_max:
-                        limit = BELOW
-                    elif d == d_min:
-                        limit = ABOVE
-                    else:
-                        limit = None
-
-                    if limit:
-
-                        rot_limit = rot_axis(self.ub[cur], "z")
-
-                        T_rel = T1.inv().dot(T2)
-
-                        d_limit = norm(T1.dot(rot_limit).dot(T_rel).trans - T0.trans)
-
-                        if limit == ABOVE:
-                            d_max = d_limit
-                        else:
-                            d_min = d_limit
-
-                        self.limited_joints += [cur]
-
-                    S.add_edge(ids[0], ids[1])
-                    if d_max == d_min:
-                        S[ids[0]][ids[1]][DIST] = d_max
-                    S[ids[0]][ids[1]][BOUNDED] = [limit]
-                    S[ids[0]][ids[1]][UPPER] = d_max
-                    S[ids[0]][ids[1]][LOWER] = d_min
-
-    def joint_variables(
-        self, G: nx.DiGraph, T_final: Dict[str, SE3] = None
-    ) -> Dict[str, Any]:
-        """
-        Calculate joint angles from a complete set of point positions.
-        """
-        # TODO: make this more readable
-        tol = 1e-10
-        q_zero = list_to_variable_dict(self.n * [0])
-        get_pose = self.get_pose
-        axis_length = self.axis_length
-
-        T = {}
-        T[ROOT] = self.T_base
-
-        # resolve scale
-        x_hat = G.nodes["x"][POS] - G.nodes["p0"][POS]
-        y_hat = G.nodes["y"][POS] - G.nodes["p0"][POS]
-        z_hat = G.nodes["q0"][POS] - G.nodes["p0"][POS]
-        scale = np.roots(
-            [
-                x_hat.dot(x_hat) + y_hat.dot(y_hat) + z_hat.dot(z_hat),
-                -2*(np.linalg.norm(x_hat) + np.linalg.norm(y_hat) + np.linalg.norm(z_hat)),
-                3,
-            ]
-        )
-        scale = scale[0].real
-
-        # resolve rotation and translation
-        x = normalize(x_hat)
-        y = normalize(y_hat)
-        z = normalize(z_hat)
-        R = np.vstack((x, -y, z)).T
-        # e,v = np.linalg.eig(R_hat)
-        # R = v.dot(v.T)
-        # R = R.real
-        B = SE3Matrix(SO3Matrix(R), scale*G.nodes[ROOT][POS])
-
-        theta = {}
-
-        for ee in self.end_effectors:
-            k_map = self.kinematic_map[ROOT][ee[0]]
-            for idx in range(1, len(k_map)):
-                cur, aux_cur = k_map[idx], f"q{k_map[idx][1:]}"
-                pred, aux_pred = (k_map[idx - 1], f"q{k_map[idx-1][1:]}")
-
-                T_prev = T[pred]
-
-                T_prev_0 = get_pose(q_zero, pred)
-                T_0 = get_pose(q_zero, cur)
-                T_rel = T_prev_0.inv().dot(T_0)
-                T_0_q = get_pose(q_zero, cur).dot(trans_axis(axis_length, "z"))
-                T_rel_q = T_prev_0.inv().dot(T_0_q)
-
-                p = B.inv().dot(scale*G.nodes[cur][POS]) - T_prev.trans
-                qnorm = G.nodes[cur][POS] + (G.nodes[aux_cur][POS] - G.nodes[cur][POS])/np.linalg.norm(G.nodes[aux_cur][POS] - G.nodes[cur][POS])
-                q = B.inv().dot(scale*qnorm) - T_prev.trans
-                # q = B.inv().dot(scale*G.nodes[aux_cur][POS]) - T_prev.trans
-                ps = T_prev.inv().as_matrix()[:3, :3].dot(p)  # in prev. joint frame
-                qs = T_prev.inv().as_matrix()[:3, :3].dot(q)  # in prev. joint frame
-
-                zs = skew(np.array([0, 0, 1]))
-                cp = (T_rel.trans - ps) + zs.dot(zs).dot(T_rel.trans)
-                cq = (T_rel_q.trans - qs) + zs.dot(zs).dot(T_rel_q.trans)
-                ap = zs.dot(T_rel.trans)
-                aq = zs.dot(T_rel_q.trans)
-                bp = zs.dot(zs).dot(T_rel.trans)
-                bq = zs.dot(zs).dot(T_rel_q.trans)
-
-                c0 = cp.dot(cp) + cq.dot(cq)
-                c1 = 2 * (cp.dot(ap) + cq.dot(aq))
-                c2 = 2 * (cp.dot(bp) + cq.dot(bq))
-                c3 = ap.dot(ap) + aq.dot(aq)
-                c4 = bp.dot(bp) + bq.dot(bq)
-                c5 = 2 * (ap.dot(bp) + aq.dot(bq))
-
-                # poly = [c0 -c2 +c4, 2*c1 - 2*c5, 2*c0 + 4*c3 -2*c4, 2*c1 + 2*c5, c0 + c2 + c4]
-                diff = np.asarray(
-                    [
-                        c1 - c5,
-                        2 * c2 + 4 * c3 - 4 * c4,
-                        3 * c1 + 3 * c5,
-                        8 * c2 + 4 * c3 - 4 * c4,
-                        -4 * c1 + 4 * c5,
-                    ]
-                )
-                if all(diff < tol):
-                    theta[cur] = 0
-                else:
-                    sols = np.roots(
-                        diff
-                    )  # solutions to the Whaba problem for fixed axis
-
-                    def error_test(x):
-                        if abs(x.imag) > 0:
-                            return 1e6
-                        x = -2 * arctan2(x.real, 1)
-                        return (
-                            c0
-                            + c1 * sin(x)
-                            - c2 * cos(x)
-                            + c3 * sin(x) ** 2
-                            + c4 * cos(x) ** 2
-                            - c5 * sin(2 * x) / 2
-                        )
-
-                    sol = min(sols, key=error_test)
-                    theta[cur] = -2 * arctan2(sol.real, 1)
-
-                T[cur] = (T_prev.dot(rot_axis(theta[cur], "z"))).dot(T_rel)
-
-            if T_final is None:
-                return theta
-
-            if (
-                T_final[ee[0]] is not None
-                and norm(cross(T_rel.trans, np.asarray([0, 0, 1]))) < tol
-            ):
-                T_th = (T[cur]).inv().dot(T_final[ee[0]]).as_matrix()
-                theta[ee[0]] += arctan2(T_th[1, 0], T_th[0, 0])
-
-        return theta
 
     def random_configuration(self):
         """
@@ -578,8 +337,9 @@ class RobotRevolute(Robot):
         return H
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from graphik.utils.roboturdf import load_ur10, load_kuka, load_schunk_lwa4d
+
     robot, graph = load_schunk_lwa4d()
     q = robot.random_configuration()
     q = robot.random_configuration()

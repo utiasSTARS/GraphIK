@@ -213,6 +213,11 @@ def constraint_violations(constraints, solution_dict):
         for con in constraints
     ]
 
+def normalize(v):
+    norm = np.linalg.norm(v)
+    if norm == 0:
+        return v
+    return v / norm
 
 if __name__ == "__main__":
 

@@ -47,7 +47,7 @@ class TestJointVariables(unittest.TestCase):
             )
             X = graph.realization(q_goal)
             P = normalize_positions(pos_from_graph(X))
-            q_rec = robot.joint_variables(graph_from_pos(P, node_ids=list(X)), T_goal)
+            q_rec = graph.joint_variables(graph_from_pos(P, node_ids=list(X)), T_goal)
             self.assertIsNone(
                 assert_allclose(list(q_goal.values()), list(q_rec.values()), rtol=1e-5)
             )
@@ -83,7 +83,7 @@ class TestJointVariables(unittest.TestCase):
                 list_to_variable_dict(q_goal), "p" + str(n)
             )
             X = graph.realization(q_goal)
-            q_rec = robot.joint_variables(X, T_goal)
+            q_rec = graph.joint_variables(X, T_goal)
             self.assertIsNone(
                 assert_allclose(list(q_goal.values()), list(q_rec.values()), rtol=1e-5)
             )
@@ -121,7 +121,7 @@ class TestJointVariables(unittest.TestCase):
                 list_to_variable_dict(q_goal), "p" + str(n)
             )
             X = graph.realization(q_goal)
-            q_rec = robot.joint_variables(X, T_goal)
+            q_rec = graph.joint_variables(X, T_goal)
             self.assertIsNone(
                 assert_allclose(list(q_goal.values()), list(q_rec.values()), rtol=1e-5)
             )
@@ -291,7 +291,7 @@ class TestJointVariables(unittest.TestCase):
             )
             X = graph.realization(q_goal)
             # q_rec = robot.joint_variables(X, T_goal.as_matrix())
-            q_rec = robot.joint_variables(X, T_goal)
+            q_rec = graph.joint_variables(X, T_goal)
             self.assertIsNone(
                 assert_allclose(list(q_goal.values()), list(q_rec.values()), rtol=1e-5)
             )
@@ -329,7 +329,7 @@ class TestJointVariables(unittest.TestCase):
             for ee in robot.end_effectors:
                 T_goal[ee[0]] = robot.get_pose(list_to_variable_dict(q_goal), ee[0])
             X = graph.realization(q_goal)
-            q_rec = robot.joint_variables(X, T_goal)
+            q_rec = graph.joint_variables(X, T_goal)
             q_rec = dict(sorted(q_rec.items()))
             self.assertIsNone(
                 assert_allclose(list(q_goal.values()), list(q_rec.values()), rtol=1e-5)
