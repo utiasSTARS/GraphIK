@@ -19,7 +19,7 @@ class RobotRevolute(Robot):
             T_zero = params["T_zero"]
         else:
             try:
-                T_zero = self.from_DH()
+                T_zero = self.from_params()
             except KeyError:
                 raise Exception("Robot description not provided.")
 
@@ -28,24 +28,6 @@ class RobotRevolute(Robot):
 
         # Set node and edge attributes describing geometry
         self.set_geometric_attributes()
-
-    @property
-    def end_effectors(self) -> List:
-        """
-        Returns a list of end effector node pairs, since it's the
-        last two points that are defined for a full pose.
-        """
-        if not hasattr(self, "_end_effectors"):
-            self._end_effectors = [x for x in self.nodes() if self.out_degree(x) == 0]
-        return self._end_effectors
-
-    @property
-    def T_zero(self) -> Dict:
-        return self._T_zero
-
-    @T_zero.setter
-    def T_zero(self, T_zero: Dict):
-        self._T_zero = T_zero
 
     def set_geometric_attributes(self):
         end_effectors = self.end_effectors
@@ -123,29 +105,7 @@ class RobotRevolute(Robot):
                     J[node][:, idx] = Ad.dot(self.nodes[pred]["S"])
         return J
 
-    def random_configuration(self):
-        """
-        Returns a random set of joint values within the joint limits
-        determined by lb and ub.
-        """
-        q = {}
-        for key in self.joint_ids:
-            if key != ROOT:
-                q[key] = self.lb[key] + (self.ub[key] - self.lb[key]) * np.random.rand()
-        return q
-
-    def zero_configuration(self):
-        """
-        Returns zero joint values within the joint limits
-        determined by lb and ub.
-        """
-        q = {}
-        for key in self.joint_ids:
-            if key != ROOT:
-                q[key] = 0
-        return q
-
-    def from_DH(self):
+    def from_params(self):
         self.a, self.d, self.al, self.th, self.modified_dh = (
             self.params["a"],
             self.params["d"],
