@@ -27,7 +27,7 @@ def solve_random_problem(graph: RobotRevoluteGraph, solver: RiemannianSolver):
 
     q_sol = graph.joint_variables(G, {f"p{n}": T_goal})
 
-    T_riemannian = robot.get_pose(list_to_variable_dict(q_sol), "p" + str(n))
+    T_riemannian = graph.get_pose(list_to_variable_dict(q_sol), "p" + str(n))
     err_riemannian_pos = norm(T_goal.trans - T_riemannian.trans)
 
     z_goal = T_goal.as_matrix()[:3, 2]

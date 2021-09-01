@@ -59,7 +59,7 @@ class RobotRevoluteGraph(RobotGraph):
 
     def structure_graph(self):
         trans_z = trans_axis(self.axis_length, "z")
-        T = self.robot.T_zero
+        robot = self.robot
         end_effectors = self.robot.end_effectors
         kinematic_map = self.robot.kinematic_map
 
@@ -69,11 +69,16 @@ class RobotRevoluteGraph(RobotGraph):
             k_map = kinematic_map[ROOT][ee[0]]
             for idx in range(len(k_map)):
                 cur, aux_cur = k_map[idx], f"q{k_map[idx][1:]}"
-                cur_pos, aux_cur_pos = T[cur].trans, T[cur].dot(trans_z).trans
+                cur_pos, aux_cur_pos = (
+                    robot.nodes[cur]["T0"].trans,
+                    robot.nodes[cur]["T0"].dot(trans_z).trans,
+                )
                 dist = la.norm(cur_pos - aux_cur_pos)
 
                 # Add nodes for joint and edge between them
-                structure.add_nodes_from([(cur, {POS: cur_pos}), (aux_cur, {POS: aux_cur_pos})])
+                structure.add_nodes_from(
+                    [(cur, {POS: cur_pos}), (aux_cur, {POS: aux_cur_pos})]
+                )
                 structure.add_edge(
                     cur, aux_cur, **{DIST: dist, LOWER: dist, UPPER: dist, BOUNDED: []}
                 )
@@ -83,14 +88,17 @@ class RobotRevoluteGraph(RobotGraph):
                     pred, aux_pred = (k_map[idx - 1], f"q{k_map[idx-1][1:]}")
                     for u in [pred, aux_pred]:
                         for v in [cur, aux_cur]:
-                            dist = la.norm(structure.nodes[u][POS] - structure.nodes[v][POS])
+                            dist = la.norm(
+                                structure.nodes[u][POS] - structure.nodes[v][POS]
+                            )
                             structure.add_edge(
                                 u,
                                 v,
                                 **{DIST: dist, LOWER: dist, UPPER: dist, BOUNDED: []},
                             )
-                    structure[pred][cur][TRANSFORM] = T[pred].inv().dot(T[cur])
-
+                    # structure[pred][cur][TRANSFORM] = (
+                    #     robot.nodes[pred]["T0"].inv().dot(robot.nodes[cur]["T0"])
+                    # )
 
         # Delete positions used for weights
         for u in structure.nodes:
@@ -101,14 +109,13 @@ class RobotRevoluteGraph(RobotGraph):
 
         return structure
 
-
     def set_limits(self):
         """
         Sets known bounds on the distances between joints.
         This is induced by link length and joint limits.
         """
         S = self.structure
-        T = self.robot.T_zero
+        robot = self.robot
         kinematic_map = self.robot.kinematic_map
         T_axis = trans_axis(self.axis_length, "z")
         end_effectors = self.robot.end_effectors
@@ -127,7 +134,11 @@ class RobotRevoluteGraph(RobotGraph):
                 ]
                 for ids in names:
                     path = kinematic_map[prev][cur]
-                    T0, T1, T2 = [T[path[0]], T[path[1]], T[path[2]]]
+                    T0, T1, T2 = [
+                        robot.nodes[path[0]]["T0"],
+                        robot.nodes[path[1]]["T0"],
+                        robot.nodes[path[2]]["T0"],
+                    ]
 
                     if AUX_PREFIX in ids[0]:
                         T0 = T0.dot(T_axis)
@@ -135,7 +146,7 @@ class RobotRevoluteGraph(RobotGraph):
                         T2 = T2.dot(T_axis)
 
                     N = T1.as_matrix()[0:3, 2]
-                    C = T1.trans + (N.dot(T2.trans-T1.trans))*N
+                    C = T1.trans + (N.dot(T2.trans - T1.trans)) * N
                     r = la.norm(T2.trans - C)
                     P = T0.trans
                     d_max, d_min = max_min_distance_revolute(r, P, C, N)
@@ -176,10 +187,10 @@ class RobotRevoluteGraph(RobotGraph):
 
     def root_angle_limits(self, G: nx.DiGraph) -> nx.DiGraph:
         axis_length = self.axis_length
-        T = self.robot.T_zero
+        robot = self.robot
         upper_limits = self.robot.ub
         limited_joints = self.limited_joints
-        T1 = T["p0"]
+        T1 = robot.nodes[ROOT]["T0"]
         base_names = ["x", "y"]
         names = ["p1", "q1"]
         T_axis = trans_axis(axis_length, "z")
@@ -189,12 +200,12 @@ class RobotRevoluteGraph(RobotGraph):
                 T0 = SE3.from_matrix(np.identity(4))
                 T0.trans = G.nodes[base_node][POS]
                 if node[0] == "p":
-                    T2 = T["p1"]
+                    T2 = robot.nodes["p1"]["T0"]
                 else:
-                    T2 = T["p1"].dot(T_axis)
+                    T2 = robot.nodes["p1"]["T0"].dot(T_axis)
 
                 N = T1.as_matrix()[0:3, 2]
-                C = T1.trans + (N.dot(T2.trans-T1.trans))*N
+                C = T1.trans + (N.dot(T2.trans - T1.trans)) * N
                 r = np.linalg.norm(T2.trans - C)
                 P = T0.trans
                 d_max, d_min = max_min_distance_revolute(r, P, C, N)
@@ -211,9 +222,9 @@ class RobotRevoluteGraph(RobotGraph):
 
                 if limit:
                     if node[0] == "p":
-                        T_rel = T1.inv().dot(T["p1"])
+                        T_rel = T1.inv().dot(robot.nodes["p1"]["T0"])
                     else:
-                        T_rel = T1.inv().dot(T["p1"].dot(T_axis))
+                        T_rel = T1.inv().dot(robot.nodes["p1"]["T0"].dot(T_axis))
 
                     d_limit = la.norm(
                         T1.dot(rot_axis(upper_limits["p1"], "z")).dot(T_rel).trans
@@ -234,7 +245,6 @@ class RobotRevoluteGraph(RobotGraph):
                 G[base_node][node][LOWER] = d_min
 
         return G
-
 
     def realization(self, joint_angles: Dict[str, float]) -> nx.DiGraph:
         """
@@ -260,13 +270,12 @@ class RobotRevoluteGraph(RobotGraph):
         # TODO: make this more readable
         tol = 1e-10
         q_zero = list_to_variable_dict(self.robot.n * [0])
-        get_pose = self.robot.get_pose
         axis_length = self.axis_length
         end_effectors = self.robot.end_effectors
         kinematic_map = self.robot.kinematic_map
 
         T = {}
-        T[ROOT] = self.robot.T_base
+        T[ROOT] = self.robot.nodes[ROOT]
 
         # resolve scale
         x_hat = G.nodes["x"][POS] - G.nodes["p0"][POS]
@@ -275,7 +284,12 @@ class RobotRevoluteGraph(RobotGraph):
         scale = np.roots(
             [
                 x_hat.dot(x_hat) + y_hat.dot(y_hat) + z_hat.dot(z_hat),
-                -2*(np.linalg.norm(x_hat) + np.linalg.norm(y_hat) + np.linalg.norm(z_hat)),
+                -2
+                * (
+                    np.linalg.norm(x_hat)
+                    + np.linalg.norm(y_hat)
+                    + np.linalg.norm(z_hat)
+                ),
                 3,
             ]
         )
@@ -286,7 +300,7 @@ class RobotRevoluteGraph(RobotGraph):
         y = normalize(y_hat)
         z = normalize(z_hat)
         R = np.vstack((x, -y, z)).T
-        B = SE3Matrix(SO3Matrix(R), scale*G.nodes[ROOT][POS])
+        B = SE3Matrix(SO3Matrix(R), scale * G.nodes[ROOT][POS])
 
         theta = {}
 
@@ -298,15 +312,17 @@ class RobotRevoluteGraph(RobotGraph):
 
                 T_prev = T[pred]
 
-                T_prev_0 = get_pose(q_zero, pred)
-                T_0 = get_pose(q_zero, cur)
+                T_prev_0 = self.get_pose(q_zero, pred)
+                T_0 = self.get_pose(q_zero, cur)
                 T_rel = T_prev_0.inv().dot(T_0)
-                T_0_q = get_pose(q_zero, cur).dot(trans_axis(axis_length, "z"))
+                T_0_q = self.get_pose(q_zero, cur).dot(trans_axis(axis_length, "z"))
                 T_rel_q = T_prev_0.inv().dot(T_0_q)
 
-                p = B.inv().dot(scale*G.nodes[cur][POS]) - T_prev.trans
-                qnorm = G.nodes[cur][POS] + (G.nodes[aux_cur][POS] - G.nodes[cur][POS])/np.linalg.norm(G.nodes[aux_cur][POS] - G.nodes[cur][POS])
-                q = B.inv().dot(scale*qnorm) - T_prev.trans
+                p = B.inv().dot(scale * G.nodes[cur][POS]) - T_prev.trans
+                qnorm = G.nodes[cur][POS] + (
+                    G.nodes[aux_cur][POS] - G.nodes[cur][POS]
+                ) / np.linalg.norm(G.nodes[aux_cur][POS] - G.nodes[cur][POS])
+                q = B.inv().dot(scale * qnorm) - T_prev.trans
                 # q = B.inv().dot(scale*G.nodes[aux_cur][POS]) - T_prev.trans
                 ps = T_prev.inv().as_matrix()[:3, :3].dot(p)  # in prev. joint frame
                 qs = T_prev.inv().as_matrix()[:3, :3].dot(q)  # in prev. joint frame
@@ -372,6 +388,15 @@ class RobotRevoluteGraph(RobotGraph):
                 theta[ee[0]] += arctan2(T_th[1, 0], T_th[0, 0])
 
         return theta
+
+    def get_pose(self, joint_angles: dict, query_node: str) -> SE3:
+        T = self.robot.pose(joint_angles, query_node)
+
+        if query_node[0] == AUX_PREFIX:
+            T_trans = trans_axis(self.axis_length, "z")
+            T = T.dot(T_trans)
+
+        return T
 
     def distance_bounds_from_sampling(self):
         robot = self.robot

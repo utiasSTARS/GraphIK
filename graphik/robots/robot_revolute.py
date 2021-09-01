@@ -3,29 +3,16 @@ from numpy.typing import ArrayLike
 
 import networkx as nx
 import numpy as np
-from graphik.robots.robot_base import Robot, SEMatrix
+from graphik.robots.robot_base_new import Robot, SEMatrix
 from graphik.utils import *
 
 from liegroups.numpy import SE3
-from numpy import arctan2, cos, cross, pi, sin
 
 class RobotRevolute(Robot):
     def __init__(self, params):
-        self.dim = 3
-        self.n = params.get("num_joints", len(params["lb"]))  # number of joints
-        self.axis_length = params.get("axis_length", 1)  # distance between p and q
-        self.T_base = params.get("T_base", SE3.identity())  # base frame
+        super(RobotRevolute, self).__init__(params)
 
-        # Topological "map" of the robot, if not provided assume chain
-        if "parents" in params:
-            self.parents = nx.DiGraph(params["parents"])
-        else:
-            self.parents = nx.path_graph(
-                [f"p{idx}" for idx in range(self.n + 1)], nx.DiGraph
-            )
-
-        # A dict of shortest paths between joints for forward kinematics
-        self.kinematic_map = nx.shortest_path(self.parents)
+        self.dim = 3 # 3d workspace
 
         # Use frame poses at zero conf if provided, otherwise construct from DH
         if "T_zero" in params:
@@ -42,20 +29,14 @@ class RobotRevolute(Robot):
             except KeyError:
                 raise Exception("Robot description not provided.")
 
-        self.lb = params.get("lb", dict(zip(self.joint_ids, self.n * [-pi])))
-        self.ub = params.get("ub", dict(zip(self.joint_ids, self.n * [pi])))
+        # Poses of frames at zero config as node attributes
+        nx.set_node_attributes(self, values=self.params["T_zero"], name="T0")
 
-        super(RobotRevolute, self).__init__()
-
-    def joint_variables(
-        self, G: nx.DiGraph, T_final: Dict[str, SE3] = None
-    ) -> Dict[str, Any]:
-        print("joint_variables is not in RevoluteGraph")
-        return {}
-
+        # Set node and edge attributes describing geometry
+        self.set_geometric_attributes()
 
     @property
-    def end_effectors(self) -> list:
+    def end_effectors(self) -> List:
         """
         Returns a list of end effector node pairs, since it's the
         last two points that are defined for a full pose.
@@ -63,37 +44,37 @@ class RobotRevolute(Robot):
         if not hasattr(self, "_end_effectors"):
             self._end_effectors = [
                 [x, f"q{x[1:]}"]
-                for x in self.parents
-                if self.parents.out_degree(x) == 0
+                for x in self.nodes()
+                if self.out_degree(x) == 0
             ]
         return self._end_effectors
 
-    @property
-    def S(self) -> dict:
-        if not hasattr(self, "_S"):
-            self._S = {}
-            for joint, T in self.T_zero.items():
-                omega = T.as_matrix()[:3,2]
-                q = T.as_matrix()[:3,3]
-                # self._S[joint] = SE3.wedge(np.hstack((np.cross(-omega, q), omega)))
-                self._S[joint] = np.hstack((np.cross(-omega, q), omega))
-        return self._S
+    def set_geometric_attributes(self):
+        end_effectors = self.end_effectors
+        kinematic_map = self.kinematic_map
 
-    @S.setter
-    def S(self, S: dict):
-        self._S = S
+        for ee in end_effectors:
+            k_map = kinematic_map[ROOT][ee[0]]
+            for idx in range(len(k_map)):
 
-    def get_pose(self, joint_angles: dict, query_node: str) -> SE3:
+                # Twists representing rotation axes as node attributes
+                cur = k_map[idx]
+                omega = self.nodes[cur]["T0"].as_matrix()[:3, 2]
+                q = self.nodes[cur]["T0"].as_matrix()[:3, 3]
+                self.nodes[cur]["S"] = np.hstack((np.cross(-omega, q), omega))
+
+                # Relative transforms between coordinate frames as edge attributes
+                if idx != 0:
+                    pred = k_map[idx - 1]
+                    self[pred][cur][TRANSFORM] = self.nodes[pred]["T0"].inv().dot(self.nodes[cur]["T0"])
+
+    def pose(self, joint_angles: dict, query_node: str) -> SE3:
         kinematic_map = self.kinematic_map[ROOT][MAIN_PREFIX + query_node[1:]]
-        T = self.T_base
+        T = self.nodes[ROOT]["T0"]
         for idx in range(len(kinematic_map) - 1):
             pred, cur = kinematic_map[idx], kinematic_map[idx + 1]
-            T = T.dot(SE3.exp(self.S[pred] * joint_angles[cur]))
-        T = T.dot(self.T_zero[MAIN_PREFIX + query_node[1:]])
-
-        if query_node[0] == AUX_PREFIX:
-            T_trans = trans_axis(self.axis_length, "z")
-            T = T.dot(T_trans)
+            T = T.dot(SE3.exp(self.nodes[pred]["S"] * joint_angles[cur]))
+        T = T.dot(self.nodes[MAIN_PREFIX + query_node[1:]]["T0"])
 
         return T
 
@@ -124,24 +105,43 @@ class RobotRevolute(Robot):
         J = {}
         for node in nodes:  # iterate through nodes
             path = kinematic_map[node]  # find joints that move node
-            T = self.T_base
+            T = self.nodes[ROOT]["T0"]
 
             J[node] = np.zeros([6, self.n])
             for idx in range(len(path) - 1):
                 pred, cur = path[idx], path[idx + 1]
                 if idx == 0:
-                    J[node][:, idx] = self.S[pred]
+                    J[node][:, idx] = self.nodes[pred]["S"]
                 else:
-                    ppred = list(self.parents.predecessors(pred))[0]
-                    T = T.dot(SE3.exp(self.S[ppred] * joint_angles[pred]))
+                    ppred = list(self.predecessors(pred))[0]
+                    T = T.dot(SE3.exp(self.nodes[ppred]["S"] * joint_angles[pred]))
                     Ad = T.adjoint()
-                    J[node][:, idx] = Ad.dot(self.S[pred])
+                    J[node][:, idx] = Ad.dot(self.nodes[pred]["S"])
         return J
+
+    def T_zero_from_DH(self, params):
+            T = {ROOT: SE3.identity()}
+            kinematic_map = self.kinematic_map
+            for ee in self.end_effectors:
+                for node in kinematic_map[ROOT][ee[0]][1:]:
+                    path_nodes = kinematic_map[ROOT][node][1:]
+
+                    q = np.asarray([0 for node in path_nodes])
+                    a = np.asarray([self.a[node] for node in path_nodes])
+                    alpha = np.asarray([self.al[node] for node in path_nodes])
+                    th = np.asarray([self.th[node] for node in path_nodes])
+                    d = np.asarray([self.d[node] for node in path_nodes])
+
+                    if not self.modified_dh:
+                        T[node] = fk_3d(a, alpha, d, q + th)
+                    else:
+                        T[node] = modified_fk_3d(a, alpha, d, q + th)
+        pass
 
     @property
     def T_zero(self) -> dict:
         if not hasattr(self, "_T_zero"):
-            T = {ROOT: self.T_base}
+            T = {ROOT: SE3.identity()}
             kinematic_map = self.kinematic_map
             for ee in self.end_effectors:
                 for node in kinematic_map[ROOT][ee[0]][1:]:
@@ -164,36 +164,6 @@ class RobotRevolute(Robot):
     @T_zero.setter
     def T_zero(self, T_zero: dict):
         self._T_zero = T_zero
-
-    @property
-    def parents(self) -> nx.DiGraph:
-        return self._parents
-
-    @parents.setter
-    def parents(self, parents: nx.DiGraph):
-        self._parents = parents
-
-    def get_pose_old(self, joint_angles: dict, query_node: str) -> SE3:
-        """
-        Returns an SE3 element corresponding to the location
-        of the query_node in the configuration determined by
-        node_inputs.
-        """
-        kinematic_map = self.kinematic_map[ROOT][MAIN_PREFIX + query_node[1:]]
-
-        T = self.T_base
-
-        for idx in range(len(kinematic_map) - 1):
-            pred, cur = kinematic_map[idx], kinematic_map[idx + 1]
-            T_rel = self.structure[pred][cur][TRANSFORM]
-            T_rot = rot_axis(joint_angles[cur], "z")
-            T = T.dot(T_rot).dot(T_rel)
-
-        if query_node[0] == "q":
-            T_trans = trans_axis(self.axis_length, "z")
-            T = T.dot(T_trans)
-
-        return T
 
     def random_configuration(self):
         """
@@ -340,9 +310,18 @@ class RobotRevolute(Robot):
 if __name__ == "__main__":
     from graphik.utils.roboturdf import load_ur10, load_kuka, load_schunk_lwa4d
 
-    robot, graph = load_schunk_lwa4d()
+    # robot, graph = load_schunk_lwa4d()
+    robot, graph = load_ur10()
+    # print(robot.nodes(data=True))
+    # print(robot.edges(data=True))
+    # print(robot.random_configuration())
     q = robot.random_configuration()
-    q = robot.random_configuration()
+    print(robot.pose(q, "p6"))
+    print(graph.get_pose(q, "p6"))
+    print(robot.jacobian(q, ["p6"]))
+    # print(robot.edges())
+    # q = robot.random_configuration()
+    # q = robot.random_configuration()
     # T = robot.get_pose(q, "p6")
     # print(robot.get_pose(q, "p6"))
     # print(robot.pose_exp(q, "p6"))

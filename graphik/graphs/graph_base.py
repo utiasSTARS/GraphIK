@@ -5,7 +5,7 @@ import numpy as np
 import numpy.linalg as la
 from typing import Dict, List, Any
 from numpy.typing import ArrayLike
-from graphik.robots.robot_base import Robot
+from graphik.robots.robot_base_new import Robot
 from graphik.utils import *
 from numpy import cos, pi, sqrt
 

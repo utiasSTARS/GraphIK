@@ -357,6 +357,7 @@ class RobotURDF(object):
             T_zero[key] = T0.inv().dot(val)
         # T_zero['root'] = SE3.identity()
         params["T_zero"] = T_zero
+        params["num_joints"] = self.n_q_joints
 
         l = 0
         for cl in self.parents.values():
@@ -487,7 +488,7 @@ def normalize(x):
 def load_schunk_lwa4p(limits=None):
     fname = graphik.__path__[0] + "/robots/urdfs/lwa4p.urdf"
     urdf_robot = RobotURDF(fname)
-    n = 6
+    n = urdf_robot.n_q_joints
     if limits is None:
         ub = np.ones(n) * np.pi
         lb = -ub
@@ -502,7 +503,7 @@ def load_schunk_lwa4p(limits=None):
 def load_schunk_lwa4d(limits=None):
     fname = graphik.__path__[0] + "/robots/urdfs/lwa4d.urdf"
     urdf_robot = RobotURDF(fname)
-    n = 7
+    n = urdf_robot.n_q_joints
     if limits is None:
         ub = np.ones(n) * np.pi
         lb = -ub
@@ -517,7 +518,7 @@ def load_schunk_lwa4d(limits=None):
 def load_kuka(limits=None):
     fname = graphik.__path__[0] + "/robots/urdfs/kuka_iiwr.urdf"
     urdf_robot = RobotURDF(fname)
-    n = 7
+    n = urdf_robot.n_q_joints
     if limits is None:
         ub = np.ones(n) * np.pi
         lb = -ub
@@ -532,7 +533,7 @@ def load_kuka(limits=None):
 def load_ur10(limits=None):
     fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
     urdf_robot = RobotURDF(fname)
-    n = 6
+    n = urdf_robot.n_q_joints
     if limits is None:
         ub = np.ones(n) * np.pi
         lb = -ub
