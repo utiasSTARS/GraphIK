@@ -35,6 +35,7 @@ class TestJointVariables(unittest.TestCase):
             "lb": lb[:n],
             "ub": ub[:n],
             "T_zero": robot_urdf.T_zero,
+            "num_joints": urdf_robot.n_q_joints
         }
         robot = RobotRevolute(params)
 
@@ -42,9 +43,7 @@ class TestJointVariables(unittest.TestCase):
         for _ in range(100):
             q_goal = robot.random_configuration()
             T_goal = {}
-            T_goal[f"p{n}"] = robot.get_pose(
-                list_to_variable_dict(q_goal), "p" + str(n)
-            )
+            T_goal[f"p{n}"] = robot.pose(q_goal, "p" + str(n))
             X = graph.realization(q_goal)
             P = normalize_positions(pos_from_graph(X))
             q_rec = graph.joint_variables(graph_from_pos(P, node_ids=list(X)), T_goal)
@@ -72,6 +71,7 @@ class TestJointVariables(unittest.TestCase):
             "lb": lb[:n],
             "ub": ub[:n],
             "T_zero": robot_urdf.T_zero,
+            "num_joints": urdf_robot.n_q_joints
         }
         robot = RobotRevolute(params)
 
@@ -79,9 +79,7 @@ class TestJointVariables(unittest.TestCase):
         for _ in range(100):
             q_goal = robot.random_configuration()
             T_goal = {}
-            T_goal[f"p{n}"] = robot.get_pose(
-                list_to_variable_dict(q_goal), "p" + str(n)
-            )
+            T_goal[f"p{n}"] = robot.pose(q_goal, "p" + str(n))
             X = graph.realization(q_goal)
             q_rec = graph.joint_variables(X, T_goal)
             self.assertIsNone(
@@ -111,15 +109,14 @@ class TestJointVariables(unittest.TestCase):
                 "lb": lb,
                 "ub": ub,
                 "modified_dh": modified_dh,
+                "num_joints": n
             }
             robot = RobotRevolute(params)  # instantiate robot
             graph = RobotRevoluteGraph(robot)  # instantiate graph
 
             q_goal = robot.random_configuration()
             T_goal = {}
-            T_goal[f"p{n}"] = robot.get_pose(
-                list_to_variable_dict(q_goal), "p" + str(n)
-            )
+            T_goal[f"p{n}"] = robot.pose(q_goal, "p" + str(n))
             X = graph.realization(q_goal)
             q_rec = graph.joint_variables(X, T_goal)
             self.assertIsNone(

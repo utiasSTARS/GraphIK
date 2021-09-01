@@ -39,6 +39,7 @@ class TestDistanceMatrix(unittest.TestCase):
             "ub": ub,
             "modified_dh": modified_dh,
             "parents": parents,
+            "num_joints": n
         }
         robot = RobotRevolute(params)
         graph = RobotRevoluteGraph(robot)
@@ -91,12 +92,13 @@ class TestDistanceMatrix(unittest.TestCase):
                 "lb": lb,
                 "ub": ub,
                 "modified_dh": True,
+                "num_joints": n
             }
             robot = RobotRevolute(params)  # instantiate robot
             graph = RobotRevoluteGraph(robot)  # instantiate graph
 
             q = robot.random_configuration()
-            T = robot.get_pose(list_to_variable_dict(q), "p" + str(n))
+            T = robot.pose(q, "p" + str(n))
             D = graph.distance_matrix_from_joints(q)
 
             # Reconstruct points

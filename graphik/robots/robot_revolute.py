@@ -12,25 +12,19 @@ class RobotRevolute(Robot):
     def __init__(self, params):
         super(RobotRevolute, self).__init__(params)
 
-        self.dim = 3 # 3d workspace
+        self.dim = 3  # 3d workspace
 
         # Use frame poses at zero conf if provided, otherwise construct from DH
         if "T_zero" in params:
-            self.T_zero = params["T_zero"]
+            T_zero = params["T_zero"]
         else:
             try:
-                self.a, self.d, self.al, self.th, self.modified_dh = (
-                    params["a"],
-                    params["d"],
-                    params["alpha"],
-                    params["theta"],
-                    params["modified_dh"],
-                )
+                T_zero = self.from_DH()
             except KeyError:
                 raise Exception("Robot description not provided.")
 
         # Poses of frames at zero config as node attributes
-        nx.set_node_attributes(self, values=self.params["T_zero"], name="T0")
+        nx.set_node_attributes(self, values=T_zero, name="T0")
 
         # Set node and edge attributes describing geometry
         self.set_geometric_attributes()
@@ -42,19 +36,23 @@ class RobotRevolute(Robot):
         last two points that are defined for a full pose.
         """
         if not hasattr(self, "_end_effectors"):
-            self._end_effectors = [
-                [x, f"q{x[1:]}"]
-                for x in self.nodes()
-                if self.out_degree(x) == 0
-            ]
+            self._end_effectors = [x for x in self.nodes() if self.out_degree(x) == 0]
         return self._end_effectors
+
+    @property
+    def T_zero(self) -> Dict:
+        return self._T_zero
+
+    @T_zero.setter
+    def T_zero(self, T_zero: Dict):
+        self._T_zero = T_zero
 
     def set_geometric_attributes(self):
         end_effectors = self.end_effectors
         kinematic_map = self.kinematic_map
 
         for ee in end_effectors:
-            k_map = kinematic_map[ROOT][ee[0]]
+            k_map = kinematic_map[ROOT][ee]
             for idx in range(len(k_map)):
 
                 # Twists representing rotation axes as node attributes
@@ -66,44 +64,50 @@ class RobotRevolute(Robot):
                 # Relative transforms between coordinate frames as edge attributes
                 if idx != 0:
                     pred = k_map[idx - 1]
-                    self[pred][cur][TRANSFORM] = self.nodes[pred]["T0"].inv().dot(self.nodes[cur]["T0"])
+                    self[pred][cur][TRANSFORM] = (
+                        self.nodes[pred]["T0"].inv().dot(self.nodes[cur]["T0"])
+                    )
 
-    def pose(self, joint_angles: dict, query_node: str) -> SE3:
-        kinematic_map = self.kinematic_map[ROOT][MAIN_PREFIX + query_node[1:]]
+    def pose(
+        self, joint_angles: Dict[str, float], query_node: Union[List[str], str]
+    ) -> Union[Dict[str, SE3], SE3]:
+        """
+        Returns an SE3 element corresponding to the pose
+        of the query_node in the configuration determined by joint_angles.
+
+        :param joint_angles: dictionary describing the current joint configuration
+        :param query_nodes: list of nodes that the Jacobian should be computed for
+        """
+        # TODO support multiple query nodes
+        kinematic_map = self.kinematic_map[ROOT][query_node]
         T = self.nodes[ROOT]["T0"]
         for idx in range(len(kinematic_map) - 1):
             pred, cur = kinematic_map[idx], kinematic_map[idx + 1]
             T = T.dot(SE3.exp(self.nodes[pred]["S"] * joint_angles[cur]))
-        T = T.dot(self.nodes[MAIN_PREFIX + query_node[1:]]["T0"])
+        T = T.dot(self.nodes[query_node]["T0"])
 
         return T
 
     def jacobian(
         self,
         joint_angles: Dict[str, float],
-        nodes: Union[List[str], str],
+        query_nodes: Union[List[str], str],
     ) -> Dict[str, ArrayLike]:
         """
         Calculate the robot's Jacobian for all end-effectors.
 
         :param joint_angles: dictionary describing the current joint configuration
-        :param nodes: list of nodes that the Jacobian should be computed for
-        :param Ts: the current list of frame poses for all nodes, speeds up computation
+        :param query_nodes: list of nodes that the Jacobian should be computed for
         :return: dictionary of Jacobians indexed by relevant node
         """
         kinematic_map = self.kinematic_map[ROOT]  # get map to all nodes from root
 
-        # find end-effector nodes #FIXME so much code and relies on notation
-        if nodes is None:
-            nodes = []
-            for ee in self.end_effectors:  # get p nodes in end-effectors
-                if ee[0][0] == MAIN_PREFIX:
-                    nodes += [ee[0]]
-                elif ee[1][0] == MAIN_PREFIX:
-                    nodes += [ee[1]]
+        # find end-effector nodes
+        if query_nodes is None:
+            query_nodes = self.end_effectors
 
         J = {}
-        for node in nodes:  # iterate through nodes
+        for node in query_nodes:  # iterate through nodes
             path = kinematic_map[node]  # find joints that move node
             T = self.nodes[ROOT]["T0"]
 
@@ -118,52 +122,6 @@ class RobotRevolute(Robot):
                     Ad = T.adjoint()
                     J[node][:, idx] = Ad.dot(self.nodes[pred]["S"])
         return J
-
-    def T_zero_from_DH(self, params):
-            T = {ROOT: SE3.identity()}
-            kinematic_map = self.kinematic_map
-            for ee in self.end_effectors:
-                for node in kinematic_map[ROOT][ee[0]][1:]:
-                    path_nodes = kinematic_map[ROOT][node][1:]
-
-                    q = np.asarray([0 for node in path_nodes])
-                    a = np.asarray([self.a[node] for node in path_nodes])
-                    alpha = np.asarray([self.al[node] for node in path_nodes])
-                    th = np.asarray([self.th[node] for node in path_nodes])
-                    d = np.asarray([self.d[node] for node in path_nodes])
-
-                    if not self.modified_dh:
-                        T[node] = fk_3d(a, alpha, d, q + th)
-                    else:
-                        T[node] = modified_fk_3d(a, alpha, d, q + th)
-        pass
-
-    @property
-    def T_zero(self) -> dict:
-        if not hasattr(self, "_T_zero"):
-            T = {ROOT: SE3.identity()}
-            kinematic_map = self.kinematic_map
-            for ee in self.end_effectors:
-                for node in kinematic_map[ROOT][ee[0]][1:]:
-                    path_nodes = kinematic_map[ROOT][node][1:]
-
-                    q = np.asarray([0 for node in path_nodes])
-                    a = np.asarray([self.a[node] for node in path_nodes])
-                    alpha = np.asarray([self.al[node] for node in path_nodes])
-                    th = np.asarray([self.th[node] for node in path_nodes])
-                    d = np.asarray([self.d[node] for node in path_nodes])
-
-                    if not self.modified_dh:
-                        T[node] = fk_3d(a, alpha, d, q + th)
-                    else:
-                        T[node] = modified_fk_3d(a, alpha, d, q + th)
-            self._T_zero = T
-
-        return self._T_zero
-
-    @T_zero.setter
-    def T_zero(self, T_zero: dict):
-        self._T_zero = T_zero
 
     def random_configuration(self):
         """
@@ -186,6 +144,32 @@ class RobotRevolute(Robot):
             if key != ROOT:
                 q[key] = 0
         return q
+
+    def from_DH(self):
+        self.a, self.d, self.al, self.th, self.modified_dh = (
+            self.params["a"],
+            self.params["d"],
+            self.params["alpha"],
+            self.params["theta"],
+            self.params["modified_dh"],
+        )
+        T = {ROOT: SE3.identity()}
+        kinematic_map = self.kinematic_map
+        for ee in self.end_effectors:
+            for node in kinematic_map[ROOT][ee][1:]:
+                path_nodes = kinematic_map[ROOT][node][1:]
+
+                q = np.asarray([0 for node in path_nodes])
+                a = np.asarray([self.a[node] for node in path_nodes])
+                alpha = np.asarray([self.al[node] for node in path_nodes])
+                th = np.asarray([self.th[node] for node in path_nodes])
+                d = np.asarray([self.d[node] for node in path_nodes])
+
+                if not self.modified_dh:
+                    T[node] = fk_3d(a, alpha, d, q + th)
+                else:
+                    T[node] = modified_fk_3d(a, alpha, d, q + th)
+        return T
 
     def get_jacobian(
         self,

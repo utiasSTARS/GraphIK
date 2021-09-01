@@ -15,7 +15,7 @@ from graphik.utils.utils import list_to_variable_dict
 def gnp_random_connected_graph(n, p):
     """
     Generates a random undirected graph, similarly to an Erdős-Rényi
-    graph, but enforcing that the resulting graph is conneted
+    graph, but enforcing that the resulting graph is connected
     """
     edges = combinations(range(n), 2)
     G = nx.Graph()

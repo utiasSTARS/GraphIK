@@ -66,7 +66,7 @@ class RobotRevoluteGraph(RobotGraph):
         structure = nx.empty_graph(create_using=nx.DiGraph)
 
         for ee in end_effectors:
-            k_map = kinematic_map[ROOT][ee[0]]
+            k_map = kinematic_map[ROOT][ee]
             for idx in range(len(k_map)):
                 cur, aux_cur = k_map[idx], f"q{k_map[idx][1:]}"
                 cur_pos, aux_cur_pos = (
@@ -123,7 +123,7 @@ class RobotRevoluteGraph(RobotGraph):
 
         limited_joints = []  # joint limits that can be enforced
         for ee in end_effectors:
-            k_map = kinematic_map[ROOT][ee[0]]
+            k_map = kinematic_map[ROOT][ee]
             for idx in range(2, len(k_map)):
                 cur, prev = k_map[idx], k_map[idx - 2]
                 names = [
@@ -275,7 +275,7 @@ class RobotRevoluteGraph(RobotGraph):
         kinematic_map = self.robot.kinematic_map
 
         T = {}
-        T[ROOT] = self.robot.nodes[ROOT]
+        T[ROOT] = self.robot.T_base
 
         # resolve scale
         x_hat = G.nodes["x"][POS] - G.nodes["p0"][POS]
@@ -284,12 +284,7 @@ class RobotRevoluteGraph(RobotGraph):
         scale = np.roots(
             [
                 x_hat.dot(x_hat) + y_hat.dot(y_hat) + z_hat.dot(z_hat),
-                -2
-                * (
-                    np.linalg.norm(x_hat)
-                    + np.linalg.norm(y_hat)
-                    + np.linalg.norm(z_hat)
-                ),
+                -2 * (la.norm(x_hat) + la.norm(y_hat) + la.norm(z_hat)),
                 3,
             ]
         )
@@ -305,7 +300,7 @@ class RobotRevoluteGraph(RobotGraph):
         theta = {}
 
         for ee in end_effectors:
-            k_map = kinematic_map[ROOT][ee[0]]
+            k_map = kinematic_map[ROOT][ee]
             for idx in range(1, len(k_map)):
                 cur, aux_cur = k_map[idx], f"q{k_map[idx][1:]}"
                 pred, aux_pred = (k_map[idx - 1], f"q{k_map[idx-1][1:]}")
@@ -321,7 +316,7 @@ class RobotRevoluteGraph(RobotGraph):
                 p = B.inv().dot(scale * G.nodes[cur][POS]) - T_prev.trans
                 qnorm = G.nodes[cur][POS] + (
                     G.nodes[aux_cur][POS] - G.nodes[cur][POS]
-                ) / np.linalg.norm(G.nodes[aux_cur][POS] - G.nodes[cur][POS])
+                ) / la.norm(G.nodes[aux_cur][POS] - G.nodes[cur][POS])
                 q = B.inv().dot(scale * qnorm) - T_prev.trans
                 # q = B.inv().dot(scale*G.nodes[aux_cur][POS]) - T_prev.trans
                 ps = T_prev.inv().as_matrix()[:3, :3].dot(p)  # in prev. joint frame
@@ -381,11 +376,11 @@ class RobotRevoluteGraph(RobotGraph):
                 return theta
 
             if (
-                T_final[ee[0]] is not None
+                T_final[ee] is not None
                 and la.norm(cross(T_rel.trans, np.asarray([0, 0, 1]))) < tol
             ):
-                T_th = (T[cur]).inv().dot(T_final[ee[0]]).as_matrix()
-                theta[ee[0]] += arctan2(T_th[1, 0], T_th[0, 0])
+                T_th = (T[cur]).inv().dot(T_final[ee]).as_matrix()
+                theta[ee] += arctan2(T_th[1, 0], T_th[0, 0])
 
         return theta
 
