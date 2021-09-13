@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 import numpy as np
 from numpy.testing import assert_array_less
-import networkx as nx
-import time
 from graphik.graphs import RobotPlanarGraph
 
 from graphik.robots import RobotPlanar
@@ -25,10 +23,11 @@ def random_problem_2d_chain():
     lim_u = list_to_variable_dict(np.pi * np.ones(n))
     lim_l = list_to_variable_dict(-np.pi * np.ones(n))
     params = {
-        "a": a,
+        "link_lengths": a,
         "theta": th,
-        "joint_limits_upper": lim_u,
-        "joint_limits_lower": lim_l,
+        "ub": lim_u,
+        "lb": lim_l,
+        "num_joints": n
     }
 
     # robot = Revolute2dChain(params)
@@ -47,7 +46,7 @@ def random_problem_2d_chain():
         G_goal = graph.realization(q_goal)
         X_goal = pos_from_graph(G_goal)
         D_goal = graph.distance_matrix_from_joints(q_goal)
-        T_goal = robot.get_pose(q_goal, f"p{n}")
+        T_goal = robot.pose(q_goal, f"p{n}")
 
         # goals = {p"f{n}": X_goal[-1, :]} # position goal
         goals = {f"p{n-1}": X_goal[-2, :], f"p{n}": X_goal[-1, :]}  # pose goal
@@ -65,11 +64,11 @@ def random_problem_2d_chain():
         P_e = (R @ Y.T + t.reshape(2, 1)).T
         G_e = graph_from_pos(P_e, graph.node_ids)
 
-        q_sol = robot.joint_variables(G_e)
+        q_sol = graph.joint_variables(G_e)
         # G_sol = graph.realization(q_sol)
         # D_sol = graph.distance_matrix_from_joints(q_sol)
 
-        T_riemannian = robot.get_pose(q_sol, "p" + f"{robot.n}")
+        T_riemannian = robot.pose(q_sol, "p" + f"{robot.n}")
         err_riemannian = T_goal.dot(T_riemannian.inv()).log()
         err_riemannian_pos = np.linalg.norm(T_goal.trans - T_riemannian.trans)
         err_riemannian_rot = np.linalg.norm(err_riemannian[2:])

@@ -28,16 +28,9 @@ class TestJointVariables(unittest.TestCase):
         # fname = graphik.__path__[0] + "/robots/urdfs/kuka_lwr.urdf"
         # fname = graphik.__path__[0] + "/robots/urdfs/jaco2arm6DOF_no_hand.urdf"
         urdf_robot = RobotURDF(fname)
-        robot_urdf = urdf_robot.make_Revolute3d(
+        robot = urdf_robot.make_Revolute3d(
             ub, lb
         )  # make the Revolute class from a URDF
-        params = {
-            "lb": lb[:n],
-            "ub": ub[:n],
-            "T_zero": robot_urdf.T_zero,
-            "num_joints": urdf_robot.n_q_joints
-        }
-        robot = RobotRevolute(params)
 
         graph = RobotRevoluteGraph(robot)
         for _ in range(100):
@@ -61,19 +54,9 @@ class TestJointVariables(unittest.TestCase):
         # fname = graphik.__path__[0] + "/robots/urdfs/kuka_lwr.urdf"
         # fname = graphik.__path__[0] + "/robots/urdfs/jaco2arm6DOF_no_hand.urdf"
         urdf_robot = RobotURDF(fname)
-        robot_urdf = urdf_robot.make_Revolute3d(
+        robot = urdf_robot.make_Revolute3d(
             ub, lb
         )  # make the Revolute class from a URDF
-        # Tz = robot_urdf.T_zero["p4"].as_matrix()
-        # Tz[2, -1] = robot_urdf.T_zero["p3"].as_matrix()[2, -1]
-        # robot_urdf.T_zero["p4"] = SE3.from_matrix(Tz)
-        params = {
-            "lb": lb[:n],
-            "ub": ub[:n],
-            "T_zero": robot_urdf.T_zero,
-            "num_joints": urdf_robot.n_q_joints
-        }
-        robot = RobotRevolute(params)
 
         graph = RobotRevoluteGraph(robot)
         for _ in range(100):
@@ -206,10 +189,10 @@ class TestJointVariables(unittest.TestCase):
             lim_u = list_to_variable_dict(pi * np.ones(n))
             lim_l = list_to_variable_dict(-pi * np.ones(n))
             params = {
-                "a": a,
-                "theta": th,
-                "joint_limits_upper": lim_u,
-                "joint_limits_lower": lim_l,
+                "link_lengths": a,
+                "ub": lim_u,
+                "lb": lim_l,
+                "num_joints": n
             }
 
             robot = RobotPlanar(params)
@@ -217,16 +200,16 @@ class TestJointVariables(unittest.TestCase):
 
             q_goal = robot.random_configuration()
             # TODO: was T_goal supposed to be tested too?
-            T_goal = robot.get_pose(q_goal, f"p{n}").trans
+            T_goal = robot.pose(q_goal, f"p{n}").trans
             X = graph.realization(q_goal)
 
-            q_rec = robot.joint_variables(X)
+            q_rec = graph.joint_variables(X)
             self.assertIsNone(
                 assert_allclose(list(q_goal.values()), list(q_rec.values()), rtol=1e-5)
             )
 
     def test_random_params_2d_tree(self):
-        for _ in range(10):
+        for _ in range(50):
             height = randint(2, high=5)
             gen = nx.balanced_tree(2, height, create_using=nx.DiGraph)
             gen = nx.relabel_nodes(gen, {node: f"p{node}" for node in gen})
@@ -237,18 +220,17 @@ class TestJointVariables(unittest.TestCase):
             lim_u = list_to_variable_dict(pi * np.ones(n))
             lim_l = list_to_variable_dict(-pi * np.ones(n))
             params = {
-                "a": a,
-                "theta": th,
-                "parents": parents,
-                "joint_limits_upper": lim_u,
-                "joint_limits_lower": lim_l,
+                "link_lengths": a,
+                "ub": lim_u,
+                "lb": lim_l,
+                "num_joints": n
             }
             robot = RobotPlanar(params)
             graph = RobotPlanarGraph(robot)
             q_goal = robot.random_configuration()
-            T_goal = robot.get_pose(q_goal, f"p{n}").trans
+            T_goal = robot.pose(q_goal, f"p{n}").trans
             X = graph.realization(q_goal)
-            q_rec = robot.joint_variables(X)
+            q_rec = graph.joint_variables(X)
             self.assertIsNone(
                 assert_allclose(list(q_goal.values()), list(q_rec.values()), rtol=1e-5)
             )

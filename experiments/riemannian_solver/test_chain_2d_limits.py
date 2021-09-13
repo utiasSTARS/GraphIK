@@ -45,7 +45,7 @@ def random_problem_2d_chain():
         G_goal = graph.realization(q_goal)
         X_goal = pos_from_graph(G_goal)
         D_goal = graph.distance_matrix_from_joints(q_goal)
-        T_goal = robot.get_pose(q_goal, f"p{n}")
+        T_goal = robot.pose(q_goal, f"p{n}")
 
         # goals = {f"p{n}": X_goal[-1, :]}
         goals = {f"p{n-1}": X_goal[-2, :], f"p{n}": X_goal[-1, :]}
@@ -69,15 +69,12 @@ def random_problem_2d_chain():
         P_e = (R @ Y.T + t.reshape(2, 1)).T
         # X_e = P_e @ P_e.T
         G_e = graph_from_pos(P_e, graph.node_ids)
-        q_sol = robot.joint_variables(G_e)
+        q_sol = graph.joint_variables(G_e)
 
-        T_riemannian = robot.get_pose(list_to_variable_dict(q_sol), "p" + f"{robot.n}")
+        T_riemannian = robot.pose(list_to_variable_dict(q_sol), "p" + f"{robot.n}")
         err_riemannian = (T_goal.dot(T_riemannian.inv())).log()
         err_riemannian_pos = np.linalg.norm(T_goal.trans - T_riemannian.trans)
         err_riemannian_rot = np.linalg.norm(err_riemannian[2])
-        # print(np.arctan2(T_riemannian.as_matrix()[1,0], T_riemannian.as_matrix()[0,0]))
-        # print(np.arctan2(T_goal.as_matrix()[1,0], T_goal.as_matrix()[0,0]))
-        # print("----")
 
         e_rot += [err_riemannian_rot]
         e_pos += [err_riemannian_pos]

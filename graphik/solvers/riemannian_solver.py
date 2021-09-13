@@ -387,7 +387,7 @@ if __name__ == "__main__":
     G_goal = graph.realization(q_goal)
     X_goal = pos_from_graph(G_goal)
     D_goal = graph.distance_matrix_from_joints(q_goal)
-    T_goal = robot.get_pose(q_goal, f"p{n}")
+    T_goal = robot.pose(q_goal, f"p{n}")
 
     goals = {
         f"p{n}": T_goal.trans,

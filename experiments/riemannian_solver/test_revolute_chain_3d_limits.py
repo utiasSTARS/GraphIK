@@ -27,8 +27,8 @@ def solve_random_problem(graph: RobotRevoluteGraph, solver: RiemannianSolver):
     G_raw = graph_from_pos(Y, graph.node_ids)  # not really order-dependent
 
     T_g = {f"p{n}": T_goal}
-    q_sol = robot.joint_variables(G_raw, T_g)
-    T_riemannian = robot.get_pose(list_to_variable_dict(q_sol), "p" + str(n))
+    q_sol = graph.joint_variables(G_raw, T_g)
+    T_riemannian = robot.pose(q_sol, "p" + str(n))
     err_riemannian_pos = norm(T_goal.trans - T_riemannian.trans)
 
     z_goal = T_goal.as_matrix()[:3, 2]
@@ -110,8 +110,8 @@ if __name__ == "__main__":
     robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
 
     graph = RobotRevoluteGraph(robot)
-    print(graph.node_ids)
-    print(robot.limited_joints)
+    # print(graph.node_ids)
+    # print(robot.limited_joints)
     # print(robot.get_pose(robot.random_configuration(), "p7"))
     solver = RiemannianSolver(graph)
     num_tests = 100

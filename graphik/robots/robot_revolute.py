@@ -8,6 +8,7 @@ from graphik.utils import *
 
 from liegroups.numpy import SE3
 
+
 class RobotRevolute(Robot):
     def __init__(self, params):
         super(RobotRevolute, self).__init__(params)
@@ -54,13 +55,15 @@ class RobotRevolute(Robot):
         self, joint_angles: Dict[str, float], query_node: Union[List[str], str]
     ) -> Union[Dict[str, SE3], SE3]:
         """
-        Returns an SE3 element corresponding to the pose
-        of the query_node in the configuration determined by joint_angles.
+        Given a list of N joint variables, calculate the Nth joint's pose.
 
-        :param joint_angles: dictionary describing the current joint configuration
-        :param query_nodes: list of nodes that the Jacobian should be computed for
+        :param node_inputs: joint variables node names as keys mapping to values
+        :param query_node: node ID of node whose pose we want
+        :returns: SE2 or SE3 pose
+        :rtype: lie.SE3Matrix
         """
         # TODO support multiple query nodes
+        # TODO avoid for loop by vectorizing matrix exponential
         kinematic_map = self.kinematic_map[ROOT][query_node]
         T = self.nodes[ROOT]["T0"]
         for idx in range(len(kinematic_map) - 1):
@@ -106,7 +109,7 @@ class RobotRevolute(Robot):
         return J
 
     def from_params(self):
-        self.a, self.d, self.al, self.th, self.modified_dh = (
+        a, d, al, th, modified_dh = (
             self.params["a"],
             self.params["d"],
             self.params["alpha"],
@@ -120,18 +123,18 @@ class RobotRevolute(Robot):
                 path_nodes = kinematic_map[ROOT][node][1:]
 
                 q = np.asarray([0 for node in path_nodes])
-                a = np.asarray([self.a[node] for node in path_nodes])
-                alpha = np.asarray([self.al[node] for node in path_nodes])
-                th = np.asarray([self.th[node] for node in path_nodes])
-                d = np.asarray([self.d[node] for node in path_nodes])
+                a = np.asarray([a[node] for node in path_nodes])
+                alpha = np.asarray([al[node] for node in path_nodes])
+                th = np.asarray([th[node] for node in path_nodes])
+                d = np.asarray([d[node] for node in path_nodes])
 
-                if not self.modified_dh:
+                if not modified_dh:
                     T[node] = fk_3d(a, alpha, d, q + th)
                 else:
                     T[node] = modified_fk_3d(a, alpha, d, q + th)
         return T
 
-    def get_jacobian(
+    def jacobian_geometric(
         self,
         joint_angles: Dict[str, float],
         nodes: Union[List[str], str],

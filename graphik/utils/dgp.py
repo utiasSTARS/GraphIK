@@ -52,7 +52,7 @@ def distance_matrix_from_graph(G: nx.Graph, label=DIST, nonedge=0) -> ArrayLike:
         ** 2
     )
 
-def adjacency_matrix_from_graph(G: nx.DiGraph, label: str = DIST) -> ArrayLike:
+def adjacency_matrix_from_graph(G: nx.DiGraph, label: str = DIST, nodelist: list = None) -> ArrayLike:
     """
     Returns the adjacency matrix of the graph, but only for edges with label.
     :returns: Adjacency matrix
@@ -61,7 +61,7 @@ def adjacency_matrix_from_graph(G: nx.DiGraph, label: str = DIST) -> ArrayLike:
         G = G.to_undirected(as_view=True)
 
     selected_edges = [(u, v) for u, v, d in G.edges(data=True) if label in d]
-    return nx.to_numpy_array(G.edge_subgraph(selected_edges), weight="")
+    return nx.to_numpy_array(G.edge_subgraph(selected_edges), weight="", nodelist=nodelist)
 
 
 def pos_from_graph(G: nx.DiGraph, node_ids=None) -> ArrayLike:

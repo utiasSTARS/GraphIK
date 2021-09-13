@@ -233,10 +233,11 @@ class TestDistanceMatrix(unittest.TestCase):
             lim_u = list_to_variable_dict(pi * np.ones(n))
             lim_l = list_to_variable_dict(-pi * np.ones(n))
             params = {
-                "a": a,
+                "link_lengths": a,
                 "theta": th,
-                "joint_limits_upper": lim_u,
-                "joint_limits_lower": lim_l,
+                "ub": lim_u,
+                "lb": lim_l,
+                "num_joints": n
             }
 
             robot = RobotPlanar(params)
@@ -279,11 +280,12 @@ class TestDistanceMatrix(unittest.TestCase):
             lim_u = list_to_variable_dict(pi * np.ones(n))
             lim_l = list_to_variable_dict(-pi * np.ones(n))
             params = {
-                "a": a,
+                "link_lengths": a,
                 "theta": th,
                 "parents": parents,
-                "joint_limits_upper": lim_u,
-                "joint_limits_lower": lim_l,
+                "ub": lim_u,
+                "lb": lim_l,
+                "num_joints": n
             }
 
             robot = RobotPlanar(params)
