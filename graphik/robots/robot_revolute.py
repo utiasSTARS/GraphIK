@@ -109,7 +109,7 @@ class RobotRevolute(Robot):
         return J
 
     def from_params(self):
-        a, d, al, th, modified_dh = (
+        self.a, self.d, self.al, self.th, self.modified_dh = (
             self.params["a"],
             self.params["d"],
             self.params["alpha"],
@@ -123,12 +123,12 @@ class RobotRevolute(Robot):
                 path_nodes = kinematic_map[ROOT][node][1:]
 
                 q = np.asarray([0 for node in path_nodes])
-                a = np.asarray([a[node] for node in path_nodes])
-                alpha = np.asarray([al[node] for node in path_nodes])
-                th = np.asarray([th[node] for node in path_nodes])
-                d = np.asarray([d[node] for node in path_nodes])
+                a = np.asarray([self.a[node] for node in path_nodes])
+                alpha = np.asarray([self.al[node] for node in path_nodes])
+                th = np.asarray([self.th[node] for node in path_nodes])
+                d = np.asarray([self.d[node] for node in path_nodes])
 
-                if not modified_dh:
+                if not self.modified_dh:
                     T[node] = fk_3d(a, alpha, d, q + th)
                 else:
                     T[node] = modified_fk_3d(a, alpha, d, q + th)

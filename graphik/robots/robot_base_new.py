@@ -176,6 +176,37 @@ class Robot(nx.DiGraph):
     def spherical(self) -> bool:
         return False
 
+    @property
+    def d(self) -> Dict[str, Any]:
+        return self._d
+
+    @d.setter
+    def d(self, d: dict):
+        self._d = d if type(d) is dict else list_to_variable_dict(flatten([d]))
+
+    @property
+    def al(self) -> Dict[str, Any]:
+        return self._al
+
+    @al.setter
+    def al(self, al: dict):
+        self._al = al if type(al) is dict else list_to_variable_dict(flatten([al]))
+
+    @property
+    def a(self) -> Dict[str, Any]:
+        return self._a
+
+    @a.setter
+    def a(self, a: dict):
+        self._a = a if type(a) is dict else list_to_variable_dict(flatten([a]))
+
+    @property
+    def th(self) -> Dict[str, Any]:
+        return self._th
+
+    @th.setter
+    def th(self, th: dict):
+        self._th = th if type(th) is dict else list_to_variable_dict(flatten([th]))
     ########################################
     #         CONVENIENCE METHODS
     ########################################
