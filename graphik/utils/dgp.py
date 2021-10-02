@@ -4,7 +4,7 @@ import networkx as nx
 import math
 from numpy.typing import ArrayLike
 from graphik.utils.constants import *
-from graphik.utils.utils import best_fit_transform
+from graphik.utils.geometry import best_fit_transform
 
 
 def orthogonal_procrustes(G1: nx.DiGraph, G2: nx.DiGraph) -> nx.DiGraph:

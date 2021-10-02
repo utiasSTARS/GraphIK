@@ -3,7 +3,7 @@ from numpy.typing import ArrayLike
 
 import networkx as nx
 import numpy as np
-from graphik.robots.robot_base_new import Robot, SEMatrix
+from graphik.robots.robot_base import Robot, SEMatrix
 from graphik.utils import *
 
 from liegroups.numpy import SE3

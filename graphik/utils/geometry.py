@@ -1,10 +1,9 @@
 import numpy as np
-import sympy as sp
 
+from typing import Tuple
+from numpy.typing import ArrayLike
 from liegroups.numpy import SO2, SE2, SO3, SE3
 from numpy import sin, cos
-
-
 
 def angle_to_se2(a: float, theta: float) -> SE2:
     """Transform a single set of DH parameters into an SE2 matrix
@@ -14,7 +13,7 @@ def angle_to_se2(a: float, theta: float) -> SE2:
     :rtype: lie.SE2Matrix
     """
     # R = SO2.from_angle(theta)  # TODO: active or passive (i.e., +/- theta?)
-    R = SO2(from_angle(theta))
+    R = SO2.from_angle(theta)
     return SE2(R, R.dot(np.array([a, 0.0])))  # TODO: rotate the translation or not?
 
 
@@ -35,139 +34,26 @@ def skew(x):
     X = np.array([[0, -x[2], x[1]], [x[2], 0, -x[0]], [-x[1], x[0], 0]])
     return X
 
-
-def exp(phi):
-    """Exponential map for :math:`SO(2)`, which computes a transformation from a tangent vector:
-
-    .. math::
-        \\mathbf{C}(\\phi) =
-        \\exp(\\phi^\\wedge) =
-        \\cos \\phi \\mathbf{1} + \\sin \\phi 1^\\wedge =
-        \\begin{bmatrix}
-            \\cos \\phi  & -\\sin \\phi  \\\\
-            \\sin \\phi & \\cos \\phi
-        \\end{bmatrix}
-
-    This is the inverse operation to :meth:`~liegroups.SO2.log`.
-    """
-    c = sp.cos(phi)
-    s = sp.sin(phi)
-
-    if type(phi) == sp.Symbol or type(phi) == sp.Add:
-        return np.array([[c, -s], [s, c]])
-    else:
-        return np.array([[c, -s], [s, c]], dtype="float64")
-
-
-def from_angle(angle_in_radians):
-    """Form a rotation matrix given an angle in radians.
-
-    See :meth:`~liegroups.SO2.exp`
-    """
-    return exp(angle_in_radians)
-
-def rotmat_from_two_vector_matches(a_1, a_2, b_1, b_2):
-    """ Returns C in SO(3), such that b_1 = C*a_1 and b_2 = C*a_2"""
-    ## Construct orthonormal basis of 'a' frame
-    a_1_u = a_1/(np.linalg.norm(a_1))
-    a_2_u = a_2/(np.linalg.norm(a_2))
-    alpha = a_1_u.dot(a_2_u)
-
-    a_basis_1 = a_1_u
-    a_basis_2 = a_2_u - alpha*a_1_u
-    a_basis_2 /= np.linalg.norm(a_basis_2)
-    a_basis_3 = np.cross(a_basis_1, a_basis_2)
-
-    ## Construct basis of 'b' frame
-    b_basis_1 = b_1/np.linalg.norm(b_1)
-    b_basis_2 = b_2/np.linalg.norm(b_2) - alpha*b_basis_1
-    b_basis_2 /= np.linalg.norm(b_basis_2)
-    b_basis_3 = np.cross(b_basis_1, b_basis_2)
-
-    #Basis of 'a' frame as column vectors
-    M_a = np.array([a_basis_1, a_basis_2, a_basis_3])
-
-    #Basis of 'b' frame as row vectors
-    M_b = np.array([b_basis_1, b_basis_2, b_basis_3]).T
-
-    #Direction cosine matrix from a to b!
-    C = M_b.dot(M_a)
-    return SO3.from_matrix(C)
-
-def rotx(angle_in_radians):
-    """Form a rotation matrix given an angle in rad about the x-axis.
-
-    .. math::
-        \\mathbf{C}_x(\\phi) =
-        \\begin{bmatrix}
-            1 & 0 & 0 \\\\
-            0 & \\cos \\phi & -\\sin \\phi \\\\
-            0 & \\sin \\phi & \\cos \\phi
-        \\end{bmatrix}
-    """
-    c = cos(angle_in_radians)
-    s = sin(angle_in_radians)
-    return np.array([[1.0, 0.0, 0.0], [0.0, c, -s], [0.0, s, c]], dtype="float64")
-
-
-def roty(angle_in_radians):
-    """Form a rotation matrix given an angle in rad about the y-axis.
-
-    .. math::
-        \\mathbf{C}_y(\\phi) =
-        \\begin{bmatrix}
-            \\cos \\phi & 0 & \\sin \\phi \\\\
-            0 & 1 & 0 \\\\
-            \\sin \\phi & 0 & \\cos \\phi
-        \\end{bmatrix}
-    """
-    c = cos(angle_in_radians)
-    s = sin(angle_in_radians)
-    return np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]], dtype="float64")
-
-
-def rotz(angle_in_radians):
-    """Form a rotation matrix given an angle in rad about the z-axis.
-
-    .. math::
-        \\mathbf{C}_z(\\phi) =
-        \\begin{bmatrix}
-            \\cos \\phi & -\\sin \\phi & 0 \\\\
-            \\sin \\phi  & \\cos \\phi & 0 \\\\
-            0 & 0 & 1
-        \\end{bmatrix}
-    """
-    # c = sp.cos(angle_in_radians)
-    # s = sp.sin(angle_in_radians)
-
-    # if type(angle_in_radians) == sp.Symbol:
-    #     return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
-    # else:
-    c = cos(angle_in_radians)
-    s = sin(angle_in_radians)
-    return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]], dtype="float64")
-
-
-def trans_axis(d, axis="z"):
+def trans_axis(t, axis="z") -> SE3:
     if axis == "z":
-        return SE3(SO3.identity(), np.array([0, 0, d]))
+        return SE3(SO3.identity(), np.array([0, 0, t]))
     if axis == "y":
-        return SE3(SO3.identity(), np.array([0, d, 0]))
+        return SE3(SO3.identity(), np.array([0, t, 0]))
     if axis == "x":
-        return SE3(SO3.identity(), np.array([d, 0, 0]))
+        return SE3(SO3.identity(), np.array([t, 0, 0]))
     raise Exception("Invalid Axis")
 
 
-def rot_axis(x, axis="z"):
+def rot_axis(theta, axis="z") -> SE3:
     if axis == "z":
-        return SE3(SO3(rotz(x)), np.array([0, 0, 0]))
+        return SE3(SO3.rotz(theta), np.array([0, 0, 0]))
     if axis == "y":
-        return SE3(SO3(roty(x)), np.array([0, 0, 0]))
+        return SE3(SO3.roty(theta), np.array([0, 0, 0]))
     if axis == "x":
-        return SE3(SO3(rotx(x)), np.array([0, 0, 0]))
+        return SE3(SO3.rotx(theta), np.array([0, 0, 0]))
     raise Exception("Invalid Axis")
 
-def generate_rotation_matrix(theta, axis):
+def generate_rotation_matrix(theta: float, axis: ArrayLike) -> ArrayLike:
     R = np.array([])
 
     c = math.cos(theta)
@@ -225,3 +111,47 @@ def max_min_distance_revolute(r, P, C, N):
         d_max = 0
 
     return d_max, d_min
+
+def best_fit_transform(A: ArrayLike, B: ArrayLike) -> Tuple[ArrayLike, ArrayLike]:
+    """
+    Calculates the least-squares best-fit transform that maps corresponding points A to B in m spatial dimensions
+    Input:
+      A: Nxm numpy array of corresponding points
+      B: Nxm numpy array of corresponding points
+    Returns:
+      R: mxm rotation matrix
+      t: mx1 translation vector
+    """
+
+    # try:
+    assert A.shape == B.shape
+    # except AssertionError:
+    #     print("A: {:}".format(A))
+    #     print("B: {:}".format(B))
+
+    # get number of dimensions
+    m = A.shape[1]
+
+    # translate points to their centroids
+    centroid_A = np.mean(A, axis=0)
+    centroid_B = np.mean(B, axis=0)
+
+    AA = A - centroid_A
+    BB = B - centroid_B
+    # print(AA)
+    # print(BB)
+
+    # rotation matrix
+    H = np.dot(AA.T, BB)
+    U, S, Vt = np.linalg.svd(H)
+    R = np.dot(Vt.T, U.T)
+    # translation
+    #
+    # special reflection case
+    # if np.linalg.det(R) < 0:
+    #     print("det(R) < R, reflection detected!, correcting for it ...\n")
+    # Vt[2, :] *= -1
+    # R = np.dot(Vt.T, U.T)
+
+    t = centroid_B.T - np.dot(R, centroid_A.T)
+    return R, t

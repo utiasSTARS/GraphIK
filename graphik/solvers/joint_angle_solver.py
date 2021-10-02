@@ -67,10 +67,10 @@ class JointAngleSolver:
             # e = np.hstack([e_p, e_o])
             # J = self.robot.get_jacobian(q_dict, [point], T_all)
 
-            # COST 3 body screw
-            T = self.robot.get_pose(q_dict, point)
+            # COST 3 screw-based loss
+            T = self.robot.pose(q_dict, point)
             J = self.robot.jacobian(q_dict, [point])
-            e = (T.inv().dot(T_goal)).log()
+            e = T.inv().dot(T_goal).log()
             Ad = T.adjoint()
             e = Ad.dot(e)
 

@@ -8,13 +8,9 @@ from graphik.graphs import (
     RobotRevoluteGraph,
     RobotSphericalGraph,
 )
-from graphik.robots import RobotRevolute, RobotSpherical, RobotPlanar
-from graphik.utils.dgp import gram_from_distance_matrix, MDS, pos_from_graph
-from graphik.utils.utils import (
-    best_fit_transform,
-    list_to_variable_dict,
-)
 
+from graphik.robots import RobotRevolute, RobotSpherical, RobotPlanar
+from graphik.utils import best_fit_transform, list_to_variable_dict, MDS, gram_from_distance_matrix, pos_from_graph
 
 class TestDistanceMatrix(unittest.TestCase):
     def test_special_case_3d_tree(self):

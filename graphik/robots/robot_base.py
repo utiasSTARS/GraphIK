@@ -4,26 +4,51 @@ from typing import Any, Dict, List, Union, Tuple
 from numpy.typing import ArrayLike
 
 import networkx as nx
-from graphik.utils.constants import *
-from graphik.utils.utils import flatten, list_to_variable_dict
+from graphik.utils import *
 from liegroups.numpy import SE2, SE3
+from math import pi
 
 SEMatrix = Union[SE2, SE3]
 
 
-class Robot(ABC):
+class Robot(nx.DiGraph):
     """
     Describes the kinematic parameters for a robot whose joints and links form a tree (no loops like in parallel
     mechanisms).
     """
 
-    def __init__(self):
+    def __init__(self, params: Dict):
+        super(Robot, self).__init__()
         self.lambdified = False
+        self.params = params
+        self.n = params["num_joints"]
+
+        # Topological "map" of the robot, if not provided assume chain
+        if "parents" in params:
+            topology = nx.DiGraph(params["parents"])
+        else:
+            topology = nx.path_graph(
+                [f"p{idx}" for idx in range(self.n + 1)], nx.DiGraph
+            )
+        self.add_nodes_from(topology.nodes())
+        self.add_edges_from(topology.edges())
+
+        # A dict of shortest paths between joints for forward kinematics
+        self.kinematic_map = nx.shortest_path(self)
+
+        # Lower and upper joint limits
+        self.lb = params.get("lb", dict(zip(self.joint_ids, self.n * [-pi])))
+        self.ub = params.get("ub", dict(zip(self.joint_ids, self.n * [pi])))
+        nx.set_node_attributes(self, values=self.lb, name="lb")
+        nx.set_node_attributes(self, values=self.ub, name="ub")
 
     @abstractmethod
-    def get_pose(self, joint_angles: Dict[str, Any], query_node: str) -> SEMatrix:
+    def set_geometric_attributes(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def pose(self, joint_angles: Dict[str, Any], query_node: str) -> SEMatrix:
         """
-        TODO rename to pose, requires extensive refactor
         Given a list of N joint variables, calculate the Nth joint's pose.
 
         :param node_inputs: joint variables node names as keys mapping to values
@@ -37,8 +62,7 @@ class Robot(ABC):
     def jacobian(
         self,
         joint_angles: Dict[str, float],
-        nodes: Union[List[str], str],
-        Ts: Dict[str, SEMatrix] = None,
+        query_nodes: Union[List[str], str],
     ) -> Dict[str, ArrayLike]:
         """
         TODO planar doesn't have an isolated jacobian method
@@ -46,50 +70,41 @@ class Robot(ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
-    def random_configuration(self) -> Dict[str, float]:
+    def random_configuration(self):
         """
         Returns a random set of joint values within the joint limits
         determined by lb and ub.
         """
-        raise NotImplementedError
+        q = {}
+        for key in self.joint_ids:
+            if key != ROOT:
+                q[key] = self.lb[key] + (self.ub[key] - self.lb[key]) * np.random.rand()
+        return q
 
-    @abstractmethod
-    def joint_variables(
-        self, G: nx.DiGraph, T: Dict[str, SEMatrix] = None
-    ) -> Dict[str, Any]:
+    def zero_configuration(self):
         """
-        Finds the set of decision variables corresponding to the
-        graph realization G.
-
-        :param G: networkx.DiGraph with known node positions
-        :returns: Dictionary of joint variables
-        :rtype: np.ndarray
+        Returns zero joint values within the joint limits
+        determined by lb and ub.
         """
-        raise NotImplementedError
+        q = {}
+        for key in self.joint_ids:
+            if key != ROOT:
+                q[key] = 0
+        return q
 
     @property
-    @abstractmethod
-    def end_effectors(self) -> List[Any]:
+    def end_effectors(self) -> List:
         """
-        :return: all end-effector nodes
+        Returns a list of end effector node pairs, since it's the
+        last two points that are defined for a full pose.
         """
-        raise NotImplementedError
+        if not hasattr(self, "_end_effectors"):
+            self._end_effectors = [x for x in self.nodes() if self.out_degree(x) == 0]
+        return self._end_effectors
 
     ########################################
     #         ATTRIBUTES
     ########################################
-    @property
-    def structure(self) -> nx.DiGraph:
-        """
-        :return: graph representing the robot's structure
-        """
-        return self._structure
-
-    @structure.setter
-    def structure(self, structure: nx.DiGraph):
-        self._structure = structure
-
     @property
     def kinematic_map(self) -> dict:
         """
@@ -110,20 +125,16 @@ class Robot(ABC):
             self._joint_ids = list(self.kinematic_map.keys())
             return self._joint_ids
 
-    @joint_ids.setter
-    def joint_ids(self, ids: list):
-        self._joint_ids = ids
-
     @property
     def T_base(self) -> SEMatrix:
         """
         :return: SE(dim) Transform to robot base frame
         """
+        try:
+            return self._T_base
+        except AttributeError:
+            self._T_base = self.nodes[ROOT]["T0"]
         return self._T_base
-
-    @T_base.setter
-    def T_base(self, T_base: SEMatrix):
-        self._T_base = T_base
 
     @property
     def limited_joints(self) -> List[str]:
@@ -162,6 +173,10 @@ class Robot(ABC):
         self._lb = lb if type(lb) is dict else list_to_variable_dict(flatten([lb]))
 
     @property
+    def spherical(self) -> bool:
+        return False
+
+    @property
     def d(self) -> Dict[str, Any]:
         return self._d
 
@@ -192,11 +207,6 @@ class Robot(ABC):
     @th.setter
     def th(self, th: dict):
         self._th = th if type(th) is dict else list_to_variable_dict(flatten([th]))
-
-    @property
-    def spherical(self) -> bool:
-        return False
-
     ########################################
     #         CONVENIENCE METHODS
     ########################################
@@ -207,8 +217,8 @@ class Robot(ABC):
         """
         T = {ROOT: self.T_base}
         for ee in self.end_effectors:
-            for node in self.kinematic_map[ROOT][ee[0]][1:]:
-                T[node] = self.get_pose(joint_angles, node)
+            for node in self.kinematic_map[ROOT][ee][1:]:
+                T[node] = self.pose(joint_angles, node)
         return T
 
     def end_effector_pos(self, q: Dict[str, float]) -> Dict[str, ArrayLike]:
@@ -218,5 +228,5 @@ class Robot(ABC):
         goals = {}
         for ee in self.end_effectors:
             for node in ee:
-                goals[node] = self.get_pose(q, node).trans
+                goals[node] = self.pose(q, node).trans
         return goals
