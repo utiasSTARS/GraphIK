@@ -20,14 +20,14 @@ def solve_random_problem(graph: RobotRevoluteGraph, solver: RiemannianSolver):
     # Y_init = pos_from_graph(graph.realization(graph.robot.zero_configuration()))
 
     # sol_info = solver.solve(D_goal, omega, use_limits=False, Y_init=Y_init)
-    sol_info = solver.solve(D_goal, omega, use_limits=True, bounds=(lb, ub))
+    sol_info = solver.solve(D_goal, omega, use_limits=True, bounds=(lb, ub),jit=True)
     Y = sol_info["x"]
     t_sol = sol_info["time"]
 
     G_sol = graph_from_pos(Y, graph.node_ids)
-    q_sol = robot.joint_variables(G_sol, {f"p{n}": T_goal})
+    q_sol = graph.joint_variables(G_sol, {f"p{n}": T_goal})
 
-    T_riemannian = robot.get_pose(q_sol, "p" + str(n))
+    T_riemannian = robot.pose(q_sol, "p" + str(n))
     err_riemannian_pos = norm(T_goal.trans - T_riemannian.trans)
 
     z_goal = T_goal.as_matrix()[:3, 2]

@@ -15,11 +15,11 @@ class RobotRevolute(Robot):
 
         self.dim = 3  # 3d workspace
 
-        # Use frame poses at zero conf if provided, otherwise construct from DH
+        # Use frame poses at zero conf if provided, otherwise find using DH
         if "T_zero" in params:
             T_zero = params["T_zero"]
         elif all (k in params for k in ("a", "d", "alpha", "theta", "modified_dh")):
-            T_zero = self.from_dh_params()
+            T_zero = self.from_dh_params(params)
         else:
             raise Exception("Robot description not provided.")
 
@@ -105,14 +105,14 @@ class RobotRevolute(Robot):
                     J[node][:, idx] = Ad.dot(self.nodes[pred]["S"])
         return J
 
-    def from_dh_params(self):
-        self.a, self.d, self.al, self.th, self.modified_dh = (
-            self.params["a"],
-            self.params["d"],
-            self.params["alpha"],
-            self.params["theta"],
-            self.params["modified_dh"],
-        )
+    def from_dh_params(self, params):
+
+        a, d, al, th, modified_dh = (params["a"], params["d"], params["alpha"], params["theta"],params["modified_dh"])
+        a = a if type(a) is dict else list_to_variable_dict(flatten([a]))
+        d = d if type(d) is dict else list_to_variable_dict(flatten([d]))
+        al = al if type(al) is dict else list_to_variable_dict(flatten([al]))
+        th = th if type(th) is dict else list_to_variable_dict(flatten([th]))
+
         T = {ROOT: SE3.identity()}
         kinematic_map = self.kinematic_map
         for ee in self.end_effectors:
@@ -120,15 +120,15 @@ class RobotRevolute(Robot):
                 path_nodes = kinematic_map[ROOT][node][1:]
 
                 q = np.asarray([0 for node in path_nodes])
-                a = np.asarray([self.a[node] for node in path_nodes])
-                alpha = np.asarray([self.al[node] for node in path_nodes])
-                th = np.asarray([self.th[node] for node in path_nodes])
-                d = np.asarray([self.d[node] for node in path_nodes])
+                a_ = np.asarray([a[node] for node in path_nodes])
+                alpha_ = np.asarray([al[node] for node in path_nodes])
+                th_ = np.asarray([th[node] for node in path_nodes])
+                d_ = np.asarray([d[node] for node in path_nodes])
 
-                if not self.modified_dh:
-                    T[node] = fk_3d(a, alpha, d, q + th)
+                if not modified_dh:
+                    T[node] = fk_3d(a_, alpha_, d_, q + th_)
                 else:
-                    T[node] = modified_fk_3d(a, alpha, d, q + th)
+                    T[node] = modified_fk_3d(a_, alpha_, d_, q + th_)
         return T
 
     def jacobian_geometric(
