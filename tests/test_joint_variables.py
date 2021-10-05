@@ -10,9 +10,8 @@ from numpy import pi
 from graphik.graphs import (
     RobotPlanarGraph,
     RobotRevoluteGraph,
-    RobotSphericalGraph,
 )
-from graphik.robots import RobotPlanar, RobotRevolute, RobotSpherical
+from graphik.robots import RobotPlanar, RobotRevolute
 from graphik.utils.roboturdf import RobotURDF
 from graphik.utils import *
 
@@ -81,16 +80,12 @@ class TestJointVariables(unittest.TestCase):
             d = rand(n)
             al = rand(n) * pi / 2 - 2 * rand(n) * pi / 2
             th = 0 * np.ones(n)
-            ub = np.ones(n) * pi - 2 * pi * rand(n)
-            lb = -ub
 
             params = {
                 "a": a,
                 "alpha": al,
                 "d": d,
                 "theta": th,
-                "lb": lb,
-                "ub": ub,
                 "modified_dh": modified_dh,
                 "num_joints": n,
             }
@@ -106,78 +101,6 @@ class TestJointVariables(unittest.TestCase):
                 assert_allclose(list(q_goal.values()), list(q_rec.values()), rtol=1e-5)
             )
 
-    # def test_random_params_3d_spherical(self):
-    #     # TODO include randomized theta to FK and such
-    #     print("Testing randomly generated params 3d ... \n")
-
-    #     for _ in range(100):
-
-    #         n = randint(3, high=20)
-
-    #         # Generate random DH parameters
-    #         a = list_to_variable_dict(0 * rand(n))
-    #         d = list_to_variable_dict(rand(n))
-    #         al = list_to_variable_dict(0 * rand(n))
-    #         th = list_to_variable_dict(0 * rand(n))
-    #         lim_u = list_to_variable_dict(pi * np.ones(n))
-    #         lim_l = list_to_variable_dict(-pi * np.ones(n))
-
-    #         params = {
-    #             "a": a,
-    #             "alpha": al,
-    #             "d": d,
-    #             "theta": th,
-    #             "joint_limits_lower": lim_l,
-    #             "joint_limits_upper": lim_u,
-    #         }
-    #         robot = RobotSpherical(params)  # instantiate robot
-    #         graph = RobotSphericalGraph(robot)  # instantiate graph
-
-    #         q_goal = robot.random_configuration()
-    #         X = graph.realization(q_goal)
-    #         q_rec = robot.joint_variables(X)
-    #         self.assertIsNone(
-    #             assert_allclose(list(q_goal.values()), list(q_rec.values()), rtol=1e-5)
-    #         )
-
-    # def test_random_params_3d_spherical_tree(self):
-    #     # TODO include randomized theta to FK and such
-    #     print("Testing randomly generated params 3d ... \n")
-
-    #     for _ in range(100):
-
-    #         height = randint(2, high=5)
-    #         gen = nx.balanced_tree(2, height, create_using=nx.DiGraph)
-    #         gen = nx.relabel_nodes(gen, {node: f"p{node}" for node in gen})
-    #         n = gen.number_of_edges()
-    #         # Generate random DH parameters
-    #         a = list_to_variable_dict(0 * rand(n))
-    #         d = list_to_variable_dict(rand(n))
-    #         al = list_to_variable_dict(0 * rand(n))
-    #         th = list_to_variable_dict(0 * rand(n))
-    #         parents = nx.to_dict_of_lists(gen)
-    #         lim_u = list_to_variable_dict(pi * np.ones(n))
-    #         lim_l = list_to_variable_dict(-pi * np.ones(n))
-
-    #         params = {
-    #             "a": a,
-    #             "alpha": al,
-    #             "d": d,
-    #             "theta": th,
-    #             "parents": parents,
-    #             "joint_limits_lower": lim_l,
-    #             "joint_limits_upper": lim_u,
-    #         }
-    #         robot = RobotSpherical(params)  # instantiate robot
-    #         graph = RobotSphericalGraph(robot)  # instantiate graph
-
-    #         q_goal = robot.random_configuration()
-    #         X = graph.realization(q_goal)
-    #         q_rec = robot.joint_variables(X)
-    #         self.assertIsNone(
-    #             assert_allclose(list(q_goal.values()), list(q_rec.values()), rtol=1e-5)
-    #         )
-
     def test_random_params_2d(self):
 
         for _ in range(100):
@@ -188,7 +111,7 @@ class TestJointVariables(unittest.TestCase):
             th = list_to_variable_dict(np.zeros(n))
             lim_u = list_to_variable_dict(pi * np.ones(n))
             lim_l = list_to_variable_dict(-pi * np.ones(n))
-            params = {"link_lengths": a, "ub": lim_u, "lb": lim_l, "num_joints": n}
+            params = {"link_lengths": a, "num_joints": n}
 
             robot = RobotPlanar(params)
             graph = RobotPlanarGraph(robot)
@@ -212,9 +135,7 @@ class TestJointVariables(unittest.TestCase):
             a = list_to_variable_dict(np.ones(n))
             th = list_to_variable_dict(np.zeros(n))
             parents = nx.to_dict_of_lists(gen)
-            lim_u = list_to_variable_dict(pi * np.ones(n))
-            lim_l = list_to_variable_dict(-pi * np.ones(n))
-            params = {"link_lengths": a, "ub": lim_u, "lb": lim_l, "num_joints": n}
+            params = {"link_lengths": a, "num_joints": n}
             robot = RobotPlanar(params)
             graph = RobotPlanarGraph(robot)
             q_goal = robot.random_configuration()
@@ -237,16 +158,12 @@ class TestJointVariables(unittest.TestCase):
         d = [0.1273, 0, 0, 0.1639, 0.1157, 0.0922]
         al = [pi / 2, 0, 0, pi / 2, -pi / 2, 0]
         th = [0, pi, 0, 0, 0, 0]
-        ub = np.ones(n) * pi - 2 * pi * rand(n)
-        lb = -ub
 
         params = {
             "a": a,
             "alpha": al,
             "d": d,
             "theta": th,
-            "lb": lb,
-            "ub": ub,
             "modified_dh": modified_dh,
             "num_joints": n,
         }
@@ -274,16 +191,12 @@ class TestJointVariables(unittest.TestCase):
         d = {"p1": 0.1237, "p2": 0, "p3": 0, "p4": 0, "p5": 0}
         al = {"p1": pi / 2, "p2": 0, "p3": 0, "p4": 0, "p5": 0}
         th = {"p1": 0, "p2": 0, "p3": 0, "p4": 0, "p5": 0}
-        ub = list_to_variable_dict((pi) * np.ones(n))
-        lb = list_to_variable_dict(-(pi) * np.ones(n))
 
         params = {
             "a": a,
             "alpha": al,
             "d": d,
             "theta": th,
-            "lb": lb,
-            "ub": ub,
             "modified_dh": modified_dh,
             "parents": parents,
             "num_joints": n,

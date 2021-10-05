@@ -112,8 +112,8 @@ class RobotPlanarGraph(RobotGraph):
         for u in S:
             # direct successors are fully known
             for v in (suc for suc in S.successors(u) if suc):
-                S[u][v]["upper_limit"] = S[u][v][DIST]
-                S[u][v]["lower_limit"] = S[u][v][DIST]
+                S[u][v][UPPER] = S[u][v][DIST]
+                S[u][v][LOWER] = S[u][v][DIST]
             for v in (des for des in level2_descendants(S, u) if des):
                 ids = self.robot.kinematic_map[u][v]  # TODO generate this at init
                 l1 = self.robot.l[ids[1]]
@@ -122,11 +122,11 @@ class RobotPlanarGraph(RobotGraph):
                 ub = self.robot.ub[ids[2]]  # symmetric limit
                 lim = max(abs(ub), abs(lb))
                 S.add_edge(u, v)
-                S[u][v]["upper_limit"] = l1 + l2
-                S[u][v]["lower_limit"] = sqrt(
+                S[u][v][UPPER] = l1 + l2
+                S[u][v][LOWER] = sqrt(
                     l1 ** 2 + l2 ** 2 - 2 * l1 * l2 * cos(pi - lim)
                 )
-                S[u][v][BOUNDED] = "below"
+                S[u][v][BOUNDED] = BELOW
 
     def realization(self, joint_angles: Dict[str, float]) -> nx.DiGraph:
         """

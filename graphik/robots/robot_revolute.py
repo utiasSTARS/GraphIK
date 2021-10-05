@@ -18,11 +18,10 @@ class RobotRevolute(Robot):
         # Use frame poses at zero conf if provided, otherwise construct from DH
         if "T_zero" in params:
             T_zero = params["T_zero"]
+        elif all (k in params for k in ("a", "d", "alpha", "theta", "modified_dh")):
+            T_zero = self.from_dh_params()
         else:
-            try:
-                T_zero = self.from_params()
-            except KeyError:
-                raise Exception("Robot description not provided.")
+            raise Exception("Robot description not provided.")
 
         # Poses of frames at zero config as node attributes
         nx.set_node_attributes(self, values=T_zero, name="T0")
@@ -31,11 +30,9 @@ class RobotRevolute(Robot):
         self.set_geometric_attributes()
 
     def set_geometric_attributes(self):
-        end_effectors = self.end_effectors
-        kinematic_map = self.kinematic_map
 
-        for ee in end_effectors:
-            k_map = kinematic_map[ROOT][ee]
+        for ee in self.end_effectors:
+            k_map = self.kinematic_map[ROOT][ee]
             for idx in range(len(k_map)):
 
                 # Twists representing rotation axes as node attributes
@@ -108,7 +105,7 @@ class RobotRevolute(Robot):
                     J[node][:, idx] = Ad.dot(self.nodes[pred]["S"])
         return J
 
-    def from_params(self):
+    def from_dh_params(self):
         self.a, self.d, self.al, self.th, self.modified_dh = (
             self.params["a"],
             self.params["d"],

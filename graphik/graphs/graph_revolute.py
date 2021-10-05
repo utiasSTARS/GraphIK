@@ -60,13 +60,11 @@ class RobotRevoluteGraph(RobotGraph):
     def structure_graph(self):
         trans_z = trans_axis(self.axis_length, "z")
         robot = self.robot
-        end_effectors = self.robot.end_effectors
-        kinematic_map = self.robot.kinematic_map
 
         structure = nx.empty_graph(create_using=nx.DiGraph)
 
-        for ee in end_effectors:
-            k_map = kinematic_map[ROOT][ee]
+        for ee in robot.end_effectors:
+            k_map = robot.kinematic_map[ROOT][ee]
             for idx in range(len(k_map)):
                 cur, aux_cur = k_map[idx], f"q{k_map[idx][1:]}"
                 cur_pos, aux_cur_pos = (
@@ -96,9 +94,6 @@ class RobotRevoluteGraph(RobotGraph):
                                 v,
                                 **{DIST: dist, LOWER: dist, UPPER: dist, BOUNDED: []},
                             )
-                    # structure[pred][cur][TRANSFORM] = (
-                    #     robot.nodes[pred]["T0"].inv().dot(robot.nodes[cur]["T0"])
-                    # )
 
         # Delete positions used for weights
         for u in structure.nodes:

@@ -103,8 +103,6 @@ class RobotPlanar(Robot):
         return J
 
 
-
-
     def jacobian_cost(self, joint_angles: dict, ee_goals) -> np.ndarray:
         """
         Calculate the planar robot's Jacobian with respect to the Euclidean squared cost function.

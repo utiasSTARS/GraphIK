@@ -363,8 +363,8 @@ class RobotURDF(object):
         for cl in self.parents.values():
             l += len(cl)
         if l == len(self.parents.keys()) - 1:
-            params["ub"] = ub
-            params["lb"] = lb
+            params["joint_limits_upper"] = ub
+            params["joint_limits_lower"] = lb
             return RobotRevolute(params)
         else:
             return RobotRevolute(params)

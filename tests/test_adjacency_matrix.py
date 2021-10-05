@@ -58,13 +58,9 @@ class TestAdjacencyMatrices(unittest.TestCase):
         n = 3
         a = list_to_variable_dict(np.ones(n))
         th = list_to_variable_dict(np.zeros(n))
-        lim_u = list_to_variable_dict(pi * np.ones(n))
-        lim_l = list_to_variable_dict(-pi * np.ones(n))
         params = {
             "link_lengths": a,
             "theta": th,
-            "ub": lim_u,
-            "lb": lim_l,
             "num_joints": n
         }
 
@@ -98,13 +94,9 @@ class TestAdjacencyMatrices(unittest.TestCase):
         n = 3
         a = list_to_variable_dict(np.ones(n))
         th = list_to_variable_dict(np.zeros(n))
-        lim_u = list_to_variable_dict(pi * np.ones(n))
-        lim_l = list_to_variable_dict(-pi * np.ones(n))
         params = {
             "link_lengths": a,
             "theta": th,
-            "ub": lim_u,
-            "lb": lim_l,
             "num_joints": n
         }
 
@@ -142,14 +134,10 @@ class TestAdjacencyMatrices(unittest.TestCase):
         parents = nx.to_dict_of_lists(gen)
         a = list_to_variable_dict(np.ones(n))
         th = list_to_variable_dict(np.zeros(n))
-        lim_u = list_to_variable_dict(np.pi * np.ones(n))
-        lim_l = list_to_variable_dict(-np.pi * np.ones(n))
         params = {
             "link_lengths": a,
             "theta": th,
             "parents": parents,
-            "ub": lim_u,
-            "lb": lim_l,
             "num_joints": n
         }
 

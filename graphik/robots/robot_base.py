@@ -37,8 +37,8 @@ class Robot(nx.DiGraph):
         self.kinematic_map = nx.shortest_path(self)
 
         # Lower and upper joint limits
-        self.lb = params.get("lb", dict(zip(self.joint_ids, self.n * [-pi])))
-        self.ub = params.get("ub", dict(zip(self.joint_ids, self.n * [pi])))
+        self.lb = params.get("joint_limits_lower", self.n * [-pi])
+        self.ub = params.get("joint_limits_upper", self.n * [pi])
         nx.set_node_attributes(self, values=self.lb, name="lb")
         nx.set_node_attributes(self, values=self.ub, name="ub")
 
