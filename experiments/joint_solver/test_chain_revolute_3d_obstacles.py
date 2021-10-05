@@ -3,11 +3,11 @@ from numpy.linalg import norm
 from numpy import pi
 from graphik.utils.roboturdf import load_ur10, load_kuka, load_schunk_lwa4d, load_schunk_lwa4p
 from graphik.utils import *
-from graphik.graphs import RobotRevoluteGraph
+from graphik.graphs import ProblemGraphRevolute
 from graphik.solvers.joint_angle_solver import JointAngleSolver
 
 
-def solve_random_problem(graph: RobotRevoluteGraph, solver: JointAngleSolver):
+def solve_random_problem(graph: ProblemGraphRevolute, solver: JointAngleSolver):
     robot = graph.robot
     n = graph.robot.n
 

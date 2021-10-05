@@ -1,7 +1,7 @@
 from graphik.utils import *
-from graphik.graphs.graph_revolute import RobotRevoluteGraph
+from graphik.graphs.graph_revolute import ProblemGraphRevolute
 
-def generate_revolute_problem(graph: RobotRevoluteGraph, obstacles = False):
+def generate_revolute_problem(graph: ProblemGraphRevolute, obstacles = False):
 
     robot = graph.robot
     n = robot.n

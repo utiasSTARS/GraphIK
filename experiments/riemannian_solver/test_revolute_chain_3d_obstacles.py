@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import numpy as np
 from experiments.problem_generation import generate_revolute_problem
-from graphik.graphs import RobotRevoluteGraph
+from graphik.graphs import ProblemGraphRevolute
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils import *
 from graphik.utils.roboturdf import load_ur10
@@ -9,7 +9,7 @@ from numpy import pi
 from numpy.linalg import norm
 
 
-def solve_random_problem(graph: RobotRevoluteGraph, solver: RiemannianSolver):
+def solve_random_problem(graph: ProblemGraphRevolute, solver: RiemannianSolver):
     robot = graph.robot
     n = robot.n
 

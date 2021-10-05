@@ -1,4 +1,4 @@
-from graphik.graphs.graph_base import RobotGraph
+from graphik.graphs.graph_base import ProblemGraph
 from graphik.solvers.sdp_formulations import SdpSolverParams, QcqpToSdpRelaxation
 from graphik.solvers.solver_base import GraphProblemSolver
 from graphik.solvers.constraints import angular_constraints, archimedean_constraint, constraints_from_graph, all_symbols
@@ -51,7 +51,7 @@ class SdpRelaxationSolver(GraphProblemSolver):
     def params(self, params: SdpSolverParams):
         self._solver_params = params
 
-    def solve(self, graph: RobotGraph, problem_params: dict = None):
+    def solve(self, graph: ProblemGraph, problem_params: dict = None):
         assert problem_params is not None, "Need a dictionary with end effector positions, etc."
         end_effector_assignment = problem_params["end_effector_assignment"]
         angular_limits = problem_params["angular_limits"] if "angular_limits" in problem_params else None

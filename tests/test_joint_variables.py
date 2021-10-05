@@ -8,8 +8,8 @@ from numpy.testing import assert_allclose
 from numpy.random import rand, randint
 from numpy import pi
 from graphik.graphs import (
-    RobotPlanarGraph,
-    RobotRevoluteGraph,
+    ProblemGraphPlanar,
+    ProblemGraphRevolute,
 )
 from graphik.robots import RobotPlanar, RobotRevolute
 from graphik.utils.roboturdf import RobotURDF
@@ -31,7 +31,7 @@ class TestJointVariables(unittest.TestCase):
             ub, lb
         )  # make the Revolute class from a URDF
 
-        graph = RobotRevoluteGraph(robot)
+        graph = ProblemGraphRevolute(robot)
         for _ in range(100):
             q_goal = robot.random_configuration()
             T_goal = {}
@@ -57,7 +57,7 @@ class TestJointVariables(unittest.TestCase):
             ub, lb
         )  # make the Revolute class from a URDF
 
-        graph = RobotRevoluteGraph(robot)
+        graph = ProblemGraphRevolute(robot)
         for _ in range(100):
             q_goal = robot.random_configuration()
             T_goal = {}
@@ -90,7 +90,7 @@ class TestJointVariables(unittest.TestCase):
                 "num_joints": n,
             }
             robot = RobotRevolute(params)  # instantiate robot
-            graph = RobotRevoluteGraph(robot)  # instantiate graph
+            graph = ProblemGraphRevolute(robot)  # instantiate graph
 
             q_goal = robot.random_configuration()
             T_goal = {}
@@ -114,7 +114,7 @@ class TestJointVariables(unittest.TestCase):
             params = {"link_lengths": a, "num_joints": n}
 
             robot = RobotPlanar(params)
-            graph = RobotPlanarGraph(robot)
+            graph = ProblemGraphPlanar(robot)
 
             q_goal = robot.random_configuration()
             # TODO: was T_goal supposed to be tested too?
@@ -137,7 +137,7 @@ class TestJointVariables(unittest.TestCase):
             parents = nx.to_dict_of_lists(gen)
             params = {"link_lengths": a, "num_joints": n}
             robot = RobotPlanar(params)
-            graph = RobotPlanarGraph(robot)
+            graph = ProblemGraphPlanar(robot)
             q_goal = robot.random_configuration()
             T_goal = robot.pose(q_goal, f"p{n}").trans
             X = graph.realization(q_goal)
@@ -168,7 +168,7 @@ class TestJointVariables(unittest.TestCase):
             "num_joints": n,
         }
         robot = RobotRevolute(params)
-        graph = RobotRevoluteGraph(robot)
+        graph = ProblemGraphRevolute(robot)
 
         for _ in range(100):
             q_goal = robot.random_configuration()
@@ -202,7 +202,7 @@ class TestJointVariables(unittest.TestCase):
             "num_joints": n,
         }
         robot = RobotRevolute(params)
-        graph = RobotRevoluteGraph(robot)
+        graph = ProblemGraphRevolute(robot)
 
         for _ in range(100):
             q_goal = robot.random_configuration()

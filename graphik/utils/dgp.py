@@ -52,7 +52,7 @@ def distance_matrix_from_graph(G: nx.Graph, label=DIST, nonedge=0) -> ArrayLike:
         ** 2
     )
 
-def adjacency_matrix_from_graph(G: nx.DiGraph, label: str = DIST, nodelist: list = None) -> ArrayLike:
+def adjacency_matrix_from_graph(G: nx.Graph, label: str = DIST, nodelist: list = None) -> ArrayLike:
     """
     Returns the adjacency matrix of the graph, but only for edges with label.
     :returns: Adjacency matrix
@@ -131,16 +131,7 @@ def graph_complete_edges(G: nx.DiGraph, overwrite = False) -> nx.DiGraph:
 
     for idx, u in enumerate(pos.keys()):
         for jdx, v in enumerate(pos.keys()):
-            if jdx > idx and (v, u) not in dst:
-                d = np.linalg.norm(pos[u] - pos[v])
-                G.add_edges_from(
-                    [
-                        (u, v, {DIST: d}),
-                        (u, v, {LOWER: d}),
-                        (u, v, {UPPER: d}),
-                    ]
-                )
-            elif jdx > idx and overwrite:
+            if (jdx > idx) and (((v, u) not in dst) or overwrite):
                 d = np.linalg.norm(pos[u] - pos[v])
                 G.add_edges_from(
                     [

@@ -7,12 +7,12 @@ import pandas as pd
 import pickle
 from progress.bar import ShadyBar as Bar
 
-from graphik.graphs import RobotRevoluteGraph
+from graphik.graphs import ProblemGraphRevolute
 from graphik.utils import *
 from graphik.utils.roboturdf import load_ur10, load_kuka, load_schunk_lwa4d
 from numpy import pi
 
-def generate_revolute_problem(graph: RobotRevoluteGraph, obstacles = False):
+def generate_revolute_problem(graph: ProblemGraphRevolute, obstacles = False):
 
     robot = graph.robot
     n = robot.n

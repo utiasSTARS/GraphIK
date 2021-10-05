@@ -2,7 +2,7 @@ from typing import Dict, List, Any
 import numpy as np
 import numpy.linalg as la
 from graphik.robots import RobotRevolute
-from graphik.graphs.graph_base import RobotGraph
+from graphik.graphs.graph_base import ProblemGraph
 from graphik.utils import *
 from liegroups.numpy import SE3
 from liegroups.numpy.se3 import SE3Matrix
@@ -11,24 +11,23 @@ import networkx as nx
 from numpy import cos, pi, sqrt, arctan2, cross
 
 
-class RobotRevoluteGraph(RobotGraph):
+class ProblemGraphRevolute(ProblemGraph):
     def __init__(
         self,
         robot: RobotRevolute,
         params: Dict = {},
     ):
+        super(ProblemGraphRevolute, self).__init__(robot, params)
 
-        self.dim = 3
-        self.robot = robot
-        self.axis_length = params.get("axis_length", 1)  # distance between p and q
+        base = self.base_subgraph()
+        structure = self.structure_graph()
 
-        self.base = self.base_subgraph()
-        self.structure = self.structure_graph()
+        composition = nx.compose(base, structure)
+        self.add_nodes_from(composition.nodes(data=True))
+        self.add_edges_from(composition.edges(data=True))
+
         self.set_limits()
-
-        self.directed = nx.compose(self.base, self.structure)
-        self.directed = self.root_angle_limits(self.directed)
-        super(RobotRevoluteGraph, self).__init__()
+        self.root_angle_limits()
 
     def base_subgraph(self) -> nx.DiGraph:
         axis_length = self.axis_length
@@ -44,10 +43,10 @@ class RobotRevoluteGraph(RobotGraph):
         )
         base.add_nodes_from(
             [
-                ("p0", {POS: np.array([0, 0, 0])}),
-                ("x", {POS: np.array([axis_length, 0, 0]), TYPE: "base"}),
-                ("y", {POS: np.array([0, -axis_length, 0]), TYPE: "base"}),
-                ("q0", {POS: np.array([0, 0, axis_length])}),
+                ("p0", {POS: np.array([0, 0, 0]), TYPE: [ROBOT, BASE]}),
+                ("x", {POS: np.array([axis_length, 0, 0]), TYPE: [BASE]}),
+                ("y", {POS: np.array([0, -axis_length, 0]), TYPE: [BASE]}),
+                ("q0", {POS: np.array([0, 0, axis_length]), TYPE: [ROBOT, BASE]}),
             ]
         )
         for u, v in base.edges():
@@ -101,8 +100,69 @@ class RobotRevoluteGraph(RobotGraph):
 
         # Set node type to robot
         nx.set_node_attributes(structure, ROBOT, TYPE)
+        structure.nodes[ROOT][TYPE] = [ROBOT, BASE]
+        structure.nodes["q0"][TYPE] = [ROBOT, BASE]
 
         return structure
+
+    def root_angle_limits(self):
+        axis_length = self.axis_length
+        robot = self.robot
+        upper_limits = self.robot.ub
+        limited_joints = self.limited_joints
+        T1 = robot.nodes[ROOT]["T0"]
+        base_names = ["x", "y"]
+        names = ["p1", "q1"]
+        T_axis = trans_axis(axis_length, "z")
+
+        for base_node in base_names:
+            for node in names:
+                T0 = SE3.from_matrix(np.identity(4))
+                T0.trans = self.nodes[base_node][POS]
+                if node[0] == "p":
+                    T2 = robot.nodes["p1"]["T0"]
+                else:
+                    T2 = robot.nodes["p1"]["T0"].dot(T_axis)
+
+                N = T1.as_matrix()[0:3, 2]
+                C = T1.trans + (N.dot(T2.trans - T1.trans)) * N
+                r = np.linalg.norm(T2.trans - C)
+                P = T0.trans
+                d_max, d_min = max_min_distance_revolute(r, P, C, N)
+                d = np.linalg.norm(T2.trans - T0.trans)
+
+                if d_max == d_min:
+                    limit = False
+                elif d == d_max:
+                    limit = BELOW
+                elif d == d_min:
+                    limit = ABOVE
+                else:
+                    limit = None
+
+                if limit:
+                    if node[0] == "p":
+                        T_rel = T1.inv().dot(robot.nodes["p1"]["T0"])
+                    else:
+                        T_rel = T1.inv().dot(robot.nodes["p1"]["T0"].dot(T_axis))
+
+                    d_limit = la.norm(
+                        T1.dot(rot_axis(upper_limits["p1"], "z")).dot(T_rel).trans
+                        - T0.trans
+                    )
+
+                    if limit == ABOVE:
+                        d_max = d_limit
+                    else:
+                        d_min = d_limit
+                    limited_joints += ["p1"]  # joint at p0 is limited
+
+                self.add_edge(base_node, node)
+                if d_max == d_min:
+                    self[base_node][node][DIST] = d_max
+                self[base_node][node][BOUNDED] = [limit]
+                self[base_node][node][UPPER] = d_max
+                self[base_node][node][LOWER] = d_min
 
     def set_limits(self):
         """
@@ -171,75 +231,15 @@ class RobotRevoluteGraph(RobotGraph):
 
                         limited_joints += [cur]
 
-                    S.add_edge(ids[0], ids[1])
+                    self.add_edge(ids[0], ids[1])
                     if d_max == d_min:
                         S[ids[0]][ids[1]][DIST] = d_max
-                    S[ids[0]][ids[1]][BOUNDED] = [limit]
-                    S[ids[0]][ids[1]][UPPER] = d_max
-                    S[ids[0]][ids[1]][LOWER] = d_min
+                    self[ids[0]][ids[1]][BOUNDED] = [limit]
+                    self[ids[0]][ids[1]][UPPER] = d_max
+                    self[ids[0]][ids[1]][LOWER] = d_min
 
         self.limited_joints = limited_joints
 
-    def root_angle_limits(self, G: nx.DiGraph) -> nx.DiGraph:
-        axis_length = self.axis_length
-        robot = self.robot
-        upper_limits = self.robot.ub
-        limited_joints = self.limited_joints
-        T1 = robot.nodes[ROOT]["T0"]
-        base_names = ["x", "y"]
-        names = ["p1", "q1"]
-        T_axis = trans_axis(axis_length, "z")
-
-        for base_node in base_names:
-            for node in names:
-                T0 = SE3.from_matrix(np.identity(4))
-                T0.trans = G.nodes[base_node][POS]
-                if node[0] == "p":
-                    T2 = robot.nodes["p1"]["T0"]
-                else:
-                    T2 = robot.nodes["p1"]["T0"].dot(T_axis)
-
-                N = T1.as_matrix()[0:3, 2]
-                C = T1.trans + (N.dot(T2.trans - T1.trans)) * N
-                r = np.linalg.norm(T2.trans - C)
-                P = T0.trans
-                d_max, d_min = max_min_distance_revolute(r, P, C, N)
-                d = np.linalg.norm(T2.trans - T0.trans)
-
-                if d_max == d_min:
-                    limit = False
-                elif d == d_max:
-                    limit = BELOW
-                elif d == d_min:
-                    limit = ABOVE
-                else:
-                    limit = None
-
-                if limit:
-                    if node[0] == "p":
-                        T_rel = T1.inv().dot(robot.nodes["p1"]["T0"])
-                    else:
-                        T_rel = T1.inv().dot(robot.nodes["p1"]["T0"].dot(T_axis))
-
-                    d_limit = la.norm(
-                        T1.dot(rot_axis(upper_limits["p1"], "z")).dot(T_rel).trans
-                        - T0.trans
-                    )
-
-                    if limit == ABOVE:
-                        d_max = d_limit
-                    else:
-                        d_min = d_limit
-                    limited_joints += ["p1"]  # joint at p0 is limited
-
-                G.add_edge(base_node, node)
-                if d_max == d_min:
-                    G[base_node][node][DIST] = d_max
-                G[base_node][node][BOUNDED] = [limit]
-                G[base_node][node][UPPER] = d_max
-                G[base_node][node][LOWER] = d_min
-
-        return G
 
     def realization(self, joint_angles: Dict[str, float]) -> nx.DiGraph:
         """
@@ -390,7 +390,6 @@ class RobotRevoluteGraph(RobotGraph):
 
     def distance_bounds_from_sampling(self):
         robot = self.robot
-        G = self.directed
         ids = self.node_ids
         q_rand = robot.random_configuration()
         D_min = self.distance_matrix_from_joints(q_rand)
@@ -406,11 +405,11 @@ class RobotRevoluteGraph(RobotGraph):
             for jdx in range(len(D_max)):
                 e1 = ids[idx]
                 e2 = ids[jdx]
-                G.add_edge(e1, e2)
-                G[e1][e2][LOWER] = np.sqrt(D_min[idx, jdx])
-                G[e1][e2][UPPER] = np.sqrt(D_max[idx, jdx])
+                self.add_edge(e1, e2)
+                self[e1][e2][LOWER] = sqrt(D_min[idx, jdx])
+                self[e1][e2][UPPER] = sqrt(D_max[idx, jdx])
                 if abs(D_max[idx, jdx] - D_min[idx, jdx]) < 1e-5:
-                    G[e1][e2][DIST] = abs(D_max[idx, jdx] - D_min[idx, jdx])
+                    self[e1][e2][DIST] = abs(D_max[idx, jdx] - D_min[idx, jdx])
 
 
 if __name__ == "__main__":
@@ -432,8 +431,8 @@ if __name__ == "__main__":
 
     urdf_robot = RobotURDF(fname)
     robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
-    graph = RobotRevoluteGraph(robot)
-    print(graph.directed.edges(data=True))
+    graph = ProblemGraphRevolute(robot)
+    print(graph.nodes(data=True))
     # import timeit
 
     # print(

@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 from numpy import pi
 from numpy.linalg import norm
 
-from graphik.graphs import RobotRevoluteGraph
+from graphik.graphs import ProblemGraphRevolute
 
 # from graphik.robots.revolute import Revolute3dChain
 from graphik.robots import RobotRevolute
@@ -36,7 +36,7 @@ if __name__ == "__main__":
     fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
     urdf_robot = RobotURDF(fname)
     robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
-    graph = RobotRevoluteGraph(robot)
+    graph = ProblemGraphRevolute(robot)
 
     # scale = 0.75
     # radius = 0.4

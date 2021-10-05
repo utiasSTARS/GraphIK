@@ -20,7 +20,7 @@ from graphik.solvers.sdp_snl import (
 from graphik.solvers.constraints import get_full_revolute_nearest_point
 from graphik.utils.roboturdf import load_ur10
 from graphik.utils.constants import *
-from graphik.graphs.graph_base import RobotGraph
+from graphik.graphs.graph_base import ProblemGraph
 
 
 def random_psd_matrix(N: int, d: int = None, normalize: bool = True) -> np.ndarray:
@@ -156,7 +156,7 @@ def get_sparsity_pattern(G, canonical_point_order: list) -> set:
 
 
 def convex_iterate_sdp_snl_graph(
-    graph: RobotGraph,
+    graph: ProblemGraph,
     anchors: dict = {},
     ranges=False,
     max_iters=10,

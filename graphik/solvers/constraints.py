@@ -1,8 +1,8 @@
 from copy import deepcopy
 from graphik.graphs.graph_base import (
-    RobotGraph,
+    ProblemGraph,
 )
-from graphik.graphs import RobotRevoluteGraph
+from graphik.graphs import ProblemGraphRevolute
 import networkx as nx
 import numpy as np
 import sympy as sp
@@ -39,7 +39,7 @@ def all_symbols(constraints):
 
 
 def generate_symbols(
-    robot_graph: RobotGraph, nodes_with_angular_vars: dict = None
+    robot_graph: ProblemGraph, nodes_with_angular_vars: dict = None
 ) -> nx.DiGraph:
     """
     Make a copy of robot_graph's such that the nodes have "sym" fields populated.
@@ -73,7 +73,7 @@ def generate_symbols(
 
 
 def constraints_from_graph(
-    robot_graph: RobotGraph, end_effector_assignments: dict, options: dict = None
+    robot_graph: ProblemGraph, end_effector_assignments: dict, options: dict = None
 ) -> list:
     """
 
@@ -119,7 +119,7 @@ def constraints_from_graph(
 
 
 def angular_constraints(
-    robot_graph: RobotGraph,
+    robot_graph: ProblemGraph,
     angular_limits: dict,
     end_effector_assignments: dict,
     angular_offsets: dict = None,
@@ -182,7 +182,7 @@ def angular_constraints(
 
 
 def nearest_neighbour_cost(
-    robot_graph: RobotGraph,
+    robot_graph: ProblemGraph,
     nearest_neighbour_points: dict,
     nearest_angular_residuals: dict = None,
 ):
@@ -262,7 +262,7 @@ if __name__ == "__main__":
     params = {"a": a, "alpha": al, "d": d, "theta": th, "lb": lb, "ub": ub}
     robot = RobotRevolute(params)  # instantiate robot
     end_effector_assignments = {"p6": np.array([1.0, 1.0, 1.0])}
-    graph = RobotRevoluteGraph(robot)
+    graph = ProblemGraphRevolute(robot)
     constraints = constraints_from_graph(graph, end_effector_assignments)
     print(graph.directed.edges())
     print(constraints)

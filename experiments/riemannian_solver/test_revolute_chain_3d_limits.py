@@ -6,12 +6,12 @@ import numpy as np
 from numpy import pi
 from numpy.linalg import norm
 
-from graphik.graphs import RobotRevoluteGraph
+from graphik.graphs import ProblemGraphRevolute
 from experiments.problem_generation import generate_revolute_problem
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils import *
 
-def solve_random_problem(graph: RobotRevoluteGraph, solver: RiemannianSolver):
+def solve_random_problem(graph: ProblemGraphRevolute, solver: RiemannianSolver):
     n = graph.robot.n
     fail = False
     G, T_goal, D_goal, X_goal = generate_revolute_problem(graph)
@@ -109,7 +109,7 @@ if __name__ == "__main__":
     urdf_robot = RobotURDF(fname)
     robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
 
-    graph = RobotRevoluteGraph(robot)
+    graph = ProblemGraphRevolute(robot)
     # print(graph.node_ids)
     # print(robot.limited_joints)
     # print(robot.get_pose(robot.random_configuration(), "p7"))

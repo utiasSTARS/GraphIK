@@ -6,7 +6,7 @@ from numpy.testing import assert_array_equal
 import unittest
 from graphik.utils.constants import *
 from itertools import combinations, groupby
-from graphik.graphs import RobotPlanarGraph
+from graphik.graphs import ProblemGraphPlanar
 from graphik.robots import RobotPlanar
 
 from graphik.utils.dgp import adjacency_matrix_from_graph
@@ -77,7 +77,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
         )
 
         robot = RobotPlanar(params)
-        graph = RobotPlanarGraph(robot)
+        graph = ProblemGraphPlanar(robot)
 
         q_goal = graph.robot.random_configuration()
         goals = {
@@ -113,7 +113,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
         )
 
         robot = RobotPlanar(params)
-        graph = RobotPlanarGraph(robot)
+        graph = ProblemGraphPlanar(robot)
 
         q_goal = graph.robot.random_configuration()
         goals = {
@@ -470,7 +470,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
             ]
         )
         robot = RobotPlanar(params)
-        graph = RobotPlanarGraph(robot)
+        graph = ProblemGraphPlanar(robot)
 
         q_goal = robot.random_configuration()
         goals = {}
@@ -835,7 +835,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
             ]
         )
         robot = RobotPlanar(params)
-        graph = RobotPlanarGraph(robot)
+        graph = ProblemGraphPlanar(robot)
 
         q_goal = robot.random_configuration()
         goals = {}

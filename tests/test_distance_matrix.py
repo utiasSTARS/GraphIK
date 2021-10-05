@@ -4,8 +4,8 @@ import networkx as nx
 from numpy.testing import assert_allclose
 from numpy import pi
 from graphik.graphs import (
-    RobotPlanarGraph,
-    RobotRevoluteGraph,
+    ProblemGraphPlanar,
+    ProblemGraphRevolute,
 )
 
 from graphik.robots import RobotRevolute, RobotPlanar
@@ -33,7 +33,8 @@ class TestDistanceMatrix(unittest.TestCase):
             "num_joints": n
         }
         robot = RobotRevolute(params)
-        graph = RobotRevoluteGraph(robot)
+        graph = ProblemGraphRevolute(robot)
+        n_nodes = graph.number_of_nodes()
 
         for _ in range(100):
 
@@ -41,14 +42,14 @@ class TestDistanceMatrix(unittest.TestCase):
             D = graph.distance_matrix_from_joints(q)
 
             # Reconstruct points
-            J = np.identity(graph.n_nodes) - (1 / (graph.n_nodes)) * np.ones(D.shape)
+            J = np.identity(n_nodes) - (1 / n_nodes) * np.ones(D.shape)
             G = -0.5 * J @ D @ J  # Gram matrix
             u, s, vh = np.linalg.svd(G, full_matrices=True)
             X = (
                 np.concatenate(
                     (
                         np.sqrt(np.diag(s[: robot.dim])),
-                        np.zeros((robot.dim, graph.n_nodes - robot.dim)),
+                        np.zeros((robot.dim, n_nodes - robot.dim)),
                     ),
                     axis=1,
                 )
@@ -82,21 +83,22 @@ class TestDistanceMatrix(unittest.TestCase):
                 "num_joints": n
             }
             robot = RobotRevolute(params)  # instantiate robot
-            graph = RobotRevoluteGraph(robot)  # instantiate graph
+            graph = ProblemGraphRevolute(robot)  # instantiate graph
+            n_nodes = graph.number_of_nodes()
 
             q = robot.random_configuration()
             T = robot.pose(q, "p" + str(n))
             D = graph.distance_matrix_from_joints(q)
 
             # Reconstruct points
-            J = np.identity(graph.n_nodes) - (1 / (graph.n_nodes)) * np.ones(D.shape)
+            J = np.identity(n_nodes) - (1 / (n_nodes)) * np.ones(D.shape)
             G = -0.5 * J @ D @ J  # Gram matrix
             u, s, vh = np.linalg.svd(G, full_matrices=True)
             X = (
                 np.concatenate(
                     (
                         np.sqrt(np.diag(s[: robot.dim])),
-                        np.zeros((robot.dim, graph.n_nodes - robot.dim)),
+                        np.zeros((robot.dim, n_nodes - robot.dim)),
                     ),
                     axis=1,
                 )
@@ -122,7 +124,8 @@ class TestDistanceMatrix(unittest.TestCase):
             }
 
             robot = RobotPlanar(params)
-            graph = RobotPlanarGraph(robot)
+            graph = ProblemGraphPlanar(robot)
+            n_nodes = graph.number_of_nodes()
 
             q = robot.random_configuration()
             D = graph.distance_matrix_from_joints(q)
@@ -134,7 +137,7 @@ class TestDistanceMatrix(unittest.TestCase):
                 np.concatenate(
                     (
                         np.sqrt(np.diag(s[: robot.dim])),
-                        np.zeros((robot.dim, graph.n_nodes - robot.dim)),
+                        np.zeros((robot.dim, n_nodes - robot.dim)),
                     ),
                     axis=1,
                 )
@@ -168,7 +171,8 @@ class TestDistanceMatrix(unittest.TestCase):
             }
 
             robot = RobotPlanar(params)
-            graph = RobotPlanarGraph(robot)
+            graph = ProblemGraphPlanar(robot)
+            n_nodes = graph.number_of_nodes()
 
             q = robot.random_configuration()
             D = graph.distance_matrix_from_joints(q)
@@ -180,7 +184,7 @@ class TestDistanceMatrix(unittest.TestCase):
                 np.concatenate(
                     (
                         np.sqrt(np.diag(s[: robot.dim])),
-                        np.zeros((robot.dim, graph.n_nodes - robot.dim)),
+                        np.zeros((robot.dim, n_nodes - robot.dim)),
                     ),
                     axis=1,
                 )

@@ -5,8 +5,8 @@ from numpy.testing import assert_array_less
 import unittest
 import networkx as nx
 from graphik.graphs import (
-    RobotPlanarGraph,
-    RobotRevoluteGraph,
+    ProblemGraphPlanar,
+    ProblemGraphRevolute,
 )
 from graphik.robots import RobotRevolute, RobotPlanar
 from graphik.utils.dgp import pos_from_graph, graph_from_pos, bound_smoothing
@@ -36,7 +36,7 @@ class TestBoundSmoothing(unittest.TestCase):
             }
 
             robot = RobotPlanar(params)
-            graph = RobotPlanarGraph(robot)
+            graph = ProblemGraphPlanar(robot)
 
             q_goal = graph.robot.random_configuration()
             G_goal = graph.realization(q_goal)
@@ -76,7 +76,7 @@ class TestBoundSmoothing(unittest.TestCase):
             }
 
             robot = RobotPlanar(params)
-            graph = RobotPlanarGraph(robot)
+            graph = ProblemGraphPlanar(robot)
 
             q_goal = graph.robot.random_configuration()
             G_goal = graph.realization(q_goal)
@@ -103,8 +103,6 @@ class TestBoundSmoothing(unittest.TestCase):
             q_goal = graph.robot.random_configuration()
             D_goal = graph.distance_matrix_from_joints(q_goal)
             T_goal = robot.pose(q_goal, "p" + str(robot.n))
-
-            lb, ub = bound_smoothing(graph.directed)
 
             G = graph.complete_from_pos(
                 {f"p{robot.n}": T_goal.trans, f"q{robot.n}": T_goal.dot(trans_axis(1, "z")).trans}

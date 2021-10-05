@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import numpy as np
-from graphik.graphs import RobotPlanarGraph
+from graphik.graphs import ProblemGraphPlanar
 from graphik.robots import RobotPlanar
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.dgp import (
@@ -32,7 +32,7 @@ def random_problem_2d_chain():
     }
 
     robot = RobotPlanar(params)
-    graph = RobotPlanarGraph(robot)
+    graph = ProblemGraphPlanar(robot)
     solver = RiemannianSolver(graph)
     n_tests = 100
 

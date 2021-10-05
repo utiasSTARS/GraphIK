@@ -10,73 +10,79 @@ from graphik.utils import *
 from numpy import cos, pi, sqrt
 
 
-class RobotGraph(ABC):
+class ProblemGraph(nx.DiGraph):
     """
     Abstract base class for graph structures equipped with optimization and EDM completion features.
     Note that the robots analyzed by this graph have a joint structure described by a tree, yet the constraints between
     the variables (e.g., graph coordinate points) induced by these joints have a graph structure (hence the name).
     """
 
-    def __init__(self):
-        pass
+    def __init__(self, robot, params):
+        super(ProblemGraph, self).__init__(
+            robot=robot, dim=robot.dim, axis_length=params.get("axis_length", 1)
+        )
+
+    @property
+    def base_nodes(self) -> List[str]:
+        """
+        :returns: List of nodes in this graph.
+        """
+        try:
+            return self._base_nodes
+        except AttributeError:
+            self._base_nodes = [
+                node for node, data in self.nodes(data=TYPE) if BASE in data
+            ]
+            return self._base_nodes
+
+    @property
+    def structure_nodes(self) -> List[str]:
+        """
+        :returns: List of nodes in this graph describing the robot's structure
+        """
+        try:
+            return self._structure_nodes
+        except AttributeError:
+            self._structure_nodes = [
+                node for node, data in self.nodes(data=TYPE) if ROBOT in data
+            ]
+            return self._structure_nodes
+
+    @property
+    def base(self) -> nx.DiGraph:
+        return self.to_directed(as_view=True).subgraph(self.base_nodes)
+
+    @property
+    def structure(self) -> nx.DiGraph:
+        return self.to_directed(as_view=True).subgraph(self.structure_nodes)
 
     @property
     def robot(self) -> Robot:
         """
         Robot object that this graph represents.
-        :returns: Robot object
         """
-        return self._robot
-
-    @robot.setter
-    def robot(self, robot: Robot):
-        self._robot = robot
-
-    @property
-    def directed(self) -> nx.DiGraph:
-        """
-        Directed graph representing the connectivity of robot nodes to nodes
-        defined by the base and environment.
-        :returns: Graph object representing the above
-        """
-        return self._directed
-
-    @directed.setter
-    def directed(self, G: nx.DiGraph):
-        self._directed = G
-
-    @property
-    def base(self) -> nx.DiGraph:
-        return self._base
-
-    @base.setter
-    def base(self, G: nx.DiGraph):
-        self._base = G
+        return self.graph["robot"]
 
     @property
     def dim(self) -> int:
         """
-        :returns: Expected lowest embedding dimension of the graph
+        Dimensionality of problem
         """
-        return self._dim
-
-    @dim.setter
-    def dim(self, dim: int):
-        self._dim = dim
+        return self.graph["dim"]
 
     @property
-    def n_nodes(self) -> int:
+    def axis_length(self) -> float:
         """
-        :returns: Number of nodes in the graph
+        Length of axis for revolute robots
         """
-        return self.directed.number_of_nodes()
+        return self.graph["axis_length"]
 
     @property
     def node_ids(self) -> List[str]:
         """
         :returns: List of nodes in this graph.
         """
-        return list(self.directed.nodes())
+        return list(self.nodes())
 
     @abstractmethod
     def realization(self, joint_angles: Dict[str, Any]) -> nx.DiGraph:
@@ -93,7 +99,7 @@ class RobotGraph(ABC):
         Returns a partial distance matrix of known distances in the problem graph.
         :returns: Distance matrix
         """
-        return distance_matrix_from_graph(self.directed)
+        return distance_matrix_from_graph(self.to_undirected(as_view=True))
 
     def distance_matrix_from_joints(self, joint_angles: ArrayLike) -> ArrayLike:
         """
@@ -110,9 +116,11 @@ class RobotGraph(ABC):
         given the kinematic and base structure, as well as the end-effector targets.
         :returns: Adjacency matrix
         """
-        return adjacency_matrix_from_graph(self.directed)
+        return adjacency_matrix_from_graph(self.to_undirected(as_view=True))
 
-    def complete_from_pos(self, P: dict, dist: bool = True, overwrite = False) -> nx.DiGraph:
+    def complete_from_pos(
+        self, P: Dict, dist: bool = True, overwrite=False
+    ) -> nx.DiGraph:
         """
         Given a dictionary of node name and position key-value pairs,
         generate a copy of the problem graph and fill the POS attributes of
@@ -123,14 +131,14 @@ class RobotGraph(ABC):
         :param P: a dictionary of node name position pairs
         :returns: graph with connected nodes with POS attribute
         """
-        G = self.directed.copy()  # copy of the original object
+        G = self.to_directed()  # copy of the original object
 
         for name, pos in P.items():
             if name in self.node_ids:
                 G.nodes[name][POS] = pos
 
         if dist:
-            G = graph_complete_edges(G, overwrite = overwrite)
+            G = graph_complete_edges(G, overwrite=overwrite)
 
         return G
 
@@ -138,40 +146,40 @@ class RobotGraph(ABC):
         if POS not in data:
             raise KeyError("Node needs to gave a position to be added.")
 
-        self.directed.add_nodes_from([(name, data)])
-        for nname, ndata in self.directed.nodes(data=True):
+        self.add_nodes_from([(name, data)])
+        for nname, ndata in self.nodes(data=True):
             if POS in ndata and nname != name:
-                self.directed.add_edge(nname, name)
-                self.directed[nname][name][DIST] = la.norm(ndata[POS] - data[POS])
-                self.directed[nname][name][LOWER] = la.norm(ndata[POS] - data[POS])
-                self.directed[nname][name][UPPER] = la.norm(ndata[POS] - data[POS])
-                self.directed[nname][name][BOUNDED] = []
+                self.add_edge(nname, name)
+                self[nname][name][DIST] = la.norm(ndata[POS] - data[POS])
+                self[nname][name][LOWER] = la.norm(ndata[POS] - data[POS])
+                self[nname][name][UPPER] = la.norm(ndata[POS] - data[POS])
+                self[nname][name][BOUNDED] = []
 
     def add_spherical_obstacle(self, name: str, position: ArrayLike, radius: float):
         # Add a fixed node representing the obstacle to the graph
         self.add_anchor_node(name, {POS: position, TYPE: OBSTACLE})
 
         # Set lower (and upper) distance limits to robot nodes
-        for node, node_type in self.directed.nodes(data=TYPE):
+        for node, node_type in self.nodes(data=TYPE):
             if node_type == ROBOT and node[0] == MAIN_PREFIX:
-                self.directed.add_edge(node, name)
-                self.directed[node][name][BOUNDED] = [BELOW]
-                self.directed[node][name][LOWER] = radius
-                self.directed[node][name][UPPER] = 100
+                self.add_edge(node, name)
+                self[node][name][BOUNDED] = [BELOW]
+                self[node][name][LOWER] = radius
+                self[node][name][UPPER] = 100
 
     def clear_obstacles(self):
         # Clears all obstacles from the graph
-        node_types = nx.get_node_attributes(self.directed, TYPE)
+        node_types = nx.get_node_attributes(self, TYPE)
         obstacles = [node for node, typ in node_types.items() if typ == OBSTACLE]
-        self.directed.remove_nodes_from(obstacles)
+        self.remove_nodes_from(obstacles)
 
     def check_distance_limits(
         self, G: nx.DiGraph, tol=1e-10
     ) -> List[Dict[str, List[Any]]]:
         """Given a graph of the same """
-        typ = nx.get_node_attributes(self.directed, name=TYPE)
+        typ = nx.get_node_attributes(self, name=TYPE)
         broken_limits = []
-        for u, v, data in self.directed.edges(data=True):
+        for u, v, data in self.edges(data=True):
             if BELOW in data[BOUNDED] or ABOVE in data[BOUNDED]:
                 if G[u][v][DIST] < data[LOWER] - tol:
                     broken_limit = {}
@@ -214,8 +222,7 @@ class RobotGraph(ABC):
         """
         L = np.zeros([self.n_nodes, self.n_nodes])  # fake distance matrix
         U = np.zeros([self.n_nodes, self.n_nodes])  # fake distance matrix
-        G = self.directed
-        for e1, e2, data in G.edges(data=True):
+        for e1, e2, data in self.edges(data=True):
             if BOUNDED in data:
                 udx = self.node_ids.index(e1)
                 vdx = self.node_ids.index(e2)

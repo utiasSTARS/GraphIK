@@ -7,7 +7,7 @@ import pandas as pd
 import pickle
 from progress.bar import ShadyBar as Bar
 
-from graphik.graphs import RobotRevoluteGraph
+from graphik.graphs import ProblemGraphRevolute
 from graphik.utils import *
 from graphik.utils.roboturdf import load_ur10, load_kuka, load_schunk_lwa4d
 from graphik.solvers.euclidean_solver_un import EuclideanSolver
@@ -16,7 +16,7 @@ from numpy.linalg.linalg import norm
 
 
 def solve_problem(
-        graph: RobotRevoluteGraph, solver, sparse=False, closed_form=True, prob_data=None
+        graph: ProblemGraphRevolute, solver, sparse=False, closed_form=True, prob_data=None
 ):
     robot = graph.robot
     n = robot.n

@@ -6,7 +6,7 @@ import mosek
 import sympy as sp
 import networkx as nx
 
-from graphik.graphs.graph_base import RobotRevoluteGraph, RobotGraph
+from graphik.graphs.graph_base import RobotRevoluteGraph, ProblemGraph
 from graphik.solvers.sdp_formulations import SdpSolverParams
 from graphik.solvers.solver_generic_sdp import SdpRelaxationSolver
 from graphik.solvers.sdp_snl import solve_nearest_point_sdp, extract_solution
@@ -100,7 +100,7 @@ def sdp_rank3_constraint_violations(
 
 
 def run_sdp_rank3_convex_iteration_experiment(
-    graph: RobotGraph, init, q_goal: dict, use_limits: bool, force_dense=True
+    graph: ProblemGraph, init, q_goal: dict, use_limits: bool, force_dense=True
 ) -> pd.DataFrame:
     # Form the solver - TODO: check pose formulation
     G = graph.realization(q_goal)
@@ -208,7 +208,7 @@ def run_sdp_rank3_convex_iteration_experiment(
 
 
 def run_sdp_rank3_revolute_experiment(
-    graph: RobotGraph, init, q_goal: dict, use_limits: bool, force_dense=False
+    graph: ProblemGraph, init, q_goal: dict, use_limits: bool, force_dense=False
 ) -> pd.DataFrame:
     # Form the solver - TODO: check pose formulation
     G = graph.realization(q_goal)
@@ -325,7 +325,7 @@ def run_sdp_rank3_revolute_experiment(
 
 
 def run_sdp_revolute_experiment(
-    graph: RobotGraph, init, q_goal: dict, use_limits: bool, force_dense=False
+    graph: ProblemGraph, init, q_goal: dict, use_limits: bool, force_dense=False
 ) -> pd.DataFrame:
 
     # Form the solver - TODO: check pose formulation

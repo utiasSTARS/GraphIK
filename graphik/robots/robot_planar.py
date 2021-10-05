@@ -207,8 +207,8 @@ if __name__ == "__main__":
     # print(robot.pose(q, "p9"))
     # print(robot.jacobian(q, ["p9"]))
 
-    from graphik.graphs.graph_planar import RobotPlanarGraph
-    graph = RobotPlanarGraph(robot)
+    from graphik.graphs.graph_planar import ProblemGraphPlanar
+    graph = ProblemGraphPlanar(robot)
     # print(graph.directed.nodes(data=True))
     # print(graph.directed.edges(data=True))
     G = graph.realization(q)

@@ -3,7 +3,7 @@ import sympy as sp
 import time
 from scipy.optimize import minimize, show_options
 from graphik.solvers.solver_base import GraphProblemSolver
-from graphik.graphs.graph_base import RobotGraph
+from graphik.graphs.graph_base import ProblemGraph
 from graphik.utils.utils import (
     norm_sq,
     list_to_variable_dict,
@@ -361,7 +361,7 @@ class LocalSolver(GraphProblemSolver):
 
         self.hess = hess_function
 
-    def solve(self, graph: RobotGraph, problem_params: dict = None):
+    def solve(self, graph: ProblemGraph, problem_params: dict = None):
         assert problem_params is not None, "Need a dictionary with initial guess, etc."
         angular_limits = (
             problem_params["angular_limits"]

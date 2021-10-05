@@ -8,22 +8,22 @@ from scipy.optimize import minimize
 from liegroups.numpy import SE3
 from numpy import pi
 from graphik.utils.roboturdf import RobotURDF
-from graphik.graphs.graph_base import RobotGraph
+from graphik.graphs.graph_base import ProblemGraph
 from graphik.utils import *
 
 TOL = 1e-10
 
 class JointAngleSolver:
-    def __init__(self, robot_graph: RobotGraph, params: Dict["str", Any]):
+    def __init__(self, robot_graph: ProblemGraph, params: Dict["str", Any]):
         self.graph = robot_graph
         self.robot = robot_graph.robot
         self.k_map = self.robot.kinematic_map[ROOT]  # get map to all nodes from root
         self.W = params["W"]
 
         # create obstacle constraints
-        typ = nx.get_node_attributes(self.graph.directed, name=TYPE)
+        typ = nx.get_node_attributes(self.graph, name=TYPE)
         pairs = []
-        for u, v, data in self.graph.directed.edges(data=True):
+        for u, v, data in self.graph.edges(data=True):
             if "below" in data[BOUNDED]:
                 if typ[u] == ROBOT and typ[v] == OBSTACLE and u != ROOT:
                     pairs += [(u, v)]
@@ -87,8 +87,8 @@ class JointAngleSolver:
             constr = []
             for robot_node, obs_node in pairs:
                 p = T_all[robot_node].trans
-                r = self.graph.directed[robot_node][obs_node][LOWER]
-                c = self.graph.directed.nodes[obs_node][POS]
+                r = self.graph[robot_node][obs_node][LOWER]
+                c = self.graph.nodes[obs_node][POS]
                 constr += [(c - p).T @ (c - p) - r ** 2]
             return np.asarray(constr)
 
@@ -108,7 +108,7 @@ class JointAngleSolver:
                 R = T_all[robot_node].rot.as_matrix()
                 ZZ[:3,3:] = R.dot(SO3.wedge(T_all[robot_node].inv().trans)).dot(R.T)
                 p = T_all[robot_node].trans
-                c = self.graph.directed.nodes[obs_node][POS]
+                c = self.graph.nodes[obs_node][POS]
                 jac += [-2 * (c - p).T @ ZZ.dot(J_all[robot_node])[:3, :]]
             return np.vstack(jac)
 
@@ -120,7 +120,7 @@ class JointAngleSolver:
         joints = self.k_map[point][1:]
         def ee_constraint(q: npt.ArrayLike):
             q_dict = {joints[idx]: q[idx] for idx in range(len(joints))}
-            T = self.robot.get_pose(q_dict, point)
+            T = self.robot.pose(q_dict, point)
             e = (T.inv().dot(T_goal)).log()
             Ad = T.adjoint()
             e = Ad.dot(e)
@@ -135,7 +135,7 @@ class JointAngleSolver:
         joints = self.k_map[point][1:]
         def ee_gradient(q: npt.ArrayLike):
             q_dict = {joints[idx]: q[idx] for idx in range(len(joints))}
-            T = self.robot.get_pose(q_dict, point)
+            T = self.robot.pose(q_dict, point)
             J = self.robot.jacobian(q_dict, [point])
             e = (T.inv().dot(T_goal)).log()
             Ad = T.adjoint()

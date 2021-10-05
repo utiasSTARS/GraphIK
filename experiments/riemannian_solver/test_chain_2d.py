@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import numpy as np
 from numpy.testing import assert_array_less
-from graphik.graphs import RobotPlanarGraph
+from graphik.graphs import ProblemGraphPlanar
 
 from graphik.robots import RobotPlanar
 
@@ -32,7 +32,7 @@ def random_problem_2d_chain():
 
     # robot = Revolute2dChain(params)
     robot = RobotPlanar(params)
-    graph = RobotPlanarGraph(robot)
+    graph = ProblemGraphPlanar(robot)
     solver = RiemannianSolver(graph)
     n_tests = 100
 
