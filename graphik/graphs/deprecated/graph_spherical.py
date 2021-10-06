@@ -2,13 +2,13 @@ from typing import Dict, List, Any
 import numpy as np
 import numpy.linalg as la
 from graphik.robots import RobotSpherical
-from graphik.graphs.graph_base import RobotGraph
+from graphik.graphs.graph_base import ProblemGraph
 from graphik.utils.constants import *
 import networkx as nx
 from numpy import cos, pi, sqrt
 
 
-class RobotSphericalGraph(RobotGraph):
+class RobotSphericalGraph(ProblemGraph):
     def __init__(
         self,
         robot: RobotSpherical,

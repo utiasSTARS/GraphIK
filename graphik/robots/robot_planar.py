@@ -4,87 +4,63 @@ from numpy.typing import ArrayLike
 import networkx as nx
 import numpy as np
 from graphik.robots.robot_base import Robot
-from graphik.utils.constants import *
-from graphik.utils.kinematics import fk_2d
-from graphik.utils.utils import level2_descendants, wraptopi
+from graphik.utils import *
 from liegroups.numpy import SE2, SO2
 from numpy import cos, pi, sqrt, inf
 
 
 class RobotPlanar(Robot):
     def __init__(self, params):
+        super(RobotPlanar, self).__init__(params)
         self.dim = 2
-        self.T_base = params.get("T_base", SE2.identity())
-        self.a = params["a"]
-        self.th = params["theta"]
-        self.n = len(self.a)
-        self.joint_ids = [f"p{idx}" for idx in range(self.n)]
-        self.lb = params.get(
-            "joint_limits_lower", dict(zip(self.joint_ids, self.n * [-pi]))
-        )
-        self.ub = params.get(
-            "joint_limits_upper", dict(zip(self.joint_ids, self.n * [pi]))
-        )
 
-        self.parents = params.get(
-            "parents", {f"p{idx}": [f"p{idx+1}"] for idx in range(self.n)}
-        )
-        self.kinematic_map = nx.shortest_path(nx.from_dict_of_lists(self.parents))
+        # Use frame poses at zero conf if provided, otherwise construct from DH
+        if "T_zero" in params:
+            T_zero = params["T_zero"]
+        else:
+            try:
+                T_zero = self.from_params()
+            except KeyError:
+                raise Exception("Robot description not provided.")
 
-        self.generate_structure_graph()
-        self.set_limits()
+        # Poses of frames at zero config as node attributes
+        nx.set_node_attributes(self, values=T_zero, name="T0")
 
-        super(RobotPlanar, self).__init__()
+        # Set node and edge attributes describing geometry
+        self.set_geometric_attributes()
 
-    def chain_graph(self) -> nx.DiGraph:
-        """
-        Directed graph representing the robots chain structure
-        """
-        edg_lst = [
-            (f"p{idx}", f"p{idx+1}", self.a[f"p{idx+1}"]) for idx in range(self.n)
-        ]
-        chain_graph = nx.DiGraph()
-        chain_graph.add_weighted_edges_from(edg_lst)
-        nx.set_node_attributes(chain_graph, "robot", TYPE)
-        nx.set_edge_attributes(chain_graph, [], BOUNDED)
-        return chain_graph
+    def set_geometric_attributes(self):
+        end_effectors = self.end_effectors
+        kinematic_map = self.kinematic_map
 
-    def tree_graph(self, parents: dict) -> nx.DiGraph:
-        """
-        Needed for forward kinematics (computing the shortest path).
-        :return: Directed graph representing the robot's tree structure.
-        """
-        tree_graph = nx.DiGraph(parents)
-        for parent, child in tree_graph.edges():
-            tree_graph.edges[parent, child][DIST] = self.a[child]
-        nx.set_node_attributes(tree_graph, "robot", TYPE)
-        nx.set_edge_attributes(tree_graph, [], BOUNDED)
-        return tree_graph
+        for ee in end_effectors:
+            k_map = kinematic_map[ROOT][ee]
+            for idx in range(len(k_map)):
 
-    def generate_structure_graph(self):
-        self.structure = self.tree_graph(self.parents)
+                # Twists representing rotation axes as node attributes
+                cur = k_map[idx]
 
-    @property
-    def end_effectors(self) -> List[Any]:
-        """
-        Returns the names of end effector nodes and the nodes
-        preceeding them (required for orientation goals) as
-        a list of lists.
-        """
-        if not hasattr(self, "_end_effectors"):
-            S = self.structure
-            self._end_effectors = [
-                [x, y]
-                for x in S
-                if S.out_degree(x) == 0
-                for y in S.predecessors(x)
-                if DIST in S[y][x]
-                if S[y][x][DIST] < inf
-            ]
+                # Relative transforms between coordinate frames as edge attributes
+                if idx != 0:
+                    pred = k_map[idx - 1]
+                    self[pred][cur][TRANSFORM] = (
+                        self.nodes[pred]["T0"].inv().dot(self.nodes[cur]["T0"])
+                    )
 
-        return self._end_effectors
+    def from_params(self):
+        self.l = self.params["link_lengths"]
+        T = {ROOT: SE2.identity()}
+        q0 = self.zero_configuration()
+        kinematic_map = self.kinematic_map
+        for ee in self.end_effectors:
+            for node in kinematic_map[ROOT][ee][1:]:
+                path_nodes = kinematic_map[ROOT][node][1:]
+                T[node] = fk_tree_2d(self.l, q0, q0, path_nodes)
+        return T
 
-    def get_pose(self, node_inputs: Dict[str, float], query_node: str) -> SE2:
+    def pose(
+        self, joint_angles: Dict[str, float], query_node: Union[List[str], str]
+    ) -> Union[Dict[str, SE2], SE2]:
         """
         Returns an SE2 element corresponding to the location
         of the query_node in the configuration determined by
@@ -94,66 +70,10 @@ class RobotPlanar(Robot):
             return SE2.identity()
 
         path_nodes = self.kinematic_map["p0"][query_node][1:]
-        q = np.asarray([node_inputs[node] for node in path_nodes])
-        a = np.asarray([self.a[node] for node in path_nodes])
-        th = np.asarray([self.th[node] for node in path_nodes])
-        return fk_2d(a, th, q)
-
-    def joint_variables(self, G: nx.Graph) -> Dict[str, float]:
-        """
-        Finds the set of decision variables corresponding to the
-        graph realization G.
-
-        :param G: networkx.DiGraph with known vertex positions
-        :returns: array of joint variables t
-        :rtype: np.ndarray
-        """
-        R = {"p0": SO2.identity()}
-        joint_variables = {}
-
-        for u, v, dat in self.structure.edges(data=DIST):
-            if dat:
-                diff_uv = G.nodes[v][POS] - G.nodes[u][POS]
-                len_uv = np.linalg.norm(diff_uv)
-                sol = np.linalg.solve(len_uv * R[u].as_matrix(), diff_uv)
-                theta_idx = np.math.atan2(sol[1], sol[0])
-                joint_variables[v] = wraptopi(theta_idx)
-                Rz = SO2.from_angle(theta_idx)
-                R[v] = R[u].dot(Rz)
-
-        return joint_variables
-
-    def set_limits(self):
-        """
-        Sets known bounds on the distances between joints.
-        This is induced by link length and joint limits.
-        """
-        S = self.structure
-        for u in S:
-            # direct successors are fully known
-            for v in (suc for suc in S.successors(u) if suc):
-                S[u][v]["upper_limit"] = S[u][v][DIST]
-                S[u][v]["lower_limit"] = S[u][v][DIST]
-            for v in (des for des in level2_descendants(S, u) if des):
-                ids = self.kinematic_map[u][v]  # TODO generate this at init
-                l1 = self.a[ids[1]]
-                l2 = self.a[ids[2]]
-                lb = self.lb[ids[2]]  # symmetric limit
-                ub = self.ub[ids[2]]  # symmetric limit
-                lim = max(abs(ub), abs(lb))
-                S.add_edge(u, v)
-                S[u][v]["upper_limit"] = l1 + l2
-                S[u][v]["lower_limit"] = sqrt(
-                    l1 ** 2 + l2 ** 2 - 2 * l1 * l2 * cos(pi - lim)
-                )
-                S[u][v][BOUNDED] = "below"
-
-    def random_configuration(self) -> Dict[str, float]:
-        q = {}
-        for key in self.structure:
-            if key != "p0":
-                q[key] = self.lb[key] + (self.ub[key] - self.lb[key]) * np.random.rand()
-        return q
+        q = np.asarray([joint_angles[node] for node in path_nodes])
+        l = np.asarray([self.l[node] for node in path_nodes])
+        th = np.asarray([0 for node in path_nodes])
+        return fk_2d(l, th, q)
 
     def jacobian(
         self, joint_angles: Dict[str, float], nodes: Union[List[str], str] = None
@@ -174,13 +94,14 @@ class RobotPlanar(Robot):
             p_ee = T_0_n[0:2, -1]
             J_i = []
             for joint in path:  # algorithm fills Jac per column
-                T_0_i = Ts[list(self.parents.predecessors(joint))[0]].as_matrix()
+                T_0_i = Ts[list(self.predecessors(joint))[0]].as_matrix()
                 p_i = T_0_i[:2, -1]
                 e = p_i - p_ee
                 J_i += [np.hstack([e[1], -e[0], 1])]
             J[node] = np.zeros([3, self.n])
             J[node][:, : len(J_i)] = np.column_stack(J_i)
         return J
+
 
     def jacobian_cost(self, joint_angles: dict, ee_goals) -> np.ndarray:
         """
@@ -261,3 +182,36 @@ class RobotPlanar(Robot):
                     )
 
         return H + H.T - np.diag(np.diag(H))
+
+
+if __name__ == "__main__":
+
+    n = 10
+
+    l = list_to_variable_dict(np.ones(n))
+    # th = list_to_variable_dict(np.zeros(n))
+    lim_u = list_to_variable_dict(np.pi * np.ones(n))
+    lim_l = list_to_variable_dict(-np.pi * np.ones(n))
+    params = {
+        "link_lengths": l,
+        "ub": lim_u,
+        "lb": lim_l,
+        "num_joints": n,
+    }
+
+    # robot = Revolute2dChain(params)
+    robot = RobotPlanar(params)
+    # print(robot.nodes(data=True))
+    # print(robot.edges(data=True))
+    q = robot.random_configuration()
+    # print(robot.pose(q, "p9"))
+    # print(robot.jacobian(q, ["p9"]))
+
+    from graphik.graphs.graph_planar import ProblemGraphPlanar
+    graph = ProblemGraphPlanar(robot)
+    # print(graph.directed.nodes(data=True))
+    # print(graph.directed.edges(data=True))
+    G = graph.realization(q)
+    q_ = graph.joint_variables(G)
+    print(q)
+    print(q_)

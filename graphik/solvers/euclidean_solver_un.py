@@ -3,17 +3,17 @@ import graphik
 import numpy as np
 import networkx as nx
 import numpy.typing as npt
-from graphik.graphs.graph_revolute import RobotRevoluteGraph
+from graphik.graphs.graph_revolute import ProblemGraphRevolute
 from graphik.utils.roboturdf import RobotURDF
 from typing import Dict, List, Any
 from numpy import pi
 from scipy.optimize import minimize
 from graphik.utils import *
-from graphik.graphs.graph_base import RobotGraph
+from graphik.graphs.graph_base import ProblemGraph
 from graphik.solvers.costgrd import lcost, lgrad, lhess, lcost_and_grad
 
 class EuclideanSolver:
-    def __init__(self, robot_graph: RobotGraph, params: Dict["str", Any]):
+    def __init__(self, robot_graph: ProblemGraph, params: Dict["str", Any]):
         self.method = params.get("method","SLSQP")
         self.options = params.get("options",{"ftol": 1e-12, "maxiter":2000})
 
@@ -126,7 +126,7 @@ if __name__ == "__main__":
     lb = -ub
     urdf_robot = RobotURDF(fname)
     robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
-    graph = RobotRevoluteGraph(robot)
+    graph = ProblemGraphRevolute(robot)
     q_goal = graph.robot.random_configuration()
     D_goal = graph.distance_matrix_from_joints(q_goal)
     q_rand = list_to_variable_dict(robot.n * [0])

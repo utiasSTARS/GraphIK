@@ -5,11 +5,10 @@ from numpy.testing import assert_array_less
 import unittest
 import networkx as nx
 from graphik.graphs import (
-    RobotPlanarGraph,
-    RobotRevoluteGraph,
-    RobotSphericalGraph,
+    ProblemGraphPlanar,
+    ProblemGraphRevolute,
 )
-from graphik.robots import RobotRevolute, RobotSpherical, RobotPlanar
+from graphik.robots import RobotRevolute, RobotPlanar
 from graphik.utils.dgp import pos_from_graph, graph_from_pos, bound_smoothing
 from graphik.utils.utils import list_to_variable_dict
 from graphik.utils.geometry import trans_axis
@@ -26,17 +25,18 @@ class TestBoundSmoothing(unittest.TestCase):
             a = list_to_variable_dict(np.ones(n))
             th = list_to_variable_dict(np.zeros(n))
             lim = np.minimum(np.random.rand(n) * pi + 0.20, pi)
-            lim_u = list_to_variable_dict(lim * np.ones(n))
-            lim_l = list_to_variable_dict(-lim * np.ones(n))
+            lim_u = lim * np.ones(n)
+            lim_l = -lim * np.ones(n)
             params = {
-                "a": a,
+                "link_lengths": a,
                 "theta": th,
                 "joint_limits_upper": lim_u,
                 "joint_limits_lower": lim_l,
+                "num_joints": n,
             }
 
             robot = RobotPlanar(params)
-            graph = RobotPlanarGraph(robot)
+            graph = ProblemGraphPlanar(robot)
 
             q_goal = graph.robot.random_configuration()
             G_goal = graph.realization(q_goal)
@@ -64,18 +64,19 @@ class TestBoundSmoothing(unittest.TestCase):
             a = list_to_variable_dict(np.ones(n))
             th = list_to_variable_dict(np.zeros(n))
             lim = np.minimum(np.random.rand(n) * pi + 0.20, pi)
-            lim_u = list_to_variable_dict(lim * np.ones(n))
-            lim_l = list_to_variable_dict(-lim * np.ones(n))
+            lim_u = lim * np.ones(n)
+            lim_l = -lim * np.ones(n)
             params = {
-                "a": a,
+                "link_lengths": a,
                 "theta": th,
                 "parents": parents,
                 "joint_limits_upper": lim_u,
                 "joint_limits_lower": lim_l,
+                "num_joints": n,
             }
 
             robot = RobotPlanar(params)
-            graph = RobotPlanarGraph(robot)
+            graph = ProblemGraphPlanar(robot)
 
             q_goal = graph.robot.random_configuration()
             G_goal = graph.realization(q_goal)
@@ -83,96 +84,11 @@ class TestBoundSmoothing(unittest.TestCase):
 
             goals = {}
             for idx, ee_pair in enumerate(robot.end_effectors):
-                goals[ee_pair[0]] = robot.get_pose(q_goal, ee_pair[0]).trans
+                goals[ee_pair] = robot.pose(q_goal, ee_pair).trans
 
             G = graph.complete_from_pos(goals)
 
             lb, ub = bound_smoothing(G)
-            self.assertIsNone(
-                assert_array_less(D_goal, ub ** 2 + TOL * np.ones(D_goal.shape))
-            )
-            self.assertIsNone(
-                assert_array_less(lb ** 2 - TOL * np.ones(D_goal.shape), D_goal)
-            )
-
-    def test_random_params_3d_spherical_chain(self):
-        n = 5
-        for _ in range(100):
-            a = list_to_variable_dict(0 * np.random.rand(n))
-            d = list_to_variable_dict(np.random.rand(n))
-            al = list_to_variable_dict(0 * np.random.rand(n))
-            th = list_to_variable_dict(0 * np.random.rand(n))
-            lim = np.minimum(np.random.rand(n) * pi, pi)
-            lim_u = list_to_variable_dict(lim * np.ones(n))
-            lim_l = list_to_variable_dict(-lim * np.ones(n))
-
-            params = {
-                "a": a,
-                "alpha": al,
-                "d": d,
-                "theta": th,
-                "joint_limits_lower": lim_l,
-                "joint_limits_upper": lim_u,
-            }
-            robot = RobotSpherical(params)  # instantiate robot
-            graph = RobotSphericalGraph(robot)  # instantiate graph
-
-            q_goal = graph.robot.random_configuration()
-            G_goal = graph.realization(q_goal)
-            X_goal = pos_from_graph(G_goal)
-            D_goal = graph.distance_matrix_from_joints(q_goal)
-
-            goals = {f"p{n-1}": X_goal[-2, :], f"p{n}": X_goal[-1, :]}
-            G = graph.complete_from_pos(goals)
-
-            lb, ub = bound_smoothing(G)
-            self.assertIsNone(
-                assert_array_less(D_goal, ub ** 2 + TOL * np.ones(D_goal.shape))
-            )
-            self.assertIsNone(
-                assert_array_less(lb ** 2 - TOL * np.ones(D_goal.shape), D_goal)
-            )
-
-    def test_random_params_3d_spherical_tree(self):
-        n = 5
-        for _ in range(100):
-            height = 4
-            gen = nx.balanced_tree(2, height, create_using=nx.DiGraph)
-            gen = nx.relabel_nodes(gen, {node: f"p{node}" for node in gen})
-            n = gen.number_of_edges()
-            # Generate random DH parameters
-            a = list_to_variable_dict(0 * np.random.rand(n))
-            d = list_to_variable_dict(np.random.rand(n))
-            al = list_to_variable_dict(0 * np.random.rand(n))
-            th = list_to_variable_dict(0 * np.random.rand(n))
-            parents = nx.to_dict_of_lists(gen)
-            lim_u = list_to_variable_dict(pi * np.ones(n))
-            lim_l = list_to_variable_dict(-pi * np.ones(n))
-
-            params = {
-                "a": a,
-                "alpha": al,
-                "d": d,
-                "theta": th,
-                "parents": parents,
-                "joint_limits_lower": lim_l,
-                "joint_limits_upper": lim_u,
-            }
-            robot = RobotSpherical(params)  # instantiate robot
-            graph = RobotSphericalGraph(robot)  # instantiate graph
-
-            q_goal = graph.robot.random_configuration()
-            G_goal = graph.realization(q_goal)
-            D_goal = graph.distance_matrix_from_joints(q_goal)
-
-            goals = {}
-            for idx, ee_pair in enumerate(robot.end_effectors):
-                goals[ee_pair[0]] = robot.get_pose(q_goal, ee_pair[0]).trans
-                goals[ee_pair[1]] = robot.get_pose(q_goal, ee_pair[1]).trans
-
-            G = graph.complete_from_pos(goals)
-            lb, ub = bound_smoothing(G)
-
             self.assertIsNone(
                 assert_array_less(D_goal, ub ** 2 + TOL * np.ones(D_goal.shape))
             )
@@ -186,9 +102,7 @@ class TestBoundSmoothing(unittest.TestCase):
         for _ in range(100):
             q_goal = graph.robot.random_configuration()
             D_goal = graph.distance_matrix_from_joints(q_goal)
-            T_goal = robot.get_pose(list_to_variable_dict(q_goal), "p" + str(robot.n))
-
-            lb, ub = bound_smoothing(graph.directed)
+            T_goal = robot.pose(q_goal, "p" + str(robot.n))
 
             G = graph.complete_from_pos(
                 {f"p{robot.n}": T_goal.trans, f"q{robot.n}": T_goal.dot(trans_axis(1, "z")).trans}

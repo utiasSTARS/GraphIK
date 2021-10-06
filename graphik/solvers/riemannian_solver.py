@@ -18,7 +18,7 @@ from graphik.utils import (
 from graphik.utils.manifolds.fixed_rank_psd_sym import PSDFixedRank
 from pymanopt.manifolds import Euclidean
 from graphik.solvers.trust_region import TrustRegions
-from graphik.graphs.graph_base import RobotGraph
+from graphik.graphs.graph_base import ProblemGraph
 from graphik.solvers.costgrd import jcost, jgrad, jhess, lcost, lgrad, lhess
 BetaTypes = tools.make_enum(
     "BetaTypes", "FletcherReeves PolakRibiere HestenesStiefel HagerZhang".split()
@@ -108,12 +108,12 @@ def adjoint(X: np.ndarray):
     return X - D
 
 class RiemannianSolver:
-    def __init__(self, graph: RobotGraph, params={}):
+    def __init__(self, graph: ProblemGraph, params={}):
 
         self.params = params
         self.graph = graph
         self.dim = graph.dim
-        self.N = graph.n_nodes
+        self.N = graph.number_of_nodes()
 
         solver_type = params.get("solver", "TrustRegions")
 
@@ -387,7 +387,7 @@ if __name__ == "__main__":
     G_goal = graph.realization(q_goal)
     X_goal = pos_from_graph(G_goal)
     D_goal = graph.distance_matrix_from_joints(q_goal)
-    T_goal = robot.get_pose(q_goal, f"p{n}")
+    T_goal = robot.pose(q_goal, f"p{n}")
 
     goals = {
         f"p{n}": T_goal.trans,

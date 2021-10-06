@@ -1,18 +1,18 @@
 from graphik.utils import *
-from graphik.graphs.graph_revolute import RobotRevoluteGraph
+from graphik.graphs.graph_revolute import ProblemGraphRevolute
 
-def generate_revolute_problem(graph: RobotRevoluteGraph, obstacles = False):
+def generate_revolute_problem(graph: ProblemGraphRevolute, obstacles = False):
 
     robot = graph.robot
     n = robot.n
-    axis_len = robot.axis_length
+    axis_len = graph.axis_length
 
     if obstacles:
         feasible = False
         while not feasible:
             q_goal = robot.random_configuration()
             G_goal = graph.realization(q_goal)
-            T_goal = robot.get_pose(q_goal, f"p{n}")
+            T_goal = robot.pose(q_goal, f"p{n}")
             broken_limits = graph.check_distance_limits(G_goal)
             if len(broken_limits) == 0:
                 feasible = True
@@ -21,7 +21,7 @@ def generate_revolute_problem(graph: RobotRevoluteGraph, obstacles = False):
 
     G_goal = graph.realization(q_goal)
     # D_goal = graph.distance_matrix_from_joints(q_goal)
-    T_goal = robot.get_pose(q_goal, f"p{n}")
+    T_goal = robot.pose(q_goal, f"p{n}")
 
     goals = {
         f"p{n}": T_goal.trans,

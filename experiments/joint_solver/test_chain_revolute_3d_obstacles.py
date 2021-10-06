@@ -1,13 +1,13 @@
 import numpy as np
 from numpy.linalg import norm
 from numpy import pi
-from graphik.utils.roboturdf import load_ur10
+from graphik.utils.roboturdf import load_ur10, load_kuka, load_schunk_lwa4d, load_schunk_lwa4p
 from graphik.utils import *
-from graphik.graphs import RobotRevoluteGraph
+from graphik.graphs import ProblemGraphRevolute
 from graphik.solvers.joint_angle_solver import JointAngleSolver
 
 
-def solve_random_problem(graph: RobotRevoluteGraph, solver: JointAngleSolver):
+def solve_random_problem(graph: ProblemGraphRevolute, solver: JointAngleSolver):
     robot = graph.robot
     n = graph.robot.n
 
@@ -15,7 +15,7 @@ def solve_random_problem(graph: RobotRevoluteGraph, solver: JointAngleSolver):
     while not feasible:
         q_goal = robot.random_configuration()
         G_goal = graph.realization(q_goal)
-        T_goal = robot.get_pose(q_goal, f"p{n}")
+        T_goal = robot.pose(q_goal, f"p{n}")
         broken_limits = graph.check_distance_limits(G_goal)
         if len(broken_limits) == 0:
             feasible = True
@@ -23,7 +23,7 @@ def solve_random_problem(graph: RobotRevoluteGraph, solver: JointAngleSolver):
     goals = {f"p{n}": T_goal}
     q_sol, t_sol, nit = solver.solve(goals, robot.zero_configuration())
 
-    T_local = robot.get_pose(q_sol, "p" + str(n))
+    T_local = robot.pose(q_sol, "p" + str(n))
     err_pos = norm(T_goal.trans - T_local.trans)
 
     z_goal = T_goal.as_matrix()[:3, 2]
@@ -54,10 +54,10 @@ def main():
         # (scale * np.asarray([0, 1, -phi]), radius),
         # (scale * np.asarray([0, -1, -phi]), radius),
         # (scale * np.asarray([0, -1, phi]), radius),
-        (scale * np.asarray([1, phi, 0]), radius),
-        (scale * np.asarray([1, -phi, 0]), radius),
-        (scale * np.asarray([-1, -phi, 0]), radius),
-        (scale * np.asarray([-1, phi, 0]), radius),
+        # (scale * np.asarray([1, phi, 0]), radius),
+        # (scale * np.asarray([1, -phi, 0]), radius),
+        # (scale * np.asarray([-1, -phi, 0]), radius),
+        # (scale * np.asarray([-1, phi, 0]), radius),
         # (scale * np.asarray([phi, 0, 1]), radius),
         # (scale * np.asarray([-phi, 0, 1]), radius),
         # (scale * np.asarray([-phi, 0, -1]), radius),

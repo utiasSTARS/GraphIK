@@ -5,7 +5,7 @@ from graphik.robots.robot_base import Robot
 from graphik.robots import RobotRevolute
 from graphik.utils.constants import *
 from liegroups.numpy import SE3, SO3
-from graphik.utils.geometry import roty, trans_axis
+from graphik.utils.geometry import trans_axis
 from graphik.utils.kinematics import fk_3d_sph
 from graphik.utils.utils import (
     level2_descendants,

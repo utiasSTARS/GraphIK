@@ -6,7 +6,7 @@ from numpy.testing import assert_array_equal
 import unittest
 from graphik.utils.constants import *
 from itertools import combinations, groupby
-from graphik.graphs import RobotPlanarGraph
+from graphik.graphs import ProblemGraphPlanar
 from graphik.robots import RobotPlanar
 
 from graphik.utils.dgp import adjacency_matrix_from_graph
@@ -15,7 +15,7 @@ from graphik.utils.utils import list_to_variable_dict
 def gnp_random_connected_graph(n, p):
     """
     Generates a random undirected graph, similarly to an Erdős-Rényi
-    graph, but enforcing that the resulting graph is conneted
+    graph, but enforcing that the resulting graph is connected
     """
     edges = combinations(range(n), 2)
     G = nx.Graph()
@@ -58,13 +58,10 @@ class TestAdjacencyMatrices(unittest.TestCase):
         n = 3
         a = list_to_variable_dict(np.ones(n))
         th = list_to_variable_dict(np.zeros(n))
-        lim_u = list_to_variable_dict(pi * np.ones(n))
-        lim_l = list_to_variable_dict(-pi * np.ones(n))
         params = {
-            "a": a,
+            "link_lengths": a,
             "theta": th,
-            "joint_limits_upper": lim_u,
-            "joint_limits_lower": lim_l,
+            "num_joints": n
         }
 
         # Adjacency matrix derived by hand
@@ -80,12 +77,12 @@ class TestAdjacencyMatrices(unittest.TestCase):
         )
 
         robot = RobotPlanar(params)
-        graph = RobotPlanarGraph(robot)
+        graph = ProblemGraphPlanar(robot)
 
         q_goal = graph.robot.random_configuration()
         goals = {
-            f"p{n}": robot.get_pose(q_goal, f"p{n}").trans,
-            f"p{n-1}": robot.get_pose(q_goal, f"p{n-1}").trans,
+            f"p{n}": robot.pose(q_goal, f"p{n}").trans,
+            f"p{n-1}": robot.pose(q_goal, f"p{n-1}").trans,
         }
         G = graph.complete_from_pos(goals)
 
@@ -97,13 +94,10 @@ class TestAdjacencyMatrices(unittest.TestCase):
         n = 3
         a = list_to_variable_dict(np.ones(n))
         th = list_to_variable_dict(np.zeros(n))
-        lim_u = list_to_variable_dict(pi * np.ones(n))
-        lim_l = list_to_variable_dict(-pi * np.ones(n))
         params = {
-            "a": a,
+            "link_lengths": a,
             "theta": th,
-            "joint_limits_upper": lim_u,
-            "joint_limits_lower": lim_l,
+            "num_joints": n
         }
 
         # Adjacency matrix derived by hand
@@ -119,12 +113,12 @@ class TestAdjacencyMatrices(unittest.TestCase):
         )
 
         robot = RobotPlanar(params)
-        graph = RobotPlanarGraph(robot)
+        graph = ProblemGraphPlanar(robot)
 
         q_goal = graph.robot.random_configuration()
         goals = {
-            f"p{n}": robot.get_pose(q_goal, f"p{n}").trans,
-            # f"p{n-1}": robot.get_pose(q_goal, f"p{n-1}").trans,
+            f"p{n}": robot.pose(q_goal, f"p{n}").trans,
+            # f"p{n-1}": robot.pose(q_goal, f"p{n-1}").trans,
         }
         G = graph.complete_from_pos(goals)
 
@@ -140,14 +134,11 @@ class TestAdjacencyMatrices(unittest.TestCase):
         parents = nx.to_dict_of_lists(gen)
         a = list_to_variable_dict(np.ones(n))
         th = list_to_variable_dict(np.zeros(n))
-        lim_u = list_to_variable_dict(np.pi * np.ones(n))
-        lim_l = list_to_variable_dict(-np.pi * np.ones(n))
         params = {
-            "a": a,
+            "link_lengths": a,
             "theta": th,
             "parents": parents,
-            "joint_limits_upper": lim_u,
-            "joint_limits_lower": lim_l,
+            "num_joints": n
         }
 
         # Adjacency matrix derived by hand
@@ -479,17 +470,20 @@ class TestAdjacencyMatrices(unittest.TestCase):
             ]
         )
         robot = RobotPlanar(params)
-        graph = RobotPlanarGraph(robot)
+        graph = ProblemGraphPlanar(robot)
 
         q_goal = robot.random_configuration()
         goals = {}
-        for idx, ee_pair in enumerate(robot.end_effectors):
-            goals[ee_pair[0]] = robot.get_pose(q_goal, ee_pair[0]).trans
-            # goals[ee_pair[1]] = robot.get_pose(q_goal, ee_pair[1]).trans
+        for idx, ee in enumerate(robot.end_effectors):
+            goals[ee] = robot.pose(q_goal, ee).trans
 
         G = graph.complete_from_pos(goals)
 
-        F = adjacency_matrix_from_graph(G)
+        idd = graph.node_ids
+        for idx, id in enumerate(idd[4:]):
+            idd[2 + int(id[1:])] = id
+
+        F = adjacency_matrix_from_graph(G, nodelist = idd).astype(int)
 
         assert_array_equal(F, F_gt)
 
@@ -504,11 +498,12 @@ class TestAdjacencyMatrices(unittest.TestCase):
         lim_u = list_to_variable_dict(np.pi * np.ones(n))
         lim_l = list_to_variable_dict(-np.pi * np.ones(n))
         params = {
-            "a": a,
+            "link_lengths": a,
             "theta": th,
             "parents": parents,
-            "joint_limits_upper": lim_u,
-            "joint_limits_lower": lim_l,
+            "ub": lim_u,
+            "lb": lim_l,
+            "num_joints": n
         }
 
         # Adjacency matrix derived by hand
@@ -840,16 +835,21 @@ class TestAdjacencyMatrices(unittest.TestCase):
             ]
         )
         robot = RobotPlanar(params)
-        graph = RobotPlanarGraph(robot)
+        graph = ProblemGraphPlanar(robot)
 
         q_goal = robot.random_configuration()
         goals = {}
-        for idx, ee_pair in enumerate(robot.end_effectors):
-            goals[ee_pair[0]] = robot.get_pose(q_goal, ee_pair[0]).trans
-            goals[ee_pair[1]] = robot.get_pose(q_goal, ee_pair[1]).trans
+        for idx, ee in enumerate(robot.end_effectors):
+            ee_p = list(robot.predecessors(ee))
+            goals[ee] = robot.pose(q_goal, ee).trans
+            goals[ee_p[0]] = robot.pose(q_goal, ee_p[0]).trans
 
         G = graph.complete_from_pos(goals)
 
-        F = adjacency_matrix_from_graph(G)
+        idd = graph.node_ids
+        for idx, id in enumerate(idd[4:]):
+            idd[2 + int(id[1:])] = id
+
+        F = adjacency_matrix_from_graph(G, nodelist = idd).astype(int)
 
         assert_array_equal(F, F_gt)

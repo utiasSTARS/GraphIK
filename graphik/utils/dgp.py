@@ -4,7 +4,7 @@ import networkx as nx
 import math
 from numpy.typing import ArrayLike
 from graphik.utils.constants import *
-from graphik.utils.utils import best_fit_transform
+from graphik.utils.geometry import best_fit_transform
 
 
 def orthogonal_procrustes(G1: nx.DiGraph, G2: nx.DiGraph) -> nx.DiGraph:
@@ -52,7 +52,7 @@ def distance_matrix_from_graph(G: nx.Graph, label=DIST, nonedge=0) -> ArrayLike:
         ** 2
     )
 
-def adjacency_matrix_from_graph(G: nx.DiGraph, label: str = DIST) -> ArrayLike:
+def adjacency_matrix_from_graph(G: nx.Graph, label: str = DIST, nodelist: list = None) -> ArrayLike:
     """
     Returns the adjacency matrix of the graph, but only for edges with label.
     :returns: Adjacency matrix
@@ -61,7 +61,7 @@ def adjacency_matrix_from_graph(G: nx.DiGraph, label: str = DIST) -> ArrayLike:
         G = G.to_undirected(as_view=True)
 
     selected_edges = [(u, v) for u, v, d in G.edges(data=True) if label in d]
-    return nx.to_numpy_array(G.edge_subgraph(selected_edges), weight="")
+    return nx.to_numpy_array(G.edge_subgraph(selected_edges), weight="", nodelist=nodelist)
 
 
 def pos_from_graph(G: nx.DiGraph, node_ids=None) -> ArrayLike:
@@ -131,16 +131,7 @@ def graph_complete_edges(G: nx.DiGraph, overwrite = False) -> nx.DiGraph:
 
     for idx, u in enumerate(pos.keys()):
         for jdx, v in enumerate(pos.keys()):
-            if jdx > idx and (v, u) not in dst:
-                d = np.linalg.norm(pos[u] - pos[v])
-                G.add_edges_from(
-                    [
-                        (u, v, {DIST: d}),
-                        (u, v, {LOWER: d}),
-                        (u, v, {UPPER: d}),
-                    ]
-                )
-            elif jdx > idx and overwrite:
+            if (jdx > idx) and (((v, u) not in dst) or overwrite):
                 d = np.linalg.norm(pos[u] - pos[v])
                 G.add_edges_from(
                     [

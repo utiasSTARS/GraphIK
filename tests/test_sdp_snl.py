@@ -2,7 +2,7 @@ import numpy as np
 import unittest
 import networkx as nx
 from numpy.testing import assert_allclose
-from graphik.graphs import RobotRevoluteGraph
+from graphik.graphs import ProblemGraphRevolute
 
 from graphik.robots.robot_base import Robot
 from graphik.robots import RobotRevolute
@@ -236,7 +236,7 @@ class TestTruncatedUR10(unittest.TestCase):
             "modified_dh": modified_dh,
         }
         self.robot = RobotRevolute(params)
-        self.graph = RobotRevoluteGraph(self.robot)
+        self.graph = ProblemGraphRevolute(self.robot)
 
     def test_cost(self):
         n_runs = 10

@@ -2,7 +2,7 @@
 import numpy as np
 from numpy.testing import assert_array_less
 import networkx as nx
-from graphik.graphs import RobotPlanarGraph
+from graphik.graphs import ProblemGraphPlanar
 from graphik.robots import RobotPlanar
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.utils.utils import best_fit_transform, list_to_variable_dict
@@ -37,7 +37,7 @@ def random_problem_2d_tree():
     }
 
     robot = RobotPlanar(params)
-    graph = RobotPlanarGraph(robot)
+    graph = ProblemGraphPlanar(robot)
     solver = RiemannianSolver(graph)
     n_tests = 100
     for idx in range(n_tests):

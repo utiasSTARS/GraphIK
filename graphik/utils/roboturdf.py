@@ -5,7 +5,7 @@ from liegroups import SE3, SO3
 import numpy as np
 import trimesh
 import pyrender
-from graphik.graphs import RobotRevoluteGraph
+from graphik.graphs import ProblemGraphRevolute
 from graphik.robots import RobotRevolute
 import graphik
 from operator import itemgetter
@@ -357,13 +357,14 @@ class RobotURDF(object):
             T_zero[key] = T0.inv().dot(val)
         # T_zero['root'] = SE3.identity()
         params["T_zero"] = T_zero
+        params["num_joints"] = self.n_q_joints
 
         l = 0
         for cl in self.parents.values():
             l += len(cl)
         if l == len(self.parents.keys()) - 1:
-            params["ub"] = ub
-            params["lb"] = lb
+            params["joint_limits_upper"] = ub
+            params["joint_limits_lower"] = lb
             return RobotRevolute(params)
         else:
             return RobotRevolute(params)
@@ -487,7 +488,7 @@ def normalize(x):
 def load_schunk_lwa4p(limits=None):
     fname = graphik.__path__[0] + "/robots/urdfs/lwa4p.urdf"
     urdf_robot = RobotURDF(fname)
-    n = 6
+    n = urdf_robot.n_q_joints
     if limits is None:
         ub = np.ones(n) * np.pi
         lb = -ub
@@ -495,14 +496,14 @@ def load_schunk_lwa4p(limits=None):
         lb = limits[0]
         ub = limits[1]
     robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
-    graph = RobotRevoluteGraph(robot)
+    graph = ProblemGraphRevolute(robot)
     return robot, graph
 
 
 def load_schunk_lwa4d(limits=None):
     fname = graphik.__path__[0] + "/robots/urdfs/lwa4d.urdf"
     urdf_robot = RobotURDF(fname)
-    n = 7
+    n = urdf_robot.n_q_joints
     if limits is None:
         ub = np.ones(n) * np.pi
         lb = -ub
@@ -510,14 +511,14 @@ def load_schunk_lwa4d(limits=None):
         lb = limits[0]
         ub = limits[1]
     robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
-    graph = RobotRevoluteGraph(robot)
+    graph = ProblemGraphRevolute(robot)
     return robot, graph
 
 
 def load_kuka(limits=None):
     fname = graphik.__path__[0] + "/robots/urdfs/kuka_iiwr.urdf"
     urdf_robot = RobotURDF(fname)
-    n = 7
+    n = urdf_robot.n_q_joints
     if limits is None:
         ub = np.ones(n) * np.pi
         lb = -ub
@@ -525,14 +526,14 @@ def load_kuka(limits=None):
         lb = limits[0]
         ub = limits[1]
     robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
-    graph = RobotRevoluteGraph(robot)
+    graph = ProblemGraphRevolute(robot)
     return robot, graph
 
 
 def load_ur10(limits=None):
     fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
     urdf_robot = RobotURDF(fname)
-    n = 6
+    n = urdf_robot.n_q_joints
     if limits is None:
         ub = np.ones(n) * np.pi
         lb = -ub
@@ -541,7 +542,7 @@ def load_ur10(limits=None):
         ub = limits[1]
     robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
     # print(robot.structure.nodes())
-    graph = RobotRevoluteGraph(robot)
+    graph = ProblemGraphRevolute(robot)
     return robot, graph
 
 
@@ -572,5 +573,5 @@ def load_truncated_ur10(n: int):
     }
 
     robot = RobotRevolute(params)
-    graph = RobotRevoluteGraph(robot)
+    graph = ProblemGraphRevolute(robot)
     return robot, graph
