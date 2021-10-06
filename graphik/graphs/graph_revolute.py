@@ -99,7 +99,7 @@ class ProblemGraphRevolute(ProblemGraph):
             del structure.nodes[u][POS]
 
         # Set node type to robot
-        nx.set_node_attributes(structure, ROBOT, TYPE)
+        nx.set_node_attributes(structure, [ROBOT], TYPE)
         structure.nodes[ROOT][TYPE] = [ROBOT, BASE]
         structure.nodes["q0"][TYPE] = [ROBOT, BASE]
 
