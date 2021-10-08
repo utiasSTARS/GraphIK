@@ -393,7 +393,7 @@ if __name__ == "__main__":
         f"p{n}": T_goal.trans,
         f"q{n}": T_goal.dot(trans_axis(1, "z")).trans,
     }
-    G = graph.complete_from_pos(goals)
+    G = graph.from_pos(goals)
     omega = adjacency_matrix_from_graph(G)
     inds = np.nonzero(omega)
     # cost, egrad, ehess = solver.create_cost(D_goal, omega, False)

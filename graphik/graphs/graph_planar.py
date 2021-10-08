@@ -16,7 +16,7 @@ class ProblemGraphPlanar(ProblemGraph):
 
         #
         base = self.base_subgraph()
-        structure = self.structure_graph()
+        structure = self.structure_subgraph()
 
         composition = nx.compose(base, structure)
         self.add_nodes_from(composition.nodes(data=True))
@@ -25,8 +25,12 @@ class ProblemGraphPlanar(ProblemGraph):
         self.set_limits()
         self.root_angle_limits()
 
-    @staticmethod
-    def base_subgraph() -> nx.DiGraph:
+        # induce a graph of non-edges?
+        # print(list(nx.non_edges(self)))
+        # for u, v in nx.non_edges(self):
+        #     self.add_edge(u,v)
+
+    def base_subgraph(self) -> nx.DiGraph:
         base = nx.DiGraph([("p0", "x"), ("p0", "y"), ("x", "y")])
 
         # Invert x axis because of the way joint limits are set up, makes no difference
@@ -46,7 +50,7 @@ class ProblemGraphPlanar(ProblemGraph):
 
         return base
 
-    def structure_graph(self):
+    def structure_subgraph(self) -> nx.DiGraph:
         robot = self.robot
         end_effectors = self.robot.end_effectors
         kinematic_map = self.robot.kinematic_map
@@ -60,7 +64,9 @@ class ProblemGraphPlanar(ProblemGraph):
                 cur_pos = robot.nodes[cur]["T0"].trans
 
                 # Add nodes for joint and edge between them
-                structure.add_nodes_from([(cur, {POS: cur_pos})])
+                structure.add_nodes_from([(cur, {POS: cur_pos, TYPE: [ROBOT]})])
+                if cur == ROOT:
+                    structure.nodes[cur][TYPE] += [BASE]
 
                 # If there exists a preceeding joint, connect it to new
                 if idx != 0:
@@ -74,13 +80,13 @@ class ProblemGraphPlanar(ProblemGraph):
                         **{DIST: dist, LOWER: dist, UPPER: dist, BOUNDED: []},
                     )
 
+                    if cur in self.robot.end_effectors:
+                        structure.nodes[cur][TYPE] += [END_EFFECTOR]
+                        structure.nodes[pred][TYPE] += [END_EFFECTOR]
+
         # Delete positions used for weights
         for u in structure.nodes:
             del structure.nodes[u][POS]
-
-        # Set node type to robot
-        nx.set_node_attributes(structure, [ROBOT], TYPE)
-        structure.nodes[ROOT][TYPE] = [ROBOT, BASE]
 
         return structure
 
@@ -129,30 +135,16 @@ class ProblemGraphPlanar(ProblemGraph):
                 )
                 self[u][v][BOUNDED] = BELOW
 
-    def realization(self, joint_angles: Dict[str, float]) -> nx.DiGraph:
-        """
-        Given a dictionary of joint variables generate a representative graph.
-        This graph will be fully conncected.
-        """
-        P = {}
-        for name in self.structure:  # TODO make single for loop
-            P[name] = self.get_pose(joint_angles, name).trans
-
-        for name in self.base:
-            P[name] = self.base.nodes[name][POS]
-
-        return self.complete_from_pos(P)
-
-    def complete_from_pose_goal(self, pose_goals: dict):
+    def _pose_goal(self, T_goal: Dict[str, SE2]) -> Dict[str, ArrayLike]:
         pos = {}
-        for ee in self.robot.end_effectors:
-            T_goal = pose_goals[ee[0]]  # first ID is the last point in chain
-            d = self[ee[1]][ee[0]][DIST]
-            z = T_goal.rot.as_matrix()[0:3, -1]
-            pos[ee[0]] = T_goal.trans
-            pos[ee[1]] = T_goal.trans - z * d
-
-        return self.complete_from_pos(pos)
+        for u, T_goal_u in T_goal.items():
+            for v in self.structure.predecessors(u):
+                if DIST in self[v][u]:
+                    d = self[v][u][DIST]
+                    z = T_goal_u.rot.as_matrix()[0:2, 0]
+                    pos[u] = T_goal_u.trans
+                    pos[v] = T_goal_u.trans - z * d
+        return pos
 
     def joint_variables(self, G: nx.Graph) -> Dict[str, float]:
         """
@@ -183,24 +175,27 @@ class ProblemGraphPlanar(ProblemGraph):
     ) -> Union[Dict[str, SE2], SE2]:
         return self.robot.pose(joint_angles, query_node)
 
+
 def main():
 
-    n =  4
+    n = 4
     a = list_to_variable_dict(np.ones(n))
     params = {"link_lengths": a, "num_joints": n}
 
     robot = RobotPlanar(params)
     graph = ProblemGraphPlanar(robot)
-    print(graph.base_nodes)
-    print(graph.structure_nodes)
-    print(graph.edges())
+    print(robot.pose(robot.random_configuration(), "p4"))
+    # print(graph.base_nodes)
+    # print(graph.structure_nodes)
+    # print(graph.end_effector_nodes)
+    # print(graph.edges())
     # print(graph.nodes(data="type"))
     # graph = RobotPlanarGraph(incoming_graph_data=robot)
     # def base_subgraph_filter_node(n1):
     #     if BASE in graph.nodes[n1][TYPE]:
     #         return True
     #     else:
-            # return False
+    # return False
 
     # print(graph.to_directed(as_view=True))
     # print(list(graph.nodes()))
@@ -215,5 +210,6 @@ def main():
 
     # print(graph.nodes(data="type"))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

@@ -84,7 +84,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
             f"p{n}": robot.pose(q_goal, f"p{n}").trans,
             f"p{n-1}": robot.pose(q_goal, f"p{n-1}").trans,
         }
-        G = graph.complete_from_pos(goals)
+        G = graph.from_pos(goals)
 
         F = adjacency_matrix_from_graph(G)
 
@@ -120,7 +120,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
             f"p{n}": robot.pose(q_goal, f"p{n}").trans,
             # f"p{n-1}": robot.pose(q_goal, f"p{n-1}").trans,
         }
-        G = graph.complete_from_pos(goals)
+        G = graph.from_pos(goals)
 
         F = adjacency_matrix_from_graph(G)
 
@@ -477,7 +477,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
         for idx, ee in enumerate(robot.end_effectors):
             goals[ee] = robot.pose(q_goal, ee).trans
 
-        G = graph.complete_from_pos(goals)
+        G = graph.from_pos(goals)
 
         idd = graph.node_ids
         for idx, id in enumerate(idd[4:]):
@@ -844,7 +844,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
             goals[ee] = robot.pose(q_goal, ee).trans
             goals[ee_p[0]] = robot.pose(q_goal, ee_p[0]).trans
 
-        G = graph.complete_from_pos(goals)
+        G = graph.from_pos(goals)
 
         idd = graph.node_ids
         for idx, id in enumerate(idd[4:]):

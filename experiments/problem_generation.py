@@ -23,15 +23,16 @@ def generate_revolute_problem(graph: ProblemGraphRevolute, obstacles = False):
     # D_goal = graph.distance_matrix_from_joints(q_goal)
     T_goal = robot.pose(q_goal, f"p{n}")
 
-    goals = {
-        f"p{n}": T_goal.trans,
-        f"q{n}": T_goal.dot(trans_axis(axis_len, "z")).trans,
-    }
+    # goals = {
+    #     f"p{n}": T_goal.trans,
+    #     f"q{n}": T_goal.dot(trans_axis(axis_len, "z")).trans,
+    # }
 
     X_goal = pos_from_graph(G_goal)
     X_goal = normalize_positions(X_goal)
     D_goal = distance_matrix_from_pos(X_goal)
 
-    G = graph.complete_from_pos(goals)
+    # G = graph.from_pos(goals)
+    G = graph.from_pose(T_goal)
 
     return G, T_goal, D_goal, X_goal

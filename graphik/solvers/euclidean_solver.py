@@ -38,7 +38,7 @@ class EuclideanSolver:
             goals[u] = np.ones(self.graph.dim)
             goals[v] = np.ones(self.graph.dim)
 
-        G = self.graph.complete_from_pos(goals)
+        G = self.graph.from_pos(goals)
         self.omega = adjacency_matrix_from_graph(G)
 
         pairs = get_obstacle_constraint_pairs(self.graph.directed)

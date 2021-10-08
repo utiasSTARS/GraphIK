@@ -28,7 +28,7 @@ def generate_revolute_problem(graph: ProblemGraphRevolute, obstacles = False):
         f"q{n}": T_goal.dot(trans_axis(axis_len, "z")).trans,
     }
 
-    G_partial = graph.complete_from_pos(goals)
+    G_partial = graph.from_pos(goals)
 
     true_feasibility = False
     if len(graph.check_distance_limits(G_goal, tol=1e-10)) == 0:

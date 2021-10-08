@@ -49,9 +49,9 @@ def random_problem_2d_chain():
         T_goal = robot.pose(q_goal, f"p{n}")
 
         # goals = {p"f{n}": X_goal[-1, :]} # position goal
-        goals = {f"p{n-1}": X_goal[-2, :], f"p{n}": X_goal[-1, :]}  # pose goal
-
-        G = graph.complete_from_pos(goals)
+        # G = graph.from_pos(goals)
+        # G = graph.from_pose_goal({f"p{n}": T_goal})
+        G = graph.from_pose(T_goal)
         F = adjacency_matrix_from_graph(G)
 
         # lb, ub = bound_smoothing(G)  # get lower and upper distance bounds for init

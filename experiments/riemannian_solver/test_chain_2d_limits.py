@@ -54,7 +54,7 @@ def random_problem_2d_chain():
         for name in goals.keys():
             align_ind.append(graph.node_ids.index(name))
 
-        G = graph.complete_from_pos(goals)
+        G = graph.from_pos(goals)
         lb, ub = bound_smoothing(G)  # will take goals and jli
         F = adjacency_matrix_from_graph(G)
 
