@@ -37,7 +37,7 @@ def solve_random_problem(graph: ProblemGraph, solver: RiemannianSolver):
     X_rand = pos_from_graph(G_rand)
     X_init = X_rand
 
-    G = graph.complete_from_pos(goals)
+    G = graph.from_pos(goals)
     lb, ub = bound_smoothing(G)
     F = adjacency_matrix_from_graph(G)
 

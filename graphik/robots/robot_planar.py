@@ -58,9 +58,7 @@ class RobotPlanar(Robot):
                 T[node] = fk_tree_2d(self.l, q0, q0, path_nodes)
         return T
 
-    def pose(
-        self, joint_angles: Dict[str, float], query_node: Union[List[str], str]
-    ) -> Union[Dict[str, SE2], SE2]:
+    def pose(self, joint_angles: Dict[str, float], query_node: str) -> SE2:
         """
         Returns an SE2 element corresponding to the location
         of the query_node in the configuration determined by
@@ -101,7 +99,6 @@ class RobotPlanar(Robot):
             J[node] = np.zeros([3, self.n])
             J[node][:, : len(J_i)] = np.column_stack(J_i)
         return J
-
 
     def jacobian_cost(self, joint_angles: dict, ee_goals) -> np.ndarray:
         """
@@ -208,6 +205,7 @@ if __name__ == "__main__":
     # print(robot.jacobian(q, ["p9"]))
 
     from graphik.graphs.graph_planar import ProblemGraphPlanar
+
     graph = ProblemGraphPlanar(robot)
     # print(graph.directed.nodes(data=True))
     # print(graph.directed.edges(data=True))

@@ -44,7 +44,7 @@ class TestBoundSmoothing(unittest.TestCase):
             D_goal = graph.distance_matrix_from_joints(q_goal)
 
             goals = {f"p{n-1}": X_goal[-2, :], f"p{n}": X_goal[-1, :]}
-            G = graph.complete_from_pos(goals)
+            G = graph.from_pos(goals)
 
             lb, ub = bound_smoothing(G)
             self.assertIsNone(
@@ -86,7 +86,7 @@ class TestBoundSmoothing(unittest.TestCase):
             for idx, ee_pair in enumerate(robot.end_effectors):
                 goals[ee_pair] = robot.pose(q_goal, ee_pair).trans
 
-            G = graph.complete_from_pos(goals)
+            G = graph.from_pos(goals)
 
             lb, ub = bound_smoothing(G)
             self.assertIsNone(
@@ -104,7 +104,7 @@ class TestBoundSmoothing(unittest.TestCase):
             D_goal = graph.distance_matrix_from_joints(q_goal)
             T_goal = robot.pose(q_goal, "p" + str(robot.n))
 
-            G = graph.complete_from_pos(
+            G = graph.from_pos(
                 {f"p{robot.n}": T_goal.trans, f"q{robot.n}": T_goal.dot(trans_axis(1, "z")).trans}
             )
             lb, ub = bound_smoothing(G)

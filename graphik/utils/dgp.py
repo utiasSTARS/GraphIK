@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from typing import List
 import numpy as np
 import networkx as nx
 import math
@@ -46,13 +47,12 @@ def distance_matrix_from_graph(G: nx.Graph, label=DIST, nonedge=0) -> ArrayLike:
     if isinstance(G, nx.DiGraph):
         G = G.to_undirected(as_view=True)
 
-    selected_edges = [(u, v) for u, v, d in G.edges(data=True) if label in d]
-    return (
-        nx.to_numpy_array(G.edge_subgraph(selected_edges), weight=DIST, nonedge=nonedge)
-        ** 2
-    )
+    return nx.to_numpy_array(G, weight=DIST, nonedge=nonedge) ** 2
 
-def adjacency_matrix_from_graph(G: nx.Graph, label: str = DIST, nodelist: list = None) -> ArrayLike:
+
+def adjacency_matrix_from_graph(
+    G: nx.Graph, label: str = DIST, nodelist: List = None
+) -> ArrayLike:
     """
     Returns the adjacency matrix of the graph, but only for edges with label.
     :returns: Adjacency matrix
@@ -61,7 +61,9 @@ def adjacency_matrix_from_graph(G: nx.Graph, label: str = DIST, nodelist: list =
         G = G.to_undirected(as_view=True)
 
     selected_edges = [(u, v) for u, v, d in G.edges(data=True) if label in d]
-    return nx.to_numpy_array(G.edge_subgraph(selected_edges), weight="", nodelist=nodelist)
+    return nx.to_numpy_array(
+        G.edge_subgraph(selected_edges), weight="", nodelist=nodelist
+    )
 
 
 def pos_from_graph(G: nx.DiGraph, node_ids=None) -> ArrayLike:
@@ -120,18 +122,21 @@ def graph_from_pos_dict(P: dict, dist=True) -> nx.DiGraph:
     return G
 
 
-def graph_complete_edges(G: nx.DiGraph, overwrite = False) -> nx.DiGraph:
+def graph_complete_edges(G: nx.DiGraph, overwrite=False) -> nx.DiGraph:
     """
     Given a graph with some defined node positions, calculate all possible distances.
     :param G: Graph with some unknown edges
     :returns: Graph with all known edges
     """
+    # FIXME can still be broken by messing up edges in source graph
     pos = nx.get_node_attributes(G, POS)  # known positions
     dst = nx.get_edge_attributes(G, DIST)  # known distances
 
     for idx, u in enumerate(pos.keys()):
         for jdx, v in enumerate(pos.keys()):
-            if (jdx > idx) and (((v, u) not in dst) or overwrite):
+            if (jdx > idx) and (
+                (((v, u) not in dst) and ((u, v) not in dst)) or overwrite
+            ):
                 d = np.linalg.norm(pos[u] - pos[v])
                 G.add_edges_from(
                     [
@@ -156,7 +161,7 @@ def factor(A: ArrayLike):
 
 
 ## perform classic Multidimensional scaling
-def MDS(B: ArrayLike, eps: float=1e-5):
+def MDS(B: ArrayLike, eps: float = 1e-5):
     n = B.shape[0]
     x = factor(B)
     (evals, evecs) = np.linalg.eigh(x)
@@ -245,13 +250,14 @@ def bound_smoothing(G: nx.DiGraph) -> tuple:
 
     return lower_bounds, upper_bounds
 
-def normalize_positions(Y: ArrayLike, scale = False):
+
+def normalize_positions(Y: ArrayLike, scale=False):
     Y_c = Y - Y.mean(0)
     C = Y_c.T.dot(Y_c)
     e, v = np.linalg.eig(C)
     Y_cr = Y_c.dot(v)
     if scale:
-        Y_crs = Y_cr/(1/abs(Y_cr).max())
+        Y_crs = Y_cr / (1 / abs(Y_cr).max())
         return Y_crs
     else:
         return Y_cr

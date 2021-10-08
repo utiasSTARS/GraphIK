@@ -83,7 +83,7 @@ class RobotSphericalGraph(ProblemGraph):
         for name in self.base:
             P[name] = self.base.nodes[name][POS]
 
-        return self.complete_from_pos(P)
+        return self.from_pos(P)
 
     def complete_from_pose_goal(self, pose_goals):
         pos = {}
@@ -94,4 +94,4 @@ class RobotSphericalGraph(ProblemGraph):
             pos[ee[0]] = T_goal.trans
             pos[ee[1]] = T_goal.trans - z * d
 
-        return self.complete_from_pos(pos)
+        return self.from_pos(pos)

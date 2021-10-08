@@ -240,21 +240,13 @@ class ProblemGraphRevolute(ProblemGraph):
 
         self.limited_joints = limited_joints
 
-
-    def realization(self, joint_angles: Dict[str, float]) -> nx.DiGraph:
-        """
-        Given a dictionary of joint variables generate a representative graph.
-        This graph will be fully connected.
-        """
-
-        axis_length = self.axis_length
-        T_all = self.robot.get_all_poses(joint_angles)
-
-        P = {}
-        for node, T in T_all.items():
-            P[node] = T.trans
-            P["q" + node[1:]] = T.dot(trans_axis(axis_length, "z")).trans
-        return self.complete_from_pos(P)
+    def _pose_goal(self, T_goal: Dict[str, SE3]) -> Dict[str, ArrayLike]:
+        pos = {}
+        for u, T_goal_u in T_goal.items():
+            v = AUX_PREFIX + u[1:]
+            pos[u] = T_goal_u.trans
+            pos[v] = T_goal_u.dot(trans_axis(self.axis_length, "z")).trans
+        return pos
 
     def joint_variables(
         self, G: nx.DiGraph, T_final: Dict[str, SE3] = None
@@ -433,6 +425,9 @@ if __name__ == "__main__":
     robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
     graph = ProblemGraphRevolute(robot)
     print(graph.nodes(data=True))
+    print(graph.base_nodes)
+    print(graph.structure_nodes)
+    print(graph.end_effector_nodes)
     # import timeit
 
     # print(

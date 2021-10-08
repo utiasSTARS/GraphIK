@@ -18,7 +18,7 @@ class RobotRevolute(Robot):
         # Use frame poses at zero conf if provided, otherwise find using DH
         if "T_zero" in params:
             T_zero = params["T_zero"]
-        elif all (k in params for k in ("a", "d", "alpha", "theta", "modified_dh")):
+        elif all(k in params for k in ("a", "d", "alpha", "theta", "modified_dh")):
             T_zero = self.from_dh_params(params)
         else:
             raise Exception("Robot description not provided.")
@@ -48,9 +48,7 @@ class RobotRevolute(Robot):
                         self.nodes[pred]["T0"].inv().dot(self.nodes[cur]["T0"])
                     )
 
-    def pose(
-        self, joint_angles: Dict[str, float], query_node: Union[List[str], str]
-    ) -> Union[Dict[str, SE3], SE3]:
+    def pose(self, joint_angles: Dict[str, float], query_node: str) -> SE3:
         """
         Given a list of N joint variables, calculate the Nth joint's pose.
 
@@ -107,7 +105,13 @@ class RobotRevolute(Robot):
 
     def from_dh_params(self, params):
 
-        a, d, al, th, modified_dh = (params["a"], params["d"], params["alpha"], params["theta"],params["modified_dh"])
+        a, d, al, th, modified_dh = (
+            params["a"],
+            params["d"],
+            params["alpha"],
+            params["theta"],
+            params["modified_dh"],
+        )
         a = a if type(a) is dict else list_to_variable_dict(flatten([a]))
         d = d if type(d) is dict else list_to_variable_dict(flatten([d]))
         al = al if type(al) is dict else list_to_variable_dict(flatten([al]))

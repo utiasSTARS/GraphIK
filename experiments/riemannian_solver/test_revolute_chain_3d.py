@@ -17,7 +17,7 @@ def solve_random_problem(graph: ProblemGraphRevolute, solver: RiemannianSolver):
     lb, ub = bound_smoothing(G)
     omega = adjacency_matrix_from_graph(G)
 
-    Y_init = pos_from_graph(graph.realization(graph.robot.zero_configuration()))
+    # Y_init = pos_from_graph(graph.realization(graph.robot.zero_configuration()))
     # sol_info = solver.solve(D_goal, omega, use_limits=False, Y_init=Y_init)
     sol_info = solver.solve(D_goal, omega, use_limits=False, bounds=(lb, ub))
     Y = sol_info["x"]

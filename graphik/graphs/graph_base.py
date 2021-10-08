@@ -1,14 +1,20 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
+from liegroups.numpy.se2 import SE2Matrix
+from liegroups.numpy.se3 import SE3Matrix
 
 import networkx as nx
+from networkx.classes.function import restricted_view
 import numpy as np
 import numpy.linalg as la
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Union
 from numpy.typing import ArrayLike
-from graphik.robots.robot_base import Robot
-from graphik.utils import *
-from numpy import cos, pi, sqrt
-
+from graphik.robots.robot_base import Robot, SEMatrix
+from graphik.utils.constants import *
+from graphik.utils import (
+    distance_matrix_from_graph,
+    adjacency_matrix_from_graph,
+    graph_complete_edges,
+)
 
 class ProblemGraph(nx.DiGraph):
     """
@@ -49,6 +55,19 @@ class ProblemGraph(nx.DiGraph):
             return self._structure_nodes
 
     @property
+    def end_effector_nodes(self) -> List[str]:
+        """
+        :returns: List of nodes in this graph belonging to the end effector
+        """
+        try:
+            return self._end_effector_nodes
+        except AttributeError:
+            self._end_effector_nodes = [
+                node for node, data in self.nodes(data=TYPE) if END_EFFECTOR in data
+            ]
+            return self._end_effector_nodes
+
+    @property
     def base(self) -> nx.DiGraph:
         return self.to_directed(as_view=True).subgraph(self.base_nodes)
 
@@ -84,31 +103,12 @@ class ProblemGraph(nx.DiGraph):
         """
         return list(self.nodes())
 
-    @abstractmethod
-    def realization(self, joint_angles: Dict[str, Any]) -> nx.DiGraph:
-        """
-        Given a set of joint angles, return a graph realization in R^dim.
-        :param x: Decision variables (revolute joints, prismatic joints)
-        :returns: Graph with node locations stored in the [POS]
-        atribute and edge weights corresponding to distances between the nodes.
-        """
-        raise NotImplementedError
-
     def distance_matrix(self) -> ArrayLike:
         """
         Returns a partial distance matrix of known distances in the problem graph.
         :returns: Distance matrix
         """
         return distance_matrix_from_graph(self.to_undirected(as_view=True))
-
-    def distance_matrix_from_joints(self, joint_angles: ArrayLike) -> ArrayLike:
-        """
-        Given a set of joint angles, return a matrix whose element
-        [idx,jdx] corresponds to the squared distance between nodes idx and jdx.
-        :param x: Decision variables (revolute joints, prismatic joints)
-        :returns: Matrix of squared distances
-        """
-        return distance_matrix_from_graph(self.realization(joint_angles))
 
     def adjacency_matrix(self) -> ArrayLike:
         """
@@ -118,7 +118,26 @@ class ProblemGraph(nx.DiGraph):
         """
         return adjacency_matrix_from_graph(self.to_undirected(as_view=True))
 
-    def complete_from_pos(
+
+    def add_anchor_node(self, name: str, data: Dict[str, Any]):
+        """
+        Adds a node with a known position to the problem graph, connecting
+        it to all other nodes with known positions.
+        :returns: Adjacency matrix
+        """
+        if POS not in data:
+            raise KeyError("Node needs to gave a position to be added.")
+
+        self.add_nodes_from([(name, data)])
+        for nname, ndata in self.nodes(data=True):
+            if POS in ndata and nname != name:
+                self.add_edge(nname, name)
+                self[nname][name][DIST] = la.norm(ndata[POS] - data[POS])
+                self[nname][name][LOWER] = la.norm(ndata[POS] - data[POS])
+                self[nname][name][UPPER] = la.norm(ndata[POS] - data[POS])
+                self[nname][name][BOUNDED] = []
+
+    def from_pos(
         self, P: Dict, dist: bool = True, overwrite=False
     ) -> nx.DiGraph:
         """
@@ -134,7 +153,7 @@ class ProblemGraph(nx.DiGraph):
         G = self.to_directed()  # copy of the original object
 
         for name, pos in P.items():
-            if name in self.node_ids:
+            if name in G:
                 G.nodes[name][POS] = pos
 
         if dist:
@@ -142,18 +161,16 @@ class ProblemGraph(nx.DiGraph):
 
         return G
 
-    def add_anchor_node(self, name: str, data: Dict[str, Any]):
-        if POS not in data:
-            raise KeyError("Node needs to gave a position to be added.")
+    @abstractmethod
+    def _pose_goal(self, T_goal: Dict[str, SEMatrix]) -> Dict[str, ArrayLike]:
+        raise NotImplementedError
 
-        self.add_nodes_from([(name, data)])
-        for nname, ndata in self.nodes(data=True):
-            if POS in ndata and nname != name:
-                self.add_edge(nname, name)
-                self[nname][name][DIST] = la.norm(ndata[POS] - data[POS])
-                self[nname][name][LOWER] = la.norm(ndata[POS] - data[POS])
-                self[nname][name][UPPER] = la.norm(ndata[POS] - data[POS])
-                self[nname][name][BOUNDED] = []
+    def from_pose(self, T_goal: Union[SEMatrix, Dict[str, SEMatrix]]) -> nx.DiGraph:
+
+        if isinstance(T_goal, (SE2Matrix, SE3Matrix)):
+            T_goal = {self.robot.end_effectors[0]: T_goal}
+
+        return self.from_pos(self._pose_goal(T_goal))
 
     def add_spherical_obstacle(self, name: str, position: ArrayLike, radius: float):
         # Add a fixed node representing the obstacle to the graph
@@ -220,8 +237,9 @@ class ProblemGraph(nx.DiGraph):
         """
         Generates a matrices of distance bounds induced by joint variables.
         """
-        L = np.zeros([self.n_nodes, self.n_nodes])  # fake distance matrix
-        U = np.zeros([self.n_nodes, self.n_nodes])  # fake distance matrix
+        n_nodes = self.number_of_nodes()
+        L = np.zeros([n_nodes, n_nodes])  # fake distance matrix
+        U = np.zeros([n_nodes, n_nodes])  # fake distance matrix
         for e1, e2, data in self.edges(data=True):
             if BOUNDED in data:
                 udx = self.node_ids.index(e1)
@@ -233,3 +251,22 @@ class ProblemGraph(nx.DiGraph):
                     U[udx, vdx] = data[UPPER] ** 2
                     U[vdx, udx] = U[udx, vdx]
         return L, U
+
+    def realization(self, joint_angles: Dict[str, float]) -> nx.DiGraph:
+        """
+        Given a set of joint angles, return a graph realization in R^dim.
+        :param x: Decision variables (revolute joints, prismatic joints)
+        :returns: Graph with node locations stored in the [POS]
+        atribute and edge weights corresponding to distances between the nodes.
+        """
+        T_all = self.robot.get_all_poses(joint_angles)
+        return self.from_pos(self._pose_goal(T_all))
+
+    def distance_matrix_from_joints(self, joint_angles: ArrayLike) -> ArrayLike:
+        """
+        Given a set of joint angles, return a matrix whose element
+        [idx,jdx] corresponds to the squared distance between nodes idx and jdx.
+        :param x: Decision variables (revolute joints, prismatic joints)
+        :returns: Matrix of squared distances
+        """
+        return distance_matrix_from_graph(self.realization(joint_angles))
