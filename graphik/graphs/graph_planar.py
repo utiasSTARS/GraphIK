@@ -25,11 +25,6 @@ class ProblemGraphPlanar(ProblemGraph):
         self.set_limits()
         self.root_angle_limits()
 
-        # induce a graph of non-edges?
-        # print(list(nx.non_edges(self)))
-        # for u, v in nx.non_edges(self):
-        #     self.add_edge(u,v)
-
     def base_subgraph(self) -> nx.DiGraph:
         base = nx.DiGraph([("p0", "x"), ("p0", "y"), ("x", "y")])
 
@@ -178,18 +173,30 @@ class ProblemGraphPlanar(ProblemGraph):
 
 def main():
 
+    import time
     n = 4
     a = list_to_variable_dict(np.ones(n))
     params = {"link_lengths": a, "num_joints": n}
 
     robot = RobotPlanar(params)
     graph = ProblemGraphPlanar(robot)
-    print(robot.pose(robot.random_configuration(), "p4"))
+    # print(robot.pose(robot.random_configuration(), "p4"))
     # print(graph.base_nodes)
     # print(graph.structure_nodes)
     # print(graph.end_effector_nodes)
     # print(graph.edges())
     # print(graph.nodes(data="type"))
+    #
+    t = []
+    for idx in range(1000):
+        t0 = time.time()
+        graph.structure
+        t1 = time.time() - t0
+        t += [t1]
+
+    print(np.median(np.array(t)))
+    print(np.mean(np.array(t)))
+    print(np.std(np.array(t)))
     # graph = RobotPlanarGraph(incoming_graph_data=robot)
     # def base_subgraph_filter_node(n1):
     #     if BASE in graph.nodes[n1][TYPE]:

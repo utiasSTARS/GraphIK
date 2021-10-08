@@ -153,7 +153,7 @@ class ProblemGraph(nx.DiGraph):
         G = self.to_directed()  # copy of the original object
 
         for name, pos in P.items():
-            if name in self.node_ids:
+            if name in G:
                 G.nodes[name][POS] = pos
 
         if dist:
@@ -251,16 +251,6 @@ class ProblemGraph(nx.DiGraph):
                     U[udx, vdx] = data[UPPER] ** 2
                     U[vdx, udx] = U[udx, vdx]
         return L, U
-
-    # @abstractmethod
-    # def realization(self, joint_angles: Dict[str, Any]) -> nx.DiGraph:
-    #     """
-    #     Given a set of joint angles, return a graph realization in R^dim.
-    #     :param x: Decision variables (revolute joints, prismatic joints)
-    #     :returns: Graph with node locations stored in the [POS]
-    #     atribute and edge weights corresponding to distances between the nodes.
-    #     """
-    #     raise NotImplementedError
 
     def realization(self, joint_angles: Dict[str, float]) -> nx.DiGraph:
         """
