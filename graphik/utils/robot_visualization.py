@@ -1,10 +1,11 @@
+from typing import Union
 import numpy as np
 from matplotlib import pyplot as plt
 
 # from matplotlib.cbook import get_sample_data
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from matplotlib import rc, cm
-from graphik.robots.robot_base import RobotRevolute
+from graphik.robots import RobotRevolute, RobotPlanar
 import matplotlib as mpl
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -92,7 +93,7 @@ def get_tree_paths(parent_nodes):
 
 
 def plot_planar_manipulator_robot(
-    robot,
+    robot: Union[RobotPlanar, RobotRevolute],
     config,
     fig_handle=None,
     ax_handle=None,
@@ -111,14 +112,14 @@ def plot_planar_manipulator_robot(
     joint_y = []
 
     for i in range(robot.n + 1):
-        joint_x += [robot.get_pose(config, "p" + str(i)).trans[0]]
-        joint_y += [robot.get_pose(config, "p" + str(i)).trans[1]]
+        joint_x += [robot.pose(config, "p" + str(i)).trans[0]]
+        joint_y += [robot.pose(config, "p" + str(i)).trans[1]]
     joint_x = np.array(joint_x)
     joint_y = np.array(joint_y)
 
-    for joint in list(robot.parents.keys()):
+    for joint in robot:
         i1 = int(joint[1:])
-        for child in robot.parents[joint]:
+        for child in robot.successors(joint):
             i2 = int(child[1:])
 
             ax_handle.plot(
@@ -134,8 +135,8 @@ def plot_planar_manipulator_robot(
                 alpha=alpha,
             )
 
-    plt.xlim([joint_x.min() - 0.125, joint_x.max() + 0.125])
-    plt.ylim([joint_y.min() - 0.125, joint_y.max() + 0.125])
+    # plt.xlim([joint_x.min() - 0.125, joint_x.max() + 0.125])
+    # plt.ylim([joint_y.min() - 0.125, joint_y.max() + 0.125])
     ax_handle.set_aspect("equal", adjustable="box")
 
     return True
