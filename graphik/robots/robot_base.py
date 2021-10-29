@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
+import numpy as np
+import networkx as nx
+
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Union, Tuple
 from numpy.typing import ArrayLike
+from graphik.utils import list_to_variable_dict, flatten
+from graphik.utils.constants import ROOT
 
-import networkx as nx
-from graphik.utils import *
+# from graphik.utils import *
 from liegroups.numpy import SE2, SE3
 from math import pi
 

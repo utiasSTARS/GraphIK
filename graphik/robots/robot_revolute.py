@@ -4,7 +4,9 @@ from numpy.typing import ArrayLike
 import networkx as nx
 import numpy as np
 from graphik.robots.robot_base import Robot, SEMatrix
-from graphik.utils import *
+from graphik.utils import list_to_variable_dict, flatten, fk_3d, modified_fk_3d, cross_symb
+from graphik.utils.constants import ROOT, TRANSFORM, MAIN_PREFIX
+# from graphik.utils import *
 
 from liegroups.numpy import SE3
 

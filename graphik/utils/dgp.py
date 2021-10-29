@@ -59,7 +59,6 @@ def adjacency_matrix_from_graph(
     """
     if isinstance(G, nx.DiGraph):
         G = G.to_undirected(as_view=True)
-
     selected_edges = [(u, v) for u, v, d in G.edges(data=True) if label in d]
     return nx.to_numpy_array(
         G.edge_subgraph(selected_edges), weight="", nodelist=nodelist
