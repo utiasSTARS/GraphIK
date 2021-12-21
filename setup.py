@@ -16,7 +16,7 @@ setup(
         "sympy >= 1.5",
         "matplotlib >= 3.1",
         "cvxpy >= 1.1.0a1",
-        "networkx == 2.2",
+        "networkx >= 2.2",
         "pymanopt >= 0.2.5",
         "progress",
         "urdfpy @ git+ssh://git@github.com/utiasSTARS/urdfpy@master#egg=urdfpy",
