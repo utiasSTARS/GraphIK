@@ -30,15 +30,18 @@ class RobotPlanar(Robot):
         self.set_geometric_attributes()
 
     def set_geometric_attributes(self):
-        end_effectors = self.end_effectors
-        kinematic_map = self.kinematic_map
 
-        for ee in end_effectors:
-            k_map = kinematic_map[ROOT][ee]
+        for ee in self.end_effectors:
+            k_map = self.kinematic_map[ROOT][ee]
             for idx in range(len(k_map)):
 
                 # Twists representing rotation axes as node attributes
                 cur = k_map[idx]
+                # omega = self.nodes[cur]["T0"].as_matrix()[:3, 2]
+                omega = np.array([0,0,1])
+                # q = self.nodes[cur]["T0"].as_matrix()[:3, 3]
+                q = np.hstack((self.nodes[cur]["T0"].as_matrix()[:2, 2], 0))
+                self.nodes[cur]["S"] = np.hstack((np.cross(-omega, q), omega))[[0,1,5]]
 
                 # Relative transforms between coordinate frames as edge attributes
                 if idx != 0:
@@ -46,6 +49,24 @@ class RobotPlanar(Robot):
                     self[pred][cur][TRANSFORM] = (
                         self.nodes[pred]["T0"].inv().dot(self.nodes[cur]["T0"])
                     )
+
+    # def set_geometric_attributes(self):
+    #     end_effectors = self.end_effectors
+    #     kinematic_map = self.kinematic_map
+
+    #     for ee in end_effectors:
+    #         k_map = kinematic_map[ROOT][ee]
+    #         for idx in range(len(k_map)):
+
+    #             # Twists representing rotation axes as node attributes
+    #             cur = k_map[idx]
+
+    #             # Relative transforms between coordinate frames as edge attributes
+    #             if idx != 0:
+    #                 pred = k_map[idx - 1]
+    #                 self[pred][cur][TRANSFORM] = (
+    #                     self.nodes[pred]["T0"].inv().dot(self.nodes[cur]["T0"])
+    #                 )
 
     def from_params(self):
         self.l = self.params["link_lengths"]
@@ -58,22 +79,77 @@ class RobotPlanar(Robot):
                 T[node] = fk_tree_2d(self.l, q0, q0, path_nodes)
         return T
 
-    def pose(self, joint_angles: Dict[str, float], query_node: str) -> SE2:
+    def pose(self, joint_angles: Dict[str, float], query_node: str) -> SE3:
         """
-        Returns an SE2 element corresponding to the location
-        of the query_node in the configuration determined by
-        node_inputs.
-        """
-        if query_node == "p0":
-            return SE2.identity()
+        Given a list of N joint variables, calculate the Nth joint's pose.
 
-        path_nodes = self.kinematic_map["p0"][query_node][1:]
-        q = np.asarray([joint_angles[node] for node in path_nodes])
-        l = np.asarray([self.l[node] for node in path_nodes])
-        th = np.asarray([0 for node in path_nodes])
-        return fk_2d(l, th, q)
+        :param node_inputs: joint variables node names as keys mapping to values
+        :param query_node: node ID of node whose pose we want
+        :returns: SE2 or SE3 pose
+        :rtype: lie.SE3Matrix
+        """
+        # TODO support multiple query nodes
+        # TODO avoid for loop by vectorizing matrix exponential
+        kinematic_map = self.kinematic_map[ROOT][query_node]
+        T = self.nodes[ROOT]["T0"]
+        for idx in range(len(kinematic_map) - 1):
+            pred, cur = kinematic_map[idx], kinematic_map[idx + 1]
+            T = T.dot(SE2.exp(self.nodes[pred]["S"] * joint_angles[cur]))
+        T = T.dot(self.nodes[query_node]["T0"])
+
+        return T
+
+    # def pose(self, joint_angles: Dict[str, float], query_node: str) -> SE2:
+    #     """
+    #     Returns an SE2 element corresponding to the location
+    #     of the query_node in the configuration determined by
+    #     node_inputs.
+    #     """
+    #     if query_node == "p0":
+    #         return SE2.identity()
+
+    #     path_nodes = self.kinematic_map["p0"][query_node][1:]
+    #     q = np.asarray([joint_angles[node] for node in path_nodes])
+    #     l = np.asarray([self.l[node] for node in path_nodes])
+    #     th = np.asarray([0 for node in path_nodes])
+    #     return fk_2d(l, th, q)
 
     def jacobian(
+        self,
+        joint_angles: Dict[str, float],
+        query_nodes: Union[List[str], str],
+    ) -> Dict[str, ArrayLike]:
+        """
+        Calculate the robot's Jacobian for all end-effectors.
+
+        :param joint_angles: dictionary describing the current joint configuration
+        :param query_nodes: list of nodes that the Jacobian should be computed for
+        :return: dictionary of Jacobians indexed by relevant node
+        """
+        kinematic_map = self.kinematic_map[ROOT]  # get map to all nodes from root
+
+        # find end-effector nodes
+        if query_nodes is None:
+            query_nodes = self.end_effectors
+
+        J = {}
+        for node in query_nodes:  # iterate through nodes
+            path = kinematic_map[node]  # find joints that move node
+            T = self.nodes[ROOT]["T0"]
+
+            J[node] = np.zeros([3, self.n])
+            for idx in range(len(path) - 1):
+                pred, cur = path[idx], path[idx + 1]
+                if idx == 0:
+                    J[node][:, idx] = self.nodes[pred]["S"]
+                else:
+                    ppred = list(self.predecessors(pred))[0]
+                    T = T.dot(SE2.exp(self.nodes[ppred]["S"] * joint_angles[pred]))
+                    Ad = T.adjoint()
+                    J[node][:, idx] = Ad.dot(self.nodes[pred]["S"])
+        return J
+
+    def jacobian_old(
         self, joint_angles: Dict[str, float], nodes: Union[List[str], str] = None
     ) -> Dict[str, ArrayLike]:
         kinematic_map = self.kinematic_map["p0"]  # get map to all nodes from root
@@ -211,5 +287,7 @@ if __name__ == "__main__":
     # print(graph.directed.edges(data=True))
     G = graph.realization(q)
     q_ = graph.joint_variables(G)
-    print(q)
-    print(q_)
+    # print(q)
+    # print(q_)
+    print(robot.jacobian(q, robot.end_effectors))
+    print(robot.jacobian_old(q, robot.end_effectors))

@@ -50,7 +50,6 @@ def random_problem_2d_chain():
 
         # goals = {p"f{n}": X_goal[-1, :]} # position goal
         # G = graph.from_pos(goals)
-        # G = graph.from_pose_goal({f"p{n}": T_goal})
         G = graph.from_pose(T_goal)
         F = adjacency_matrix_from_graph(G)
 
@@ -65,17 +64,12 @@ def random_problem_2d_chain():
         G_e = graph_from_pos(P_e, graph.node_ids)
 
         q_sol = graph.joint_variables(G_e)
-        # G_sol = graph.realization(q_sol)
-        # D_sol = graph.distance_matrix_from_joints(q_sol)
 
         T_riemannian = robot.pose(q_sol, "p" + f"{robot.n}")
         err_riemannian = T_goal.dot(T_riemannian.inv()).log()
         err_riemannian_pos = np.linalg.norm(T_goal.trans - T_riemannian.trans)
         err_riemannian_rot = np.linalg.norm(err_riemannian[2:])
-        # print(robot.get_pose(q_sol, f"p{n}").trans - T_goal.trans)
-        # print(robot.get_pose(q_sol, f"p{n}").trans - T_goal.trans)
-        # e_D = F * (np.sqrt(D_sol) - np.sqrt(D_goal))
-        # e_sol += [abs(max(e_D.min(), e_D.max(), key=abs))]
+
         e_rot += [err_riemannian_rot]
         e_pos += [err_riemannian_pos]
         if err_riemannian_pos > 0.01 or err_riemannian_rot > 0.01:

@@ -1,24 +1,25 @@
+from graphik.utils.geometry import skew
 import graphik
 import numpy as np
-import time
 import networkx as nx
-import numpy.typing as npt
-from typing import Dict, List, Any
+from numpy.typing import ArrayLike
+from typing import Dict, List, Any, Union
 from scipy.optimize import minimize
-from liegroups.numpy import SE3
+from liegroups.numpy import SE3, SO3, SE2, SO2
 from numpy import pi
 from graphik.utils.roboturdf import RobotURDF
+from graphik.utils.constants import *
 from graphik.graphs.graph_base import ProblemGraph
-from graphik.utils import *
+from graphik.utils.utils import list_to_variable_dict
+from graphik.utils.roboturdf import load_kuka, load_ur10
 
-TOL = 1e-10
-
-class JointAngleSolver:
+class LocalSolver:
     def __init__(self, robot_graph: ProblemGraph, params: Dict["str", Any]):
         self.graph = robot_graph
         self.robot = robot_graph.robot
         self.k_map = self.robot.kinematic_map[ROOT]  # get map to all nodes from root
-        self.W = params["W"]
+        self.n = self.robot.n
+        self.dim = self.graph.dim
 
         # create obstacle constraints
         typ = nx.get_node_attributes(self.graph, name=TYPE)
@@ -27,60 +28,60 @@ class JointAngleSolver:
             if "below" in data[BOUNDED]:
                 if typ[u] == ROBOT and typ[v] == OBSTACLE and u != ROOT:
                     pairs += [(u, v)]
+        self.m = len(pairs)
         self.g = []
         if len(pairs) > 0:
             fun = self.gen_obstacle_constraints(pairs)
             jac = self.gen_obstacle_constraint_gradient(pairs)
             self.g = [{"type": "ineq", "fun": fun, "jac": jac}]
+            # self.g = [{"type": "ineq", "fun": fun}]
 
-
-    # OPTION A
-    def gen_cost_and_grad_ee(self, point: str, T_goal: SE3):
-        # R_goal = T_goal.rot
+    def gen_objective_ee(self, point: str, T_goal: Union[SE3, SE2]):
         joints = self.k_map[point][1:]
+        n = len(joints)
 
-        def cost(q: npt.ArrayLike):
-            q_dict = {joints[idx]: q[idx] for idx in range(len(joints))}
-            # T_all = self.robot.get_all_poses(q_dict)
-            # R = T_all[point].rot
-            # e_p = T_goal.trans - T_all[point].trans
+        if self.dim==3:
+            log = SE3.log
+        else:
+            log = SE2.log
 
-            # COST 1 body linear + rotation error
-            # e_o = 0.5 * (
-            #     np.cross(R[0:3, 0], R_goal[0:3, 0])
-            #     + np.cross(R[0:3, 1], R_goal[0:3, 1])
-            #     +np.cross(R[0:3, 2], R_goal[0:3, 2])
-            # )
-            # L = -0.5*(
-            #     # skew(R_goal[0:3, 0])@skew(R[0:3, 0])
-            #     # + skew(R_goal[0:3, 1])@skew(R[0:3, 1])
-            #     + skew(R_goal.as_matrix()[0:3, 2])@skew(R.as_matrix()[0:3, 2]))
-            # J[point] = np.block([[np.eye(3), np.zeros((3,3))], [np.zeros((3,3)), L]])@J[point]
-            # e_o = np.cross(R.as_matrix()[0:3, 2], R_goal.as_matrix()[0:3, 2])
+        def objective(q: ArrayLike):
+            q_dict = {joints[idx]: q[idx] for idx in range(n)}
+            T = self.robot.pose(q_dict, point)
+            e = log(T.inv().dot(T_goal)) # body frame
+            return e.T @ e
 
-            # COST 2 body linear + partial rotation error
-            # v = np.cross(R.as_matrix()[0:3, 2], R_goal.as_matrix()[0:3, 2])
-            # s = np.linalg.norm(v)
-            # c = R.as_matrix()[0:3, 2]@R_goal.as_matrix()[0:3, 2]
-            # R = np.eye(3) + skew(v) + (skew(v)@skew(v))*((1-c)/s**2)
-            # e_o = SO3(R).log()
-            # e = np.hstack([e_p, e_o])
-            # J = self.robot.get_jacobian(q_dict, [point], T_all)
+        return objective
 
-            # COST 3 screw-based loss
+
+    def gen_grad_ee(self, point: str, T_goal: SE3):
+        joints = self.k_map[point][1:]
+        n = len(joints)
+
+        if self.dim==3:
+
+
+            log = SE3.log
+            inv_left_jacobian = SE3.inv_left_jacobian
+        else:
+            log = SE2.log
+            inv_left_jacobian = SE2.inv_left_jacobian
+
+        def gradient(q: ArrayLike):
+            # gradient of objective
+            q_dict = {joints[idx]: q[idx] for idx in range(n)}
             T = self.robot.pose(q_dict, point)
             J = self.robot.jacobian(q_dict, [point])
-            e = T.inv().dot(T_goal).log()
-            Ad = T.adjoint()
-            e = Ad.dot(e)
-
-            jac = -2 * J[point].T @ e
-            return e.T @ e, jac
-
-        return cost
+            del_T =T.inv().dot(T_goal)
+            e = log(del_T) # body frame
+            J_e = inv_left_jacobian(e)
+            J[point] = J_e @ T.inv().adjoint() @ J[point]
+            jac = -2 * J[point].T  @ e
+            return jac
+        return gradient
 
     def gen_obstacle_constraints(self, pairs: list):
-        def obstacle_constraint(q: npt.ArrayLike):
+        def obstacle_constraint(q: ArrayLike):
             q_dict = list_to_variable_dict(q)
             T_all = self.robot.get_all_poses(q_dict)
 
@@ -95,10 +96,20 @@ class JointAngleSolver:
         return obstacle_constraint
 
     def gen_obstacle_constraint_gradient(self, pairs: list):
-        ZZ = np.zeros([6,6])
-        ZZ[:3,:3] = np.eye(3)
-        ZZ[3:,3:] = np.eye(3)
-        def obstacle_gradient(q: npt.ArrayLike):
+        if self.dim==3:
+            dim = 3
+            ZZ = np.zeros([6,6])
+            ZZ[:3,:3] = np.eye(3)
+            ZZ[3:,3:] = np.eye(3)
+            wedge = SO3.wedge
+        else:
+            dim = 2
+            ZZ = np.zeros([4,4])
+            ZZ[:2,:2] = np.eye(2)
+            ZZ[2:,2:] = np.eye(2)
+            wedge = SO2.wedge
+
+        def obstacle_gradient(q: ArrayLike):
             q_dict = list_to_variable_dict(q)
             T_all = self.robot.get_all_poses(q_dict)
             J_all = self.robot.jacobian(q_dict, list(q_dict.keys()))
@@ -106,115 +117,114 @@ class JointAngleSolver:
             jac = []
             for robot_node, obs_node in pairs:
                 R = T_all[robot_node].rot.as_matrix()
-                ZZ[:3,3:] = R.dot(SO3.wedge(T_all[robot_node].inv().trans)).dot(R.T)
+                ZZ[:dim,dim:] = R.dot(wedge(T_all[robot_node].inv().trans)).dot(R.T)
                 p = T_all[robot_node].trans
                 c = self.graph.nodes[obs_node][POS]
-                jac += [-2 * (c - p).T @ ZZ.dot(J_all[robot_node])[:3, :]]
+                jac += [-2 * (c - p).T @ ZZ.dot(J_all[robot_node])[:dim, :]]
             return np.vstack(jac)
 
         return obstacle_gradient
 
-
-    # OPTION B
-    def gen_ee_constraint(self, point: str, T_goal: SE3):
+    def gen_cost_and_grad_ee(self, point: str, T_goal: SE3):
+        # R_goal = T_goal.rot.as_matrix()
         joints = self.k_map[point][1:]
-        def ee_constraint(q: npt.ArrayLike):
-            q_dict = {joints[idx]: q[idx] for idx in range(len(joints))}
-            T = self.robot.pose(q_dict, point)
-            e = (T.inv().dot(T_goal)).log()
-            Ad = T.adjoint()
-            e = Ad.dot(e)
+        n = len(joints)
+        if self.dim==3:
+            log = SE3.log
+            inv_left_jacobian = SE3.inv_left_jacobian
+        else:
+            log = SE2.log
+            inv_left_jacobian = lambda x: np.eye(3)
 
-            constr = np.asarray([e.T@e])
-            return constr
-
-        return ee_constraint
-
-    def gen_ee_constraint_gradient(self, point: str, T_goal: SE3):
-        # R_goal = T_goal.rot
-        joints = self.k_map[point][1:]
-        def ee_gradient(q: npt.ArrayLike):
-            q_dict = {joints[idx]: q[idx] for idx in range(len(joints))}
+        def cost(q: ArrayLike):
+            q_dict = {joints[idx]: q[idx] for idx in range(n)}
             T = self.robot.pose(q_dict, point)
             J = self.robot.jacobian(q_dict, [point])
-            e = (T.inv().dot(T_goal)).log()
-            Ad = T.adjoint()
-            e = Ad.dot(e)
-            jac = -2 * J[point].T @ e
-            return jac
+            del_T =T.inv().dot(T_goal)
+            e = log(del_T) # body frame
+            J_e = inv_left_jacobian(e)
+            J[point] = J_e @ T.inv().adjoint() @ J[point]
+            jac = -2 * J[point].T  @ e
+            return e.T @ e, jac
 
-        return ee_gradient
-
-    def gen_cost(self):
-        def cost(q: npt.ArrayLike):
-            return q.T@q
-
-        def jac(q: npt.ArrayLike):
-            return -2*q
-        return cost, jac
-
+        return cost
 
     def solve(self, goals: dict, q0: dict):
         for node, goal in goals.items():
             cost_and_grad = self.gen_cost_and_grad_ee(node, goal)
 
-        constr = self.g.copy()
-        # for node, goal in goals.items():
-        #     fun = self.gen_ee_constraint(node, goal)
-        #     jac = self.gen_ee_constraint_gradient(node, goal)
-        #     constr+=[{"type": "eq", "fun": fun, "jac": jac}]
-        # cost, cost_jac = self.gen_cost()
-
-        #solve
-        t = time.time()
+        # solve
         res = minimize(
             cost_and_grad,
             # cost,
             np.asarray(list(q0.values())),
             jac=True,
-            # jac=cost_jac,
-            constraints=constr,
+            # jac=grad,
+            constraints=self.g,
             method="SLSQP",
-            options={"ftol": 1e-7, "maxiter":200},
-            # method="BFGS",
-            # options={"maxiter":3000, "gtol":1e-06},
+            options={"ftol": 1e-7},
         )
-        t = time.time() - t
-        return list_to_variable_dict(res.x), t, res.nit
+        return res
+
 
 def main():
-    fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
-    n = 6
-    ub = (pi) * np.ones(n)
-    lb = -ub
-    urdf_robot = RobotURDF(fname)
-    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
-    import timeit
+    #
+    # Define the problem
+    #
 
-    f = lambda: robot.jacobian(robot.random_configuration(), ["p6"])
+    # robot, graph = load_ur10()
+    # scale = 0.75
+    # radius = 0.4
+    # obstacles = [
+    #     (scale * np.asarray([1, 1, 0]), radius),
+    #     (scale * np.asarray([1, -1, 0]), radius),
+    #     (scale * np.asarray([-1, 1, 0]), radius),
+    #     (scale * np.asarray([-1, -1, 0]), radius),
+    #     (scale * np.asarray([0, 0, 1]), radius),
+    #     (scale * np.asarray([0, 0, -1]), radius),
+    # ]
 
-    # print(timeit.timeit(f, number=1000))
-    print(
-        max(
-            timeit.repeat(
-                "robot.get_all_poses(robot.random_configuration())",
-                globals=globals(),
-                number=1,
-                repeat=1000,
-            )
-        )
-    )
-    print(
-        max(
-            timeit.repeat(
-                'robot.jacobian(robot.random_configuration(), ["p6"])',
-                globals=globals(),
-                number=1,
-                repeat=1000,
-            )
-        )
-    )
+    # for idx, obs in enumerate(obstacles):
+    #     graph.add_spherical_obstacle(f"o{idx}", obs[0], obs[1])
 
-if __name__ == "__main__":
-    np.set_printoptions(precision=3, suppress=True)
+    # q_goal = robot.random_configuration()
+    # T_goal = robot.pose(q_goal, f"p{robot.n}")
+    # goals = {f"p{robot.n}": T_goal}
+
+    # x0 = [0,0,0,0,0,0]
+    # problem = LocalSolver(graph,{})
+    # sol = problem.solve(goals, robot.random_configuration())
+    # # sol = problem.solve(goals, list_to_variable_dict(x0))
+    # print(sol)
+
+    from graphik.robots import RobotPlanar
+    from graphik.graphs import ProblemGraphPlanar
+    n = 10
+
+    a = list_to_variable_dict(np.ones(n))
+    th = list_to_variable_dict(np.zeros(n))
+    lim_u = list_to_variable_dict(np.pi * np.ones(n))
+    lim_l = list_to_variable_dict(-np.pi * np.ones(n))
+    params = {
+        "link_lengths": a,
+        "theta": th,
+        "ub": lim_u,
+        "lb": lim_l,
+        "num_joints": n
+    }
+
+    robot = RobotPlanar(params)
+    graph = ProblemGraphPlanar(robot)
+    q_goal = robot.random_configuration()
+    T_goal = robot.pose(q_goal, f"p{robot.n}")
+    goals = {f"p{robot.n}": T_goal}
+    problem = LocalSolver(graph,{})
+    sol = problem.solve(goals, robot.random_configuration())
+    q_sol = list_to_variable_dict(sol.x)
+    print(T_goal)
+    print(robot.pose(q_sol, robot.end_effectors[0]))
+
+if __name__ == '__main__':
+
+    # np.random.seed(24)  # TODO: this seems to have a significant effect on performance
     main()
