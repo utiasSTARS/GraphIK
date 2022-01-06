@@ -50,6 +50,38 @@ class RobotRevolute(Robot):
                         self.nodes[pred]["T0"].inv().dot(self.nodes[cur]["T0"])
                     )
 
+    def from_dh_params(self, params):
+
+        a, d, al, th, modified_dh = (
+            params["a"],
+            params["d"],
+            params["alpha"],
+            params["theta"],
+            params["modified_dh"],
+        )
+        a = a if type(a) is dict else list_to_variable_dict(flatten([a]))
+        d = d if type(d) is dict else list_to_variable_dict(flatten([d]))
+        al = al if type(al) is dict else list_to_variable_dict(flatten([al]))
+        th = th if type(th) is dict else list_to_variable_dict(flatten([th]))
+
+        T = {ROOT: SE3.identity()}
+        kinematic_map = self.kinematic_map
+        for ee in self.end_effectors:
+            for node in kinematic_map[ROOT][ee][1:]:
+                path_nodes = kinematic_map[ROOT][node][1:]
+
+                q = np.asarray([0 for node in path_nodes])
+                a_ = np.asarray([a[node] for node in path_nodes])
+                alpha_ = np.asarray([al[node] for node in path_nodes])
+                th_ = np.asarray([th[node] for node in path_nodes])
+                d_ = np.asarray([d[node] for node in path_nodes])
+
+                if not modified_dh:
+                    T[node] = fk_3d(a_, alpha_, d_, q + th_)
+                else:
+                    T[node] = modified_fk_3d(a_, alpha_, d_, q + th_)
+        return T
+
     def pose(self, joint_angles: Dict[str, float], query_node: str) -> SE3:
         """
         Given a list of N joint variables, calculate the Nth joint's pose.
@@ -105,37 +137,6 @@ class RobotRevolute(Robot):
                     J[node][:, idx] = Ad.dot(self.nodes[pred]["S"])
         return J
 
-    def from_dh_params(self, params):
-
-        a, d, al, th, modified_dh = (
-            params["a"],
-            params["d"],
-            params["alpha"],
-            params["theta"],
-            params["modified_dh"],
-        )
-        a = a if type(a) is dict else list_to_variable_dict(flatten([a]))
-        d = d if type(d) is dict else list_to_variable_dict(flatten([d]))
-        al = al if type(al) is dict else list_to_variable_dict(flatten([al]))
-        th = th if type(th) is dict else list_to_variable_dict(flatten([th]))
-
-        T = {ROOT: SE3.identity()}
-        kinematic_map = self.kinematic_map
-        for ee in self.end_effectors:
-            for node in kinematic_map[ROOT][ee][1:]:
-                path_nodes = kinematic_map[ROOT][node][1:]
-
-                q = np.asarray([0 for node in path_nodes])
-                a_ = np.asarray([a[node] for node in path_nodes])
-                alpha_ = np.asarray([al[node] for node in path_nodes])
-                th_ = np.asarray([th[node] for node in path_nodes])
-                d_ = np.asarray([d[node] for node in path_nodes])
-
-                if not modified_dh:
-                    T[node] = fk_3d(a_, alpha_, d_, q + th_)
-                else:
-                    T[node] = modified_fk_3d(a_, alpha_, d_, q + th_)
-        return T
 
     def jacobian_geometric(
         self,
