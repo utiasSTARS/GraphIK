@@ -84,7 +84,6 @@ def random_problem_2d_chain():
     print("Average pos error {:}".format(np.average(np.array(e_pos))))
     print("Average rot error {:}".format(np.average(np.array(e_rot))))
     print("Number of fails {:}".format(fails))
-    # print("Standard deviation of maximum error {:}".format(np.std(np.array(e_sol))))
 
     assert_array_less(e_pos, 1e-4 * np.ones(n_tests))
 

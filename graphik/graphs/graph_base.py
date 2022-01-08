@@ -31,7 +31,7 @@ class ProblemGraph(nx.DiGraph):
     @property
     def base_nodes(self) -> List[str]:
         """
-        :returns: List of nodes in this graph.
+        :returns: List of nodes in this graph describing the base coordinate system.
         """
         try:
             return self._base_nodes
@@ -57,7 +57,7 @@ class ProblemGraph(nx.DiGraph):
     @property
     def end_effector_nodes(self) -> List[str]:
         """
-        :returns: List of nodes in this graph belonging to the end effector
+        :returns: List of nodes in this graph describing the end effectors
         """
         try:
             return self._end_effector_nodes
@@ -69,10 +69,16 @@ class ProblemGraph(nx.DiGraph):
 
     @property
     def base(self) -> nx.DiGraph:
+        """
+        :returns: base coordinate system subgraph
+        """
         return self.to_directed(as_view=True).subgraph(self.base_nodes)
 
     @property
     def structure(self) -> nx.DiGraph:
+        """
+        :returns: robot structure subgraph
+        """
         return self.to_directed(as_view=True).subgraph(self.structure_nodes)
 
     @property
@@ -137,7 +143,7 @@ class ProblemGraph(nx.DiGraph):
         """
         return adjacency_matrix_from_graph(self.to_undirected(as_view=True))
 
-    def from_pos(self, P: Dict, dist: bool = True, overwrite=False) -> nx.DiGraph:
+    def from_pos(self, P: Dict, dist: bool = True, overwrite: bool = False) -> nx.DiGraph:
         """
         Given a dictionary of node name and position key-value pairs,
         generate a copy of the problem graph and fill the POS attributes of
