@@ -84,7 +84,7 @@ q_sol = robot.joint_variables(G_sol, T_g)
 
 See [experiments/simple_ik_examples/](https://github.com/utiasSTARS/graphIK/tree/main/experiments/simple_ik_examples) for further examples on other types of robots, including planar and spherical manipulators.
 
-For an example using a convex optimization-based approach and incorporating spherical obstacles, please see [experiments/cidgik_example.py](https://github.com/utiasSTARS/graphIK/tree/main/experiments/cidgik_example.py).
+For an example using a convex optimization-based approach and incorporating spherical obstacles, please see [experiments/cidgik_example.py](https://github.com/utiasSTARS/graphIK/blob/main/experiments/cidgik_example.py).
 
 ## Publications and Related Work
 If you use any of this code in your research, kindly cite any relevant publications listed here.
