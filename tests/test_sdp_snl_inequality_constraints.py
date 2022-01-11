@@ -39,11 +39,11 @@ if __name__ == "__main__":
 
     # NOTE both functions should really take in the output of graph.complete_from_pos() and parse that
     # Form the equality constraints
-    constraint_clique_dict = distance_constraints(robot, end_effectors, sparse, ee_cost)
+    constraint_clique_dict = distance_constraints(graph, end_effectors, sparse, ee_cost)
 
     # Form the inequality constraints
     inequality_map = distance_range_constraints(
-        robot.structure, constraint_clique_dict, end_effectors
+        graph.structure, constraint_clique_dict, end_effectors
     )  # this will only add joint limits
 
     # Nuclear norm cost (simple)
@@ -56,7 +56,7 @@ if __name__ == "__main__":
     solution, prob, constraint_clique_dict, sdp_variable_map = solve_nearest_point_sdp(
         nearest_points_nuclear,
         end_effectors,
-        robot,
+        graph,
         sparse=False,
         solver_params=None,
         verbose=True,

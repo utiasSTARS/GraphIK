@@ -9,6 +9,7 @@ from graphik.utils.roboturdf import load_ur10, load_truncated_ur10
 from graphik.utils.constants import *
 from graphik.utils.chordal import complete_to_chordal_graph
 from graphik.robots import RobotRevolute
+from graphik.graphs import ProblemGraphRevolute
 from graphik.solvers.constraints import get_full_revolute_nearest_point
 from graphik.solvers.sdp_formulations import SdpSolverParams
 
@@ -314,7 +315,7 @@ def distance_constraints_graph(
 
 
 def distance_constraints(
-    robot: RobotRevolute,
+    graph: ProblemGraphRevolute,
     end_effectors: dict,
     sparse: bool = False,
     ee_cost: bool = False,
@@ -332,7 +333,7 @@ def distance_constraints(
     :return: mapping from cliques to LMEs
     """
     undirected = nx.Graph(
-        robot.generate_structure_graph()
+        graph.structure_graph()
     )  # This graph must be chordal # NOTE creates a new structure graph?
     equality_cliques = nx.chordal_graph_cliques(
         undirected
@@ -809,21 +810,21 @@ def extract_full_sdp_solution(
 def solve_nearest_point_sdp(
     nearest_points: dict,
     end_effectors: dict,
-    robot,
+    graph,
     sparse=False,
     solver_params=None,
     verbose=False,
     inequality_constraints_map=None,
 ):
     constraint_clique_dict = distance_constraints(
-        robot, end_effectors, sparse, ee_cost=False
+        graph, end_effectors, sparse, ee_cost=False
     )
     (
         sdp_variable_map,
         sdp_constraints_map,
         sdp_cost_map,
     ) = constraints_and_nearest_points_to_sdp_vars(
-        constraint_clique_dict, nearest_points, robot.dim
+        constraint_clique_dict, nearest_points, graph.robot.dim
     )
     if inequality_constraints_map is not None:
         inequality_constraints = cvxpy_inequality_constraints(
@@ -836,7 +837,7 @@ def solve_nearest_point_sdp(
         sdp_variable_map,
         sdp_constraints_map,
         sdp_cost_map,
-        robot.dim,
+        graph.robot.dim,
         extra_constraints=inequality_constraints,
     )
     if solver_params is None:
@@ -845,7 +846,7 @@ def solve_nearest_point_sdp(
     # Z_exact = list(sdp_variable_map_exact.values())[0].value
     # _, s_exact, _ = np.linalg.svd(Z_exact)
     # solution_rank_exact = np.linalg.matrix_rank(Z_exact, tol=1e-6, hermitian=True)
-    solution = extract_solution(constraint_clique_dict, sdp_variable_map, robot.dim)
+    solution = extract_solution(constraint_clique_dict, sdp_variable_map, graph.robot.dim)
 
     return solution, prob, constraint_clique_dict, sdp_variable_map
 
@@ -1013,7 +1014,7 @@ if __name__ == "__main__":
     }
 
     # Form the constraints
-    constraint_clique_dict = distance_constraints(robot, end_effectors, sparse, ee_cost)
+    constraint_clique_dict = distance_constraints(graph, end_effectors, sparse, ee_cost)
     # A, b, mapping, _ = list(constraint_clique_dict.values())[0]
 
     # Different cost function options here - cost function is controlled by a dictionary mapping some subset of the keys

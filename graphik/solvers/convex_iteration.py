@@ -12,7 +12,6 @@ from graphik.solvers.sdp_formulations import SdpSolverParams
 from graphik.solvers.sdp_snl import (
     distance_range_constraints,
     solve_linear_cost_sdp,
-    distance_constraints,
     distance_constraints_graph,
     extract_full_sdp_solution,
     extract_solution,

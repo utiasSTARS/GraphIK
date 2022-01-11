@@ -23,7 +23,7 @@ def run_constraint_test(test_case, graph: Robot, sparse=False, ee_cost=False):
     n = robot.n
 
     # get a copy of the current robot + environment graph
-    G = graph.directed.copy()
+    G = nx.DiGraph(graph)
 
     # remove base nodes and all adjacent edges
     G.remove_node("x")
@@ -101,7 +101,7 @@ def run_cost_test(test_case, robot, graph, sparse=False, ee_cost=False):
         key: input_vals[key] for key in ["p0", "q0", f"p{robot.n}", f"q{robot.n}"]
     }
 
-    constraint_clique_dict = distance_constraints(robot, end_effectors, sparse, ee_cost)
+    constraint_clique_dict = distance_constraints(graph, end_effectors, sparse, ee_cost)
     A, b, mapping, _ = list(constraint_clique_dict.values())[0]
 
     # Make cost function stuff
@@ -163,7 +163,7 @@ class TestUR10(unittest.TestCase):
                     random_input_vals = {key: np.random.rand(3) for key in input_vals}
 
                     # Copy of the current robot + environment graph
-                    G = self.graph.directed.copy()
+                    G = nx.DiGraph(self.graph)
                     G.remove_node("x")
                     G.remove_node("y")
 
@@ -234,6 +234,7 @@ class TestTruncatedUR10(unittest.TestCase):
             "lb": lb[:n],
             "ub": ub[:n],
             "modified_dh": modified_dh,
+            "num_joints": n
         }
         self.robot = RobotRevolute(params)
         self.graph = ProblemGraphRevolute(self.robot)
