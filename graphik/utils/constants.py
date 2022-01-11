@@ -16,3 +16,8 @@ MAIN_PREFIX = "p"
 AUX_PREFIX = "q"
 BASE = "base"
 UNDEFINED = None
+
+# CIDGIK constants
+FEASIBLE = True
+INFEASIBLE = 'infeasible'
+SOLVER_ERROR = 'solver_error'

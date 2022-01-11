@@ -575,3 +575,35 @@ def load_truncated_ur10(n: int):
     robot = RobotRevolute(params)
     graph = ProblemGraphRevolute(robot)
     return robot, graph
+
+
+def load_9_dof(limits=None):
+    """
+    For successive axes to be coplanar, need either a=0 or alpha= +/-pi for all joints.
+    """
+    n = 9
+    a  = list(np.zeros(n))
+    al = list(np.array([-1., 1., -1., 1., -1., 1., -1., 1., 0.])*np.pi/2)
+    d  = list(np.array([0., 0., 0.15655, 0., 0.15215, 0., 0.11985, 0., 0.0739])*3.)  # Inflate for scale similar to table environment
+    th = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    if limits is None:
+        ub = np.ones(n) * np.pi
+        lb = -ub
+    else:
+        lb = limits[0]
+        ub = limits[1]
+    modified_dh = False
+    params = {
+        "a": a,
+        "alpha": al,
+        "d": d,
+        "theta": th,
+        "lb": lb,
+        "ub": ub,
+        "modified_dh": modified_dh,
+        "num_joints": n,
+    }
+
+    robot = RobotRevolute(params)
+    graph = ProblemGraphRevolute(robot)
+    return robot, graph

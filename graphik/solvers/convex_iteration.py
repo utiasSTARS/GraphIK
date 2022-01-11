@@ -4,6 +4,7 @@ Rank constraints via convex iteration (Dattorro's Convex Optimization and Euclid
 """
 import numpy as np
 import cvxpy as cp
+import networkx as nx
 from timeit import default_timer
 from progress.bar import ShadyBar as Bar
 
@@ -163,10 +164,15 @@ def convex_iterate_sdp_snl_graph(
     sparse=False,
     verbose=False,
     closed_form=True,
-    W_init=None
+    W_init=None,
+    abs_eig_sum_tol=1e-6,
+    rel_eig_sum_tol=1e-3,
+    floor_mode=False,
+    scs=False
 ):
     # get a copy of the current robot + environment graph
-    G = graph.directed.copy()
+    G = nx.DiGraph(graph)
+    # G = graph.directed.copy()
 
     # remove base nodes and all adjacent edges
     G.remove_node("x")
@@ -179,7 +185,10 @@ def convex_iterate_sdp_snl_graph(
     # If a position is pre-defined for a node, set to anchor
     for node, data in G.nodes(data=True):
         if data.get(POS, None) is not None:
-            anchors[node] = data[POS]
+            if node not in ('p0', 'q0') or not floor_mode:
+                anchors[node] = data[POS]
+    planar_constraints = {'p0': (np.array([0., 0., 1.]), 0.),
+                          'q0': (np.array([0., 0., 1.]), 1.)} if floor_mode else None
 
     # full_points = [node for node in G if node not in ["x", "y"]]
     canonical_point_order = [point for point in G if point not in anchors.keys()]
@@ -194,21 +203,43 @@ def convex_iterate_sdp_snl_graph(
     primal_sdp_runtime = 0.
     fantope_solver_runtime = 0.
 
+    # Return feasibility
+    feasible = FEASIBLE
+
+    # Track the cost for convergence
+    last_cost = 1e6
+
     n = len(canonical_point_order)
     N = n + d
     C = np.eye(N) if W_init is None else W_init  # Identity satisfies any sparsity pattern by default
-    # bar = Bar("Convex iteration", max=max_iters, check_tty=False, hide_cursor=False)
+    prob = None
+    sdp_variable_map = None
     for iter in range(max_iters):
         solution, prob, sdp_variable_map, _ = solve_linear_cost_sdp(
             robot,
             anchors,
             constraint_clique_dict,
             C,
+            prob,
+            sdp_variable_map,
             canonical_point_order,
             verbose=False,
             inequality_constraints_map=inequality_map,
+            planar_constraints=planar_constraints,
+            scs=scs,
+            warm_start=True
         )
+        # Handle infeasibility case
+        if solution is INFEASIBLE:
+            feasible = INFEASIBLE
+            primal_sdp_runtime += prob.solver_stats.solve_time
+            break
+        elif solution is SOLVER_ERROR:
+            feasible = SOLVER_ERROR
+            primal_sdp_runtime += 0.0  # TODO: handle this in post-processing
+            break
         primal_sdp_runtime += prob.solver_stats.solve_time
+
         if not sparse:
             G = extract_full_sdp_solution(constraint_clique_dict, canonical_point_order, sdp_variable_map, N, d)
             eigvals_G = np.linalg.eigvalsh(G)  # Returns in ascending order (according to docs)
@@ -222,8 +253,15 @@ def convex_iterate_sdp_snl_graph(
                 C, t_fantope = solve_fantope_sdp_sparse(constraint_clique_dict, sdp_variable_map, d)
             eig_value_sum_vs_iterations.append(sparse_eigenvalue_sum(sdp_variable_map, d))
         fantope_solver_runtime += t_fantope
-    #     bar.next()
-    # bar.finish()
+
+        # Check for convergence
+        eigval_sum_change = last_cost - prob.value
+        rel_change = np.abs(eigval_sum_change)/np.abs(last_cost)
+        if np.abs(eigval_sum_change) <= abs_eig_sum_tol or prob.value <= abs_eig_sum_tol or rel_change < rel_eig_sum_tol:
+            break
+        else:
+            last_cost = prob.value
+
     return (
         C,
         constraint_clique_dict,
@@ -232,7 +270,8 @@ def convex_iterate_sdp_snl_graph(
         eig_value_sum_vs_iterations,
         prob,
         primal_sdp_runtime,
-        fantope_solver_runtime
+        fantope_solver_runtime,
+        feasible
     )
 
 
@@ -245,20 +284,22 @@ if __name__ == "__main__":
     full_points = [f"p{idx}" for idx in range(0, graph.robot.n + 1)] + [
         f"q{idx}" for idx in range(0, graph.robot.n + 1)
     ]
-    n_runs = 10
+    n_runs = 1000
 
     # Store results
     final_eigvalue_sum_list = []
     primal_sdp_runtime = []
     fantope_runtime = []
+    feasibility_list = []
 
     final_eigvalue_sum_list_sparse_naive = []
     primal_sdp_runtime_sparse_naive = []
     fantope_runtime_sparse_naive = []
-
+    feasibility_list_sparse_naive = []
     final_eigvalue_sum_list_sparse_sdp = []
     primal_sdp_runtime_sparse_sdp = []
     fantope_runtime_sparse_sdp = []
+    feasibility_list_sparse_sdp = []
 
     bar = Bar("", max=n_runs, check_tty=False, hide_cursor=False)
     for idx in range(n_runs):
@@ -280,13 +321,18 @@ if __name__ == "__main__":
             eig_value_sum_vs_iterations,
             _,
             t_primal,
-            t_fantope
+            t_fantope,
+            feasible
         ) = convex_iterate_sdp_snl_graph(graph, anchors=end_effectors, ranges=False, max_iters=10,
                                          sparse=False, verbose=False, closed_form=True)
         # solution = extract_solution(constraint_clique_dict, sdp_variable_map, d)
-        final_eigvalue_sum_list.append(eig_value_sum_vs_iterations[-1])
+        if feasible is FEASIBLE:
+            final_eigvalue_sum_list.append(eig_value_sum_vs_iterations[-1])
+        else:
+            final_eigvalue_sum_list.append(np.NaN)
         primal_sdp_runtime.append(t_primal)
         fantope_runtime.append(t_fantope)
+        feasibility_list.append(feasible)
 
         # Run 'naive' sparse solver (Wang and Yu, 2018)
         (
@@ -297,12 +343,16 @@ if __name__ == "__main__":
             eig_value_sum_vs_iterations,
             _,
             t_primal,
-            t_fantope
+            t_fantope,
+            feasible
         ) = convex_iterate_sdp_snl_graph(graph, anchors=end_effectors, ranges=False, max_iters=10,
                                          sparse=True, verbose=False, closed_form=True)
-        final_eigvalue_sum_list_sparse_naive.append(eig_value_sum_vs_iterations[-1])
         primal_sdp_runtime_sparse_naive.append(t_primal)
         fantope_runtime_sparse_naive.append(t_fantope)
+        if feasible is FEASIBLE:
+            final_eigvalue_sum_list_sparse_naive.append(eig_value_sum_vs_iterations[-1])
+        else:
+            final_eigvalue_sum_list_sparse_naive.append(np.NaN)
 
         # Run sparse solver where Fantope program has a sparsity pattern matched to the primal SDP's
         (
@@ -313,12 +363,16 @@ if __name__ == "__main__":
             eig_value_sum_vs_iterations,
             _,
             t_primal,
-            t_fantope
+            t_fantope,
+            feasible
         ) = convex_iterate_sdp_snl_graph(graph, anchors=end_effectors, ranges=False, max_iters=10,
                                          sparse=True, verbose=False, closed_form=False)
-        final_eigvalue_sum_list_sparse_sdp.append(eig_value_sum_vs_iterations[-1])
         primal_sdp_runtime_sparse_sdp.append(t_primal)
         fantope_runtime_sparse_sdp.append(t_fantope)
+        if feasible is FEASIBLE:
+            final_eigvalue_sum_list_sparse_sdp.append(eig_value_sum_vs_iterations[-1])
+        else:
+            final_eigvalue_sum_list_sparse_sdp.append(np.NaN)
 
         bar.next()
     bar.finish()
