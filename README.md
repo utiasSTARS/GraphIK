@@ -1,5 +1,5 @@
 # graphIK
-A library for solving inverse kinematics with graphical models and distance geometry.
+A library for solving inverse kinematics by modelling robots as geometric graphs and using ideas from distance geometry.
 
 <img src="https://raw.githubusercontent.com/utiasSTARS/GraphIK/main/assets/graph_ik_logo.png" width="250px"/>
 
@@ -84,19 +84,47 @@ q_sol = robot.joint_variables(G_sol, T_g)
 
 See [experiments/simple_ik_examples/](https://github.com/utiasSTARS/graphIK/tree/main/experiments/simple_ik_examples) for further examples on other types of robots, including planar and spherical manipulators.
 
+For an example using a convex optimization-based approach and incorporating spherical obstacles, please see [experiments/cidgik_example.py](https://github.com/utiasSTARS/graphIK/tree/main/experiments/cidgik_example.py).
+
 ## Publications and Related Work
 If you use any of this code in your research, kindly cite any relevant publications listed here.
 
 ### Riemannian Optimization 
 arXiv: [Inverse Kinematics as Low-Rank Euclidean Distance Matrix Completion](https://arxiv.org/abs/2011.04850)
 
+arXiv: [Riemannian Optimization for Distance-Geometric Inverse Kinematics](https://arxiv.org/abs/2108.13720)
 
-### SDP Relaxations
+```bibtex
+@misc{marić2021riemannian,
+      title={Riemannian Optimization for Distance-Geometric Inverse Kinematics}, 
+      author={Filip Marić and Matthew Giamou and Adam W. Hall and Soroush Khoubyarian and Ivan Petrović and Jonathan Kelly},
+      year={2021},
+      eprint={2108.13720},
+      archivePrefix={arXiv},
+      primaryClass={cs.RO}
+}
+```
+
+### Semidefinite Programming (SDP) Relaxations
+
+#### CIDGIK
+arXiv: [Convex Iteration for Distance-Geometric Inverse Kinematics](https://arxiv.org/abs/2109.03374)
+```bibtex
+@misc{giamou2022convex,
+      title={Convex Iteration for Distance-Geometric Inverse Kinematics}, 
+      author={Matthew Giamou and Filip Marić and David M. Rosen and Valentin Peretroukhin and Nicholas Roy and Ivan Petrović and Jonathan Kelly},
+      year={2022},
+      eprint={2109.03374},
+      archivePrefix={arXiv},
+      primaryClass={cs.RO}
+}
+```
+
+#### Sparse Sum-of-Squares Optimization for Planar and Spherical IK 
 arXiv: [Inverse Kinematics for Serial Kinematic Chains via Sum of Squares Optimization](https://arxiv.org/abs/1909.09318)
 
-Code: https://github.com/utiasSTARS/sos-ik
+MATLAB Code: https://github.com/utiasSTARS/sos-ik
 
-Bibtex:
 ```bibtex
 @inproceedings{maric2020inverse,
   title={Inverse Kinematics for Serial Kinematic Chains via Sum of Squares Optimization},
@@ -107,4 +135,3 @@ Bibtex:
   organization={IEEE}
 }
 ```
-
