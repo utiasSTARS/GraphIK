@@ -29,7 +29,7 @@ def generate_revolute_problem(graph: ProblemGraphRevolute, obstacles = False):
     # }
 
     X_goal = pos_from_graph(G_goal)
-    X_goal = normalize_positions(X_goal)
+    X_goal = X_goal
     D_goal = distance_matrix_from_pos(X_goal)
 
     # G = graph.from_pos(goals)

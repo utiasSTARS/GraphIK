@@ -37,7 +37,7 @@ class TestJointVariables(unittest.TestCase):
             T_goal = {}
             T_goal[f"p{n}"] = robot.pose(q_goal, "p" + str(n))
             X = graph.realization(q_goal)
-            P = normalize_positions(pos_from_graph(X))
+            P = pos_from_graph(X)
             q_rec = graph.joint_variables(graph_from_pos(P, node_ids=list(X)), T_goal)
             self.assertIsNone(
                 assert_allclose(list(q_goal.values()), list(q_rec.values()), rtol=1e-5)

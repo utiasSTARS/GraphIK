@@ -268,21 +268,13 @@ class ProblemGraphRevolute(ProblemGraph):
         x_hat = G.nodes["x"][POS] - G.nodes["p0"][POS]
         y_hat = G.nodes["y"][POS] - G.nodes["p0"][POS]
         z_hat = G.nodes["q0"][POS] - G.nodes["p0"][POS]
-        scale = np.roots(
-            [
-                x_hat.dot(x_hat) + y_hat.dot(y_hat) + z_hat.dot(z_hat),
-                -2 * (la.norm(x_hat) + la.norm(y_hat) + la.norm(z_hat)),
-                3,
-            ]
-        )
-        scale = scale[0].real
 
         # resolve rotation and translation
         x = normalize(x_hat)
         y = normalize(y_hat)
         z = normalize(z_hat)
         R = np.vstack((x, -y, z)).T
-        B = SE3Matrix(SO3Matrix(R), scale * G.nodes[ROOT][POS])
+        B = SE3Matrix(SO3Matrix(R), G.nodes[ROOT][POS])
 
         theta = {}
 
@@ -300,12 +292,11 @@ class ProblemGraphRevolute(ProblemGraph):
                 T_0_q = self.get_pose(q_zero, cur).dot(trans_axis(axis_length, "z"))
                 T_rel_q = T_prev_0.inv().dot(T_0_q)
 
-                p = B.inv().dot(scale * G.nodes[cur][POS]) - T_prev.trans
+                p = B.inv().dot(G.nodes[cur][POS]) - T_prev.trans
                 qnorm = G.nodes[cur][POS] + (
                     G.nodes[aux_cur][POS] - G.nodes[cur][POS]
                 ) / la.norm(G.nodes[aux_cur][POS] - G.nodes[cur][POS])
-                q = B.inv().dot(scale * qnorm) - T_prev.trans
-                # q = B.inv().dot(scale*G.nodes[aux_cur][POS]) - T_prev.trans
+                q = B.inv().dot(qnorm) - T_prev.trans
                 ps = T_prev.inv().as_matrix()[:3, :3].dot(p)  # in prev. joint frame
                 qs = T_prev.inv().as_matrix()[:3, :3].dot(q)  # in prev. joint frame
 
@@ -324,7 +315,6 @@ class ProblemGraphRevolute(ProblemGraph):
                 c4 = bp.dot(bp) + bq.dot(bq)
                 c5 = 2 * (ap.dot(bp) + aq.dot(bq))
 
-                # poly = [c0 -c2 +c4, 2*c1 - 2*c5, 2*c0 + 4*c3 -2*c4, 2*c1 + 2*c5, c0 + c2 + c4]
                 diff = np.asarray(
                     [
                         c1 - c5,

@@ -150,14 +150,21 @@ class ProblemGraphPlanar(ProblemGraph):
         :returns: array of joint variables t
         :rtype: np.ndarray
         """
-        R = {ROOT: SO2.identity()}
         joint_variables = {}
+
+        # resolve rotation of entire point set
+        R_, t_ = best_fit_transform(np.vstack((G.nodes[ROOT][POS],
+                                               G.nodes["x"][POS],
+                                               G.nodes["y"][POS])) ,
+                                    np.vstack(([0,0], [-1,0], [0,1])))
+
+        R = {ROOT: SO2.identity()}
 
         for u, v, dat in self.structure.edges(data=DIST):
             if dat:
-                diff_uv = G.nodes[v][POS] - G.nodes[u][POS]
+                diff_uv = R_.dot(G.nodes[v][POS] - G.nodes[u][POS])
                 len_uv = np.linalg.norm(diff_uv)
-                sol = np.linalg.solve(len_uv * R[u].as_matrix(), diff_uv)
+                sol = R[u].as_matrix().T.dot(diff_uv/len_uv)
                 theta_idx = np.math.atan2(sol[1], sol[0])
                 joint_variables[v] = wraptopi(theta_idx)
                 Rz = SO2.from_angle(theta_idx)
@@ -169,54 +176,3 @@ class ProblemGraphPlanar(ProblemGraph):
         self, joint_angles: Dict[str, float], query_node: Union[List[str], str]
     ) -> Union[Dict[str, SE2], SE2]:
         return self.robot.pose(joint_angles, query_node)
-
-
-def main():
-
-    import time
-    n = 4
-    a = list_to_variable_dict(np.ones(n))
-    params = {"link_lengths": a, "num_joints": n}
-
-    robot = RobotPlanar(params)
-    graph = ProblemGraphPlanar(robot)
-    # print(robot.pose(robot.random_configuration(), "p4"))
-    # print(graph.base_nodes)
-    # print(graph.structure_nodes)
-    # print(graph.end_effector_nodes)
-    # print(graph.edges())
-    # print(graph.nodes(data="type"))
-    #
-    t = []
-    for idx in range(1000):
-        t0 = time.time()
-        graph.structure
-        t1 = time.time() - t0
-        t += [t1]
-
-    print(np.median(np.array(t)))
-    print(np.mean(np.array(t)))
-    print(np.std(np.array(t)))
-    # graph = RobotPlanarGraph(incoming_graph_data=robot)
-    # def base_subgraph_filter_node(n1):
-    #     if BASE in graph.nodes[n1][TYPE]:
-    #         return True
-    #     else:
-    # return False
-
-    # print(graph.to_directed(as_view=True))
-    # print(list(graph.nodes()))
-    # print(graph.nodes)
-    # print(graph.to_directed(as_view=True).subgraph(["x", "y", "p0"]).edges(data=True))
-    # print(nx.subgraph_view(graph.to_directed(as_view=True),base_subgraph_filter_node).nodes())
-    # def base_subgraph_edge_node(n1, n2):
-    #     return n1 != 5
-
-    # for node, dat in graph.nodes(data="type"):
-    #     print(node, dat)
-
-    # print(graph.nodes(data="type"))
-
-
-if __name__ == "__main__":
-    main()

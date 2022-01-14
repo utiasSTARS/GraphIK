@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from graphik.utils.dgp import adjacency_matrix_from_graph, bound_smoothing, distance_matrix_from_graph, graph_from_pos
 import pymanopt
 
 from numba import njit
@@ -229,3 +230,19 @@ class RiemannianSolver:
         else:
             Y_sol = self.solver.solve(problem, x=Y_init)
             return Y_sol
+
+def solve_with_riemannian(graph, T_goal, use_jit=True):
+    G = graph.from_pose(T_goal)
+    solver = RiemannianSolver(graph)
+    D_goal = distance_matrix_from_graph(G)
+    omega = adjacency_matrix_from_graph(G)
+    lb, ub = bound_smoothing(G)
+    sol_info = solver.solve(D_goal, omega, use_limits=True, bounds=(lb, ub), jit=use_jit)
+    G_sol = graph_from_pos(sol_info["x"], graph.node_ids)
+    q_sol = graph.joint_variables(G_sol, {f"p{graph.robot.n}": T_goal})
+
+    broken_limits = graph.check_distance_limits(graph.realization(q_sol), tol=1e-6)
+    if len(broken_limits) > 0:
+        return None, None
+    else:
+        return q_sol, sol_info["x"]
