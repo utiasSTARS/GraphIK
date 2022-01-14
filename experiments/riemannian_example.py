@@ -20,7 +20,7 @@ if __name__ == "__main__":
     q_goal = robot.random_configuration()
     T_goal = robot.pose(q_goal, f"p{robot.n}")  # Can be any desired pose, this is just a simple example
 
-    # Run CIDGIK with the anchor nodes as a goal
+    # Run Riemannian solver
     q_sol, solution_points = solve_with_riemannian(graph, T_goal)  # Returns None if infeasible or didn't solve
 
     # Compare the solution's end effector pose to the goal.
