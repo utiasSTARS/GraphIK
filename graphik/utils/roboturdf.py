@@ -8,6 +8,9 @@ import pyrender
 from graphik.graphs import ProblemGraphRevolute
 from graphik.robots import RobotRevolute
 import graphik
+if not type(graphik.__path__) == list:
+    graphik.__path__ = graphik.__path__._path
+
 from operator import itemgetter
 
 
