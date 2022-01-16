@@ -1,0 +1,23 @@
+LOWER = "lower_limit"
+UPPER = "upper_limit"
+BOUNDED = "bounded"
+BELOW = "below"
+ABOVE = "above"
+TRANSFORM = "T"
+TYPE = "type"
+OBSTACLE = "obstacle"
+ROBOT = "robot"
+END_EFFECTOR = "end_effector"
+RADIUS = "radius"
+DIST = "weight"
+POS = "pos"
+ROOT = "p0"
+MAIN_PREFIX = "p"
+AUX_PREFIX = "q"
+BASE = "base"
+UNDEFINED = None
+
+# CIDGIK constants
+FEASIBLE = True
+INFEASIBLE = 'infeasible'
+SOLVER_ERROR = 'solver_error'

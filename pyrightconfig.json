@@ -1,0 +1,19 @@
+{"exclude": [
+    "**/node_modules",
+    "**/__pycache__"
+],
+ "ignore": [
+    "./experiments/",
+    "./assets/",
+    "./tests/",
+    "./build/"
+],
+ "include": [
+    "./graphik/"
+],
+ "venvPath":"/home/filipmrc/.local/share/virtualenvs",
+ "stubPath":"/home/filipmrc/.local/share/virtualenvs/graphIK-2Qv-L6tD/lib/python3.8/site-packages",
+ "venv":"graphIK-2Qv-L6tD",
+ "verboseOutput": false,
+ "executionEnvironments": [{"root": "/home/filipmrc/code/graphIK/"}]
+}
