@@ -2,7 +2,6 @@
 from graphik.utils.dgp import adjacency_matrix_from_graph, bound_smoothing, distance_matrix_from_graph, graph_from_pos
 import pymanopt
 
-from numba import njit
 import numpy as np
 from pymanopt import tools
 from pymanopt.solvers import ConjugateGradient
@@ -16,30 +15,17 @@ from graphik.utils import (
 from graphik.utils.manifolds.fixed_rank_psd_sym import PSDFixedRank
 from graphik.solvers.trust_region import TrustRegions
 from graphik.graphs.graph_base import ProblemGraph
-from graphik.solvers.costgrd import jcost, jgrad, jhess, lcost, lgrad, lhess
+try:
+    from graphik.solvers.costgrd import jcost, jgrad, jhess, lcost, lgrad, lhess
+except ModuleNotFoundError as err:
+    pass
+    # print("AOT compiled functions not found. To improve performance please run solvers/costs.py.")
+
 BetaTypes = tools.make_enum(
     "BetaTypes", "FletcherReeves PolakRibiere HestenesStiefel HagerZhang".split()
 )
 
-@njit(cache=True, fastmath=True, error_model='numpy')
-def distmat(Y: np.ndarray):
-    num_atoms = Y.shape[0]
-    dim = Y.shape[1]
-    locs = Y
-    dmat = np.zeros((num_atoms, num_atoms))
-    for i in np.ndindex(*dmat.shape):
-        d = 0
-        for k in range(dim):
-            d += (locs[i[0], k] - locs[i[1], k]) ** 2
-        dmat[i] = d
-        dmat[i] = d
-    return dmat
-    # Non-numba
-    # X = Y.dot(Y.T)
-    # return (np.diagonal(X)[:, np.newaxis] + np.diagonal(X)) - 2 * X
-
-
-def adjoint(X: np.ndarray):
+def adjoint(X: np.ndarray) -> np.ndarray:
     D = np.zeros_like(X)
     np.einsum('ijj->ij',D)[...] = np.sum(X, axis=-1)
     return X - D
@@ -153,7 +139,7 @@ class RiemannianSolver:
         else:
             # NOTE not tested
             def cost(Y):
-                D = distmat(Y)
+                D = distance_matrix_from_pos(Y)
                 E0 = omega * (D_goal - D)
                 E1 = np.maximum(psi_L - LL * D, 0)
                 E2 = np.maximum(-psi_U + UU * D, 0)
@@ -162,7 +148,7 @@ class RiemannianSolver:
             def egrad(Y):
                 n = Y.shape[0]
                 A = np.zeros([3, n, n])
-                D = distmat(Y)
+                D = distance_matrix_from_pos(Y)
                 A[0,:,:] = omega * (D_goal - D)
                 A[1,:,:] = np.maximum(psi_L - LL * D, 0)
                 A[2,:,:] = -np.maximum(-psi_U + UU * D, 0)
@@ -171,7 +157,7 @@ class RiemannianSolver:
 
             def ehess(Y, Z):
                 n = Y.shape[0]
-                D = distmat(Y)
+                D = distance_matrix_from_pos(Y)
 
                 A = np.zeros([6, n, n])
                 A[0,:,:] = omega * (D_goal - D)
