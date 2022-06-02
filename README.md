@@ -42,8 +42,9 @@ The main purpose of our graphical interpretation of robot kinematics is the deve
 
 ```
 from graphik.solvers.riemannian_solver import solve_with_riemannian
-q_sol, solution_points = solve_with_riemannian(graph, T_goal)  # Returns None if infeasible or didn't solve
+q_sol, solution_points = solve_with_riemannian(graph, T_goal, jit=False)  # Returns None if infeasible or didn't solve
 ```
+For faster computation, precompile costs and gradients using numba by running `python costs.py` in `graphik/solvers/`.
 
 For a similar example using [`CIDGIK`](https://arxiv.org/abs/2109.03374), a convex optimization-based approach, please see [experiments/cidgik_example.py](https://github.com/utiasSTARS/graphIK/blob/main/experiments/cidgik_example.py).
 
