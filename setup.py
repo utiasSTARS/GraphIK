@@ -11,7 +11,7 @@ setup(
     url="https://github.com/utiasSTARS/graphIK",
     packages=find_packages(),
     install_requires=[
-        "numpy >= 1.16",
+        "numpy == 1.20",
         "scipy >= 1.3.0",
         "sympy >= 1.5",
         "matplotlib >= 3.1",

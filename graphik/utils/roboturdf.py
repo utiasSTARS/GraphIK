@@ -579,6 +579,19 @@ def load_truncated_ur10(n: int):
     graph = ProblemGraphRevolute(robot)
     return robot, graph
 
+def load_panda(limits=None):
+    fname = graphik.__path__[0] + "/robots/urdfs/panda_arm.urdf"
+    urdf_robot = RobotURDF(fname)
+    n = urdf_robot.n_q_joints
+    if limits is None:
+        ub = np.ones(n) * np.pi
+        lb = -ub
+    else:
+        lb = limits[0]
+        ub = limits[1]
+    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
+    graph = ProblemGraphRevolute(robot)
+    return robot, graph
 
 def load_9_dof(limits=None):
     """
