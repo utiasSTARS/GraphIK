@@ -593,6 +593,20 @@ def load_panda(limits=None):
     graph = ProblemGraphRevolute(robot)
     return robot, graph
 
+def load_panda_truncated(limits=None):
+    fname = graphik.__path__[0] + "/robots/urdfs/panda_arm_truncated.urdf"
+    urdf_robot = RobotURDF(fname)
+    n = urdf_robot.n_q_joints
+    if limits is None:
+        ub = np.ones(n) * np.pi
+        lb = -ub
+    else:
+        lb = limits[0]
+        ub = limits[1]
+    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
+    graph = ProblemGraphRevolute(robot)
+    return robot, graph
+
 def load_9_dof(limits=None):
     """
     For successive axes to be coplanar, need either a=0 or alpha= +/-pi for all joints.
