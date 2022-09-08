@@ -1,15 +1,13 @@
-# graphIK
-A library for solving inverse kinematics by modelling robots as geometric graphs and using ideas from distance geometry.
+# GraphIK
+GrpahIK is a library for solving inverse kinematics by modelling robots as geometric graphs and using concepts from distance geometry.
 
 <img src="https://raw.githubusercontent.com/utiasSTARS/GraphIK/main/assets/graph_ik_logo.png" width="250px"/>
-
 
 ## Dependencies
 GraphIK is implemented in Python 3. See [setup.py](https://github.com/utiasSTARS/graphIK/blob/main/setup.py) for a full list of dependencies.
 
-
 ## Usage
-Use of GraphIK can be summarized into 4 key steps which we'll walk through below (see the scripts in [experiments/](https://github.com/utiasSTARS/graphik-internal/tree/main/experiments) for more details).
+Use of GraphIK can be summarized by four key steps, which we'll walk through below (see the scripts in [experiments/](https://github.com/utiasSTARS/graphik-internal/tree/main/experiments) for more details).
 
 ### 1. Load a Robot
 In this example, we'll parse a [URDF file](https://industrial-training-master.readthedocs.io/en/melodic/_source/session3/Intro-to-URDF.html) describing a [Schunk LWA4P manipulator](https://github.com/marselap/schunk_lwa4p). 
@@ -21,7 +19,7 @@ robot, graph = load_schunk_lwa4d()
 GraphIK's interface between robot models and IK solvers is the abstract [`ProblemGraph`](https://github.com/utiasSTARS/graphIK/blob/main/graphik/graphs/graph_base.py) class. For the LWA4P, we'll use `ProblemGraphRevolute`, a subclass of `ProblemGraph` that can represent 3D robots with revolute joints.
 
 ### 2. Instantiate a ProblemGraph Object with Obstacles
-If you are considering an environment with spherical obstacles, you can include constraints that prevent collisions with them. In this example, we will use a set of spheres that approximate a table: 
+If you are considering an environment with spherical obstacles, you can include constraints that prevent collisions. In this example, we will use a set of spheres that approximate a table: 
 ```
 from graphik.utils.utils import table_environment
 obstacles = table_environment()
@@ -31,14 +29,14 @@ for idx, obs in enumerate(obstacles):
 ```
 
 ### 3. Specify a Goal Pose
-Interfaces to our solvers require a goal pose defined by the [`lieroups`](https://github.com/utiasSTARS/liegroups) library. For this simple example, using the robot's forward kinematics is the fastest way to get a sample goal pose:
+Interfaces to our solvers require a goal pose defined by the [`liegroups`](https://github.com/utiasSTARS/liegroups) library. For this simple example, using the robot's forward kinematics is the fastest way to get a sample goal pose:
 ```
 q_goal = robot.random_configuration()
 T_goal = robot.pose(q_goal, f"p{robot.n}")
 ```
 
 ### 4. Solve the IK Problem
-The main purpose of our graphical interpretation of robot kinematics is the development of distance geometric IK solvers. One example is the [Riemannian optimization-based solver](https://arxiv.org/abs/2011.04850) implemented in [`RiemannianSolver`](https://github.com/utiasSTARS/graphIK/blob/main/graphik/solvers/riemannian_solver.py). 
+The main purpose of our graphical interpretation of robot kinematics is to develop distance-geometric IK solvers. One example is the [Riemannian optimization-based solver](https://arxiv.org/abs/2011.04850) implemented in [`RiemannianSolver`](https://github.com/utiasSTARS/graphIK/blob/main/graphik/solvers/riemannian_solver.py). 
 
 ```
 from graphik.solvers.riemannian_solver import solve_with_riemannian
@@ -49,15 +47,30 @@ For faster computation, precompile costs and gradients using numba by running `p
 For a similar example using [`CIDGIK`](https://arxiv.org/abs/2109.03374), a convex optimization-based approach, please see [experiments/cidgik_example.py](https://github.com/utiasSTARS/graphIK/blob/main/experiments/cidgik_example.py).
 
 ## Publications and Related Work
-If you use any of this code in your research, kindly cite any relevant publications listed here.
+If you use any of this code in your research, please kindly cite the relevant publications listed here.
 
 ### Riemannian Optimization 
 arXiv: [Inverse Kinematics as Low-Rank Euclidean Distance Matrix Completion](https://arxiv.org/abs/2011.04850)
 
+IEEE Transactions on Robotics: [Riemannian Optimization for Distance-Geometric Inverse Kinematics](https://ieeexplore.ieee.org/document/9631368/)
+
+```bibtex
+@article{marić2022riemannian,
+	author = {Filip Mari\'{c} and Matthew Giamou and Adam W. Hall and Soroush Khoubyarian and Ivan Petrović and Jonathan Kelly},
+	journal = {{IEEE} Transactions on Robotics},
+	month = {June},
+	number = {3},
+	pages = {1703--1722},
+	title = {Riemannian Optimization for Distance-Geometric Inverse Kinematics},
+	volume = {38},
+	year = {2022}
+}
+```
+
 arXiv: [Riemannian Optimization for Distance-Geometric Inverse Kinematics](https://arxiv.org/abs/2108.13720)
 
 ```bibtex
-@misc{marić2021riemannian,
+@misc{marić202riemannian,
       title={Riemannian Optimization for Distance-Geometric Inverse Kinematics}, 
       author={Filip Marić and Matthew Giamou and Adam W. Hall and Soroush Khoubyarian and Ivan Petrović and Jonathan Kelly},
       year={2021},
