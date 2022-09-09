@@ -1,5 +1,5 @@
 # GraphIK
-GrpahIK is a library for solving inverse kinematics by modelling robots as geometric graphs and using concepts from distance geometry.
+GrpahIK is a library for solving inverse kinematics problems by modelling robots as geometric graphs and using concepts from distance geometry.
 
 <img src="https://raw.githubusercontent.com/utiasSTARS/GraphIK/main/assets/graph_ik_logo.png" width="250px"/>
 
@@ -50,7 +50,6 @@ For a similar example using [`CIDGIK`](https://arxiv.org/abs/2109.03374), a conv
 If you use any of this code in your research, please kindly cite the relevant publications listed here.
 
 ### Riemannian Optimization 
-arXiv: [Inverse Kinematics as Low-Rank Euclidean Distance Matrix Completion](https://arxiv.org/abs/2011.04850)
 
 IEEE Transactions on Robotics: [Riemannian Optimization for Distance-Geometric Inverse Kinematics](https://ieeexplore.ieee.org/document/9631368/)
 
@@ -70,24 +69,42 @@ IEEE Transactions on Robotics: [Riemannian Optimization for Distance-Geometric I
 arXiv: [Riemannian Optimization for Distance-Geometric Inverse Kinematics](https://arxiv.org/abs/2108.13720)
 
 ```bibtex
-@misc{marić202riemannian,
-      title={Riemannian Optimization for Distance-Geometric Inverse Kinematics}, 
+@misc{marić202riemannian_arxiv,
       author={Filip Marić and Matthew Giamou and Adam W. Hall and Soroush Khoubyarian and Ivan Petrović and Jonathan Kelly},
+      title={Riemannian Optimization for Distance-Geometric Inverse Kinematics}, 
       year={2021},
       eprint={2108.13720},
       archivePrefix={arXiv},
       primaryClass={cs.RO}
 }
 ```
+arXiv: [Inverse Kinematics as Low-Rank Euclidean Distance Matrix Completion](https://arxiv.org/abs/2011.04850)
 
 ### Semidefinite Programming (SDP) Relaxations
 
 #### CIDGIK
-arXiv: [Convex Iteration for Distance-Geometric Inverse Kinematics](https://arxiv.org/abs/2109.03374)
+
+IEEE Robotics & Automation Letters: [Convex Iteration for Distance-Geometric Inverse Kinematics](https://ieeexplore.ieee.org/document/9677911)
+
 ```bibtex
-@misc{giamou2022convex,
-      title={Convex Iteration for Distance-Geometric Inverse Kinematics}, 
+@article{2022_Giamou_Convex,
+	author = {Matthew Giamou and Filip Marić and David M. Rosen and Valentin Peretroukhin and Nicholas Roy and Ivan Petrović and Jonathan Kelly},
+	journal = {{IEEE} Robotics and Automation Letters},
+	month = {April},
+	number = {2},
+	pages = {1952--1959},
+	title = {Convex Iteration for Distance-Geometric Inverse Kinematics},
+	volume = {7},
+	year = {2022}
+}
+```
+
+arXiv: [Convex Iteration for Distance-Geometric Inverse Kinematics](https://arxiv.org/abs/2109.03374)
+
+```bibtex
+@misc{giamou2022convex_arxiv,
       author={Matthew Giamou and Filip Marić and David M. Rosen and Valentin Peretroukhin and Nicholas Roy and Ivan Petrović and Jonathan Kelly},
+      title={Convex Iteration for Distance-Geometric Inverse Kinematics}, 
       year={2022},
       eprint={2109.03374},
       archivePrefix={arXiv},
@@ -95,18 +112,32 @@ arXiv: [Convex Iteration for Distance-Geometric Inverse Kinematics](https://arxi
 }
 ```
 
-#### Sparse Sum-of-Squares Optimization for Planar and Spherical IK 
-arXiv: [Inverse Kinematics for Serial Kinematic Chains via Sum of Squares Optimization](https://arxiv.org/abs/1909.09318)
+#### Sparse Sum-of-Squares Optimization for Planar and Spherical IK
 
-MATLAB Code: https://github.com/utiasSTARS/sos-ik
+IEEE ICRA 2020: [Inverse Kinematics for Serial Kinematic Chains via Sum of Squares Optimization](https://ieeexplore.ieee.org/document/9196704)
 
 ```bibtex
-@inproceedings{maric2020inverse,
-  title={Inverse Kinematics for Serial Kinematic Chains via Sum of Squares Optimization},
-  author={Mari{\'c}, Filip and Giamou, Matthew and Khoubyarian, Soroush and Petrovi{\'c}, Ivan and Kelly, Jonathan},
-  booktitle={2020 IEEE International Conference on Robotics and Automation (ICRA)},
-  pages={7101--7107},
-  year={2020},
-  organization={IEEE}
+@inproceedings{marić2020inverse,
+	address = {Paris, France},
+	author = {Filip Marić and Matthew Giamou and Soroush Khoubyarian and Ivan Petrović and Jonathan Kelly},
+	booktitle = {Proceedings of the {IEEE} International Conference on Robotics and Automation {(ICRA'20})},
+	pages = {7101--7107},
+	title = {Inverse Kinematics for Serial Kinematic Chains via Sum of Squares Optimization},
+	year = {2020}
 }
 ```
+
+arXiv: [Inverse Kinematics for Serial Kinematic Chains via Sum of Squares Optimization](https://arxiv.org/abs/1909.09318)
+
+```bibtex
+@misc{marić2022convex_arxiv,
+      author={Filip Marić and {Matthew Giamou and Soroush Khoubyarian and Ivan Petrović and Jonathan Kelly},
+      title={Inverse Kinematics for Serial Kinematic Chains via Sum of Squares Optimization}, 
+      year={2020},
+      eprint={1909.09318},
+      archivePrefix={arXiv},
+      primaryClass={cs.RO}
+}
+```
+
+MATLAB Code: https://github.com/utiasSTARS/sos-ik
