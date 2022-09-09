@@ -69,7 +69,7 @@ IEEE Transactions on Robotics: [Riemannian Optimization for Distance-Geometric I
 arXiv: [Riemannian Optimization for Distance-Geometric Inverse Kinematics](https://arxiv.org/abs/2108.13720)
 
 ```bibtex
-@misc{marić202riemannian_arxiv,
+@misc{marić2021riemannian_arxiv,
       author={Filip Marić and Matthew Giamou and Adam W. Hall and Soroush Khoubyarian and Ivan Petrović and Jonathan Kelly},
       title={Riemannian Optimization for Distance-Geometric Inverse Kinematics}, 
       year={2021},
@@ -87,7 +87,7 @@ arXiv: [Inverse Kinematics as Low-Rank Euclidean Distance Matrix Completion](htt
 IEEE Robotics & Automation Letters: [Convex Iteration for Distance-Geometric Inverse Kinematics](https://ieeexplore.ieee.org/document/9677911)
 
 ```bibtex
-@article{2022_Giamou_Convex,
+@article{giamou2022convex,
 	author = {Matthew Giamou and Filip Marić and David M. Rosen and Valentin Peretroukhin and Nicholas Roy and Ivan Petrović and Jonathan Kelly},
 	journal = {{IEEE} Robotics and Automation Letters},
 	month = {April},
