@@ -49,7 +49,7 @@ For faster computation, precompile costs and gradients using numba by running `p
 For a similar example using [`CIDGIK`](https://arxiv.org/abs/2109.03374), a convex optimization-based approach, please see [experiments/cidgik_example.py](https://github.com/utiasSTARS/graphIK/blob/main/experiments/cidgik_example.py).
 
 ## Publications and Related Work
-If you use any of this code in your research, please kindly cite the relevant publications listed here.
+If you use any of this code in your research work, please kindly cite the relevant publications listed here.
 
 ### Riemannian Optimization 
 
