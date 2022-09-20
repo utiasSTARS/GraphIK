@@ -1,5 +1,5 @@
 # GraphIK
-GrpahIK is a library for solving inverse kinematics problems by modelling robots as geometric graphs and using concepts from distance geometry.
+GraphIK is a library for solving inverse kinematics problems by modelling robots as geometric graphs and using concepts from distance geometry.
 
 <img src="https://raw.githubusercontent.com/utiasSTARS/GraphIK/main/assets/graph_ik_logo.png" width="250px"/>
 
