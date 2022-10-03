@@ -1,4 +1,4 @@
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import numpy as np
 import numpy.linalg as la
 from graphik.robots import RobotRevolute
@@ -248,15 +248,17 @@ class ProblemGraphRevolute(ProblemGraph):
             pos[v] = T_goal_u.dot(trans_axis(self.axis_length, "z")).trans
         return pos
 
-    def joint_variables(
-        self, G: nx.DiGraph, T_final: Dict[str, SE3] = None
-    ) -> Dict[str, Any]:
+    def joint_variables(self, G: nx.DiGraph, T_final: Optional[Dict[str, SE3]] = None) -> Dict[str, float]:
         """
-        Calculate joint angles from a complete set of point positions.
+        Finds the set of decision variables corresponding to the
+        graph realization G.
+
+        :param G: networkx.DiGraph with known vertex positions
+        :param T_final: poses of end-effectors in case two final frames aligned along z
+        :returns: Dictionary of joint angles
+        :rtype: Dict[str, float]
         """
-        # TODO: make this more readable
         tol = 1e-10
-        q_zero = list_to_variable_dict(self.robot.n * [0])
         axis_length = self.axis_length
         end_effectors = self.robot.end_effectors
         kinematic_map = self.robot.kinematic_map
@@ -276,8 +278,9 @@ class ProblemGraphRevolute(ProblemGraph):
         R = np.vstack((x, -y, z)).T
         B = SE3Matrix(SO3Matrix(R), G.nodes[ROOT][POS])
 
-        theta = {}
+        omega_z = skew(np.array([0,0,1]));
 
+        theta = {}
         for ee in end_effectors:
             k_map = kinematic_map[ROOT][ee]
             for idx in range(1, len(k_map)):
@@ -286,82 +289,35 @@ class ProblemGraphRevolute(ProblemGraph):
 
                 T_prev = T[pred]
 
-                T_prev_0 = self.get_pose(q_zero, pred)
-                T_0 = self.get_pose(q_zero, cur)
-                T_rel = T_prev_0.inv().dot(T_0)
-                T_0_q = self.get_pose(q_zero, cur).dot(trans_axis(axis_length, "z"))
-                T_rel_q = T_prev_0.inv().dot(T_0_q)
+                T_prev_0 = self.robot.nodes[pred]["T0"] # previous p xf at 0
+                T_0 = self.robot.nodes[cur]["T0"] # cur p xf at 0
+                T_0_q = self.robot.nodes[cur]["T0"].dot(trans_axis(axis_length, "z")) # cur q xf at 0
+                T_rel = T_prev_0.inv().dot(T_0) # relative xf
+                ps_0 = T_prev_0.inv().dot(T_0).trans # relative xf
+                qs_0 = T_prev_0.inv().dot(T_0_q).trans # rel q xf
 
-                p = B.inv().dot(G.nodes[cur][POS]) - T_prev.trans
+                # predicted p and q expressed in previous frame
+                p = B.inv().dot(G.nodes[cur][POS])
                 qnorm = G.nodes[cur][POS] + (
                     G.nodes[aux_cur][POS] - G.nodes[cur][POS]
                 ) / la.norm(G.nodes[aux_cur][POS] - G.nodes[cur][POS])
-                q = B.inv().dot(qnorm) - T_prev.trans
-                ps = T_prev.inv().as_matrix()[:3, :3].dot(p)  # in prev. joint frame
-                qs = T_prev.inv().as_matrix()[:3, :3].dot(q)  # in prev. joint frame
+                q = B.inv().dot(qnorm)
+                ps = T_prev.inv().as_matrix()[:3, :3].dot(p - T_prev.trans)  # in prev. joint frame
+                qs = T_prev.inv().as_matrix()[:3, :3].dot(q - T_prev.trans)  # in prev. joint frame
 
-                zs = skew(np.array([0, 0, 1]))
-                cp = (T_rel.trans - ps) + zs.dot(zs).dot(T_rel.trans)
-                cq = (T_rel_q.trans - qs) + zs.dot(zs).dot(T_rel_q.trans)
-                ap = zs.dot(T_rel.trans)
-                aq = zs.dot(T_rel_q.trans)
-                bp = zs.dot(zs).dot(T_rel.trans)
-                bq = zs.dot(zs).dot(T_rel_q.trans)
-
-                c0 = cp.dot(cp) + cq.dot(cq)
-                c1 = 2 * (cp.dot(ap) + cq.dot(aq))
-                c2 = 2 * (cp.dot(bp) + cq.dot(bq))
-                c3 = ap.dot(ap) + aq.dot(aq)
-                c4 = bp.dot(bp) + bq.dot(bq)
-                c5 = 2 * (ap.dot(bp) + aq.dot(bq))
-
-                diff = np.asarray(
-                    [
-                        c1 - c5,
-                        2 * c2 + 4 * c3 - 4 * c4,
-                        3 * c1 + 3 * c5,
-                        8 * c2 + 4 * c3 - 4 * c4,
-                        -4 * c1 + 4 * c5,
-                    ]
-                )
-                if all(diff < tol):
-                    theta[cur] = 0
-                else:
-                    sols = np.roots(
-                        diff
-                    )  # solutions to the Whaba problem for fixed axis
-
-                    def error_test(x):
-                        if abs(x.imag) > 0:
-                            return 1e6
-                        x = -2 * arctan2(x.real, 1)
-                        return (
-                            c0
-                            + c1 * sin(x)
-                            - c2 * cos(x)
-                            + c3 * sin(x) ** 2
-                            + c4 * cos(x) ** 2
-                            - c5 * sin(2 * x) / 2
-                        )
-
-                    sol = min(sols, key=error_test)
-                    theta[cur] = -2 * arctan2(sol.real, 1)
+                theta[cur] = arctan2(-qs_0.dot(omega_z).dot(qs), qs_0.dot(omega_z.dot(omega_z.T)).dot(qs))
 
                 T[cur] = (T_prev.dot(rot_axis(theta[cur], "z"))).dot(T_rel)
 
-            if T_final is None:
-                return theta
-
-            if (
-                T_final[ee] is not None
-                and la.norm(cross(T_rel.trans, np.asarray([0, 0, 1]))) < tol
-            ):
+            # if the rotation axis of final joint is aligned with ee frame z axis,
+            # get angle from EE pose if available
+            if ((T_final is not None) and (la.norm(cross(T_rel.trans, np.asarray([0, 0, 1]))) < tol)):
                 T_th = (T[cur]).inv().dot(T_final[ee]).as_matrix()
-                theta[ee] += arctan2(T_th[1, 0], T_th[0, 0])
+                theta[ee] = wraptopi(theta[ee] +  arctan2(T_th[1, 0], T_th[0, 0]))
 
         return theta
 
-    def get_pose(self, joint_angles: dict, query_node: str) -> SE3:
+    def get_pose(self, joint_angles: Dict[str, float], query_node: str) -> SE3:
         T = self.robot.pose(joint_angles, query_node)
 
         if query_node[0] == AUX_PREFIX:

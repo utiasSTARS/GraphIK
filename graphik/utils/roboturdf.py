@@ -1,16 +1,10 @@
-from graphik.utils.utils import flatten
-from itertools import combinations
+from graphik.utils import skew, normalize
 from urdfpy import URDF
 from liegroups import SE3, SO3
 import numpy as np
-import trimesh
-import pyrender
 from graphik.graphs import ProblemGraphRevolute
 from graphik.robots import RobotRevolute
 import graphik
-if not type(graphik.__path__) == list:
-    graphik.__path__ = graphik.__path__._path
-
 from operator import itemgetter
 
 
@@ -23,26 +17,22 @@ class RobotURDF(object):
         self.n_q_joints = len(self.q_to_urdf_ind)
         self.n_urdf_joints = len(self.urdf_ind_to_q)
 
-        self.ee_joints = None
+        self.ee_joints = self.find_end_effector_joints()
         self.T_zero = self.extract_T_zero_from_URDF(frame="joint")
         self.scene = None
 
         self.parents = None
-        # self.parents = self.get_parents()
 
     def joint_map(self):
         urdf_ind_to_q = {}
         q_to_urdf_ind = {}
-        q_to_names = {}
         q_ind = 1
         label = "p{0}"
-        # for j, joint in enumerate(self.urdf.joints):
+
         for joint in self.urdf.actuated_joints:
             j = self.urdf.joints.index(joint)
             urdf_ind_to_q[j] = label.format(q_ind)
             q_to_urdf_ind[label.format(q_ind)] = j
-            # urdf_ind_to_q[j] = q_ind
-            # q_to_urdf_ind[q_ind] = j
             q_ind += 1
 
         return urdf_ind_to_q, q_to_urdf_ind
@@ -132,7 +122,7 @@ class RobotURDF(object):
     def extract_T_zero_from_URDF(self, q=None, frame="joint"):
         """
         T is located at the joint's origin, the rotation such that
-        z_hat points along the joint axis.
+        z_hat points along the joint rotation axis.
         """
         if q is not None:
             urdf_q = self.map_to_urdf_ind(q)
@@ -156,8 +146,7 @@ class RobotURDF(object):
             else:
                 T[joint] = T_link
 
-        ee_joints = self.find_end_effector_joints()
-        for ee_joint in ee_joints:
+        for ee_joint in self.ee_joints:
             ee_link = self.find_link_by_name(ee_joint.child)
             T[ee_joint] = SE3.from_matrix(fk[ee_link])
 
@@ -180,12 +169,6 @@ class RobotURDF(object):
         for joint in self.urdf.joints:
             child_joints = self.find_joints_actuated_child_joints(joint)
             if child_joints == []:
-                # child_link = self.find_link_by_name(joint.child)
-                # ee_joint = self.find_joints_with_parent_link(child_link)
-                # if ee_joint == []:
-                #    # No fixed joint for ee
-                #    raise("There is an end effector joint that isn't a fixed frame")
-                # ee_joints.extend(ee_joint)
                 ee_joints.append(joint)
 
         self.ee_joints = ee_joints
@@ -205,109 +188,6 @@ class RobotURDF(object):
         urdf_q = dict(zip(names, list(q.values())))
 
         return urdf_q
-
-    def visualize(
-        self,
-        q=None,
-        with_frames=True,
-        with_balls=True,
-        with_robot=True,
-        with_edges=True,
-        transparency=None,
-    ):
-        self.make_scene(
-            q=q,
-            with_frames=with_frames,
-            with_balls=with_balls,
-            with_robot=with_robot,
-            with_edges=with_edges,
-            transparency=transparency,
-        )
-
-        v = pyrender.Viewer(self.scene, use_raymond_lighting=True)
-
-    def make_scene(
-        self,
-        q=None,
-        with_frames=True,
-        with_balls=True,
-        with_robot=True,
-        with_edges=True,
-        transparency=None,
-    ):
-
-        if q is not None:
-            urdf_q = self.map_to_urdf_ind(q)
-            # cfg = list(urdf_q.values())
-            cfg = urdf_q
-        else:
-            cfg = {}
-        if with_robot:
-            robot_scene = self.urdf.show(
-                cfg=cfg, return_scene=True, transparency=transparency
-            )
-            if self.scene is None:
-                self.scene = robot_scene
-            else:
-                for node in robot_scene.get_nodes():
-                    self.scene.add_node(node)
-
-        Ts_dict = self.extract_T_zero_from_URDF(q=q)
-        Ts = []
-        for T in Ts_dict:
-            T_zero = Ts_dict[T]
-            Ts.append(T_zero)
-
-        if with_frames:
-            path = graphik.robots.__path__[0] + "/urdfs/meshes/frame.dae"
-            self.scene = view_dae(path, Ts, scene=self.scene, return_scene_only=True)
-
-        if with_balls:
-            path = graphik.robots.__path__[0] + "/urdfs/meshes/redball.dae"
-            self.scene = view_dae(path, Ts, scene=self.scene, return_scene_only=True)
-
-        if with_edges:
-            # Generate dense tuples that connect all joints
-            dense_edge_indices = list(combinations(range(len(Ts)), r=2))
-
-            # Draw cylinders between each indices
-            for e in dense_edge_indices:
-
-                m = self._create_edge_cylinder_mesh(Ts[e[0]], Ts[e[1]])
-                # None means the cylinder has zero height (duplicate Ts?)
-                if m is not None:
-                    self.scene.add(m, pose=SE3.identity().as_matrix())
-
-    def _create_edge_cylinder_mesh(self, T_i, T_j, radius=0.005):
-        """
-        Creates a cylinder that connects the 'nodes' at T_i and T_j
-
-        Parameters
-        ----------
-        T_i, T_j : SE3
-            SE3 representing nodes between which the cylinder will be drawn
-
-        Returns
-        -------
-        m : pyrender Mesh
-        """
-        # Generate each segment
-        seg = np.zeros((2, 3))
-        seg[0] = T_i.trans
-        seg[1] = T_j.trans
-
-        # Check that the cylinder has non-negligible size
-        if np.linalg.norm(seg[1] - seg[0]) < 0.001:
-            return None
-
-        # Create a gray cylinder
-        cyl = trimesh.creation.cylinder(radius=radius, segment=seg)
-        gray = 0.1
-        cyl.visual.vertex_colors = [gray, gray, gray, 0.98]
-
-        # Render it!
-        m = pyrender.Mesh.from_trimesh(cyl)
-        return m
 
     def joint_limits(self):
         ub = {}
@@ -343,7 +223,7 @@ class RobotURDF(object):
         labels = [label.format(i) for i in range(n)]
         return labels
 
-    def make_Revolute3d(self, ub, lb):
+    def make_Revolute3d(self, ub, lb, randomized_links = False, randomize_percentage = 0.4):
         # if all the child lists have len 1, then chain, otherwise tree
         params = {}
 
@@ -352,13 +232,24 @@ class RobotURDF(object):
         self.get_parents(joints)
         params["parents"] = self.parents
 
+        T_list = list(self.T_zero.values())
+        if randomized_links:
+            T_mod = T_list
+            for idx in range(len(T_list)-1):
+                T_delta = T_list[idx].inv().dot(T_list[idx+1]) # delta translation
+                t_delta = T_delta.trans*((1-randomize_percentage) + 2*randomize_percentage*np.random.rand()) # variation
+                t_delta[np.abs(t_delta) < 1e-6] = 0
+                T_delta.trans = t_delta
+                T_mod[idx+1] = T_mod[idx].dot(T_delta)
+            T_list = T_mod
+
         # Assign Transforms
         T_labels = self.get_graphik_labels(joints)
-        T_zero = dict(zip(T_labels, self.T_zero.values()))
+        # T_zero = dict(zip(T_labels, self.T_zero.values()))
+        T_zero = dict(zip(T_labels, T_list))
         T0 = T_zero["p0"]
         for key, val in T_zero.items():
             T_zero[key] = T0.inv().dot(val)
-        # T_zero['root'] = SE3.identity()
         params["T_zero"] = T_zero
         params["num_joints"] = self.n_q_joints
 
@@ -372,91 +263,13 @@ class RobotURDF(object):
         else:
             return RobotRevolute(params)
 
-
-def view_dae(dae: str, T_zero: list, scene=None, return_scene_only=False, colour=None):
-    if scene is None:
-        scene = pyrender.Scene()
-
-    frame_tm = trimesh.load(dae)
-    material = None
-    if colour is not None:
-        for tm in frame_tm.dump():
-            colors, texcoords, material = pyrender.Mesh._get_trimesh_props(tm)
-            if colour == "red":
-                material.baseColorFactor = np.array([1.0, 0.0, 0.0, 1.0])
-            elif colour == "green":
-                material.baseColorFactor = np.array([0.0, 1.0, 0.0, 1.0])
-            elif colour == "blue":
-                material.baseColorFactor = np.array([0.0, 0.0, 1.0, 1.0])
-            else:
-                raise ("colour not implemented")
-
-    # frame_tm = trimesh.load('graphik/robots/urdfs/meshes/frame.dae')
-    meshes = pyrender.Mesh.from_trimesh(frame_tm.dump(), material=material)
-
-    for T in T_zero:
-        scene.add(meshes, pose=T.as_matrix())
-    if return_scene_only:
-        return scene
-    else:
-        v = pyrender.Viewer(scene, use_raymond_lighting=True)
-        return scene
-
-
-def skew(x):
-    x = flatten(x)
-    X = np.array([[0, -x[2], x[1]], [x[2], 0, -x[0]], [-x[1], x[0], 0]])
-    return X
-
-
-def plot_balls_from_points(
-    points: np.array, scene=None, return_scene_only=False, colour=None
-):
-    """
-    Plot red balls at each point in the nx3 array points
-    Parameters
-    ----------
-    points : np.array
-        nx3 array of points to plot the balls
-    scene : pyrender.Scene
-        The scene to add the balls to. If scene=None, then a new scene will be
-        created
-    return_scene_only : bool
-        If True, will only return the scene and not plot the points. If False,
-        will plot the points and return the scene.
-
-    Returns
-    -------
-        scene
-
-    """
-    dae = graphik.robots.__path__[0] + "/urdfs/meshes/redball.dae"
-    n, _ = points.shape
-    T = []
-    for i in range(n):
-        T_id = np.eye(4)
-        T_id[0:3, 3] = points[i, :]
-        T_zero = SE3.from_matrix(T_id)
-        T.append(T_zero)
-
-    scene = view_dae(
-        dae, T, scene=scene, return_scene_only=return_scene_only, colour=colour
-    )
-    return scene
-
-
-def get_T_from_joint_axis(axis: str, switch=False):
+def get_T_from_joint_axis(axis: np.ndarray):
     """
     Take in the axis string from urdf "X X X" and return the rotation matrix
     assoicated with that axis
     """
     norm = np.linalg.norm
     z_hat = np.array([0, 0, 1])
-
-    if switch:
-        sgn = -1.0
-    else:
-        sgn = 1.0
 
     if all(np.isclose(axis, -z_hat)):
         R = SO3.rotx(np.pi).as_matrix()
@@ -483,12 +296,7 @@ def get_T_from_joint_axis(axis: str, switch=False):
 
     return T
 
-
-def normalize(x):
-    return x / np.linalg.norm(x)
-
-
-def load_schunk_lwa4p(limits=None):
+def load_schunk_lwa4p(limits=None, randomized_links = False, randomize_percentage = 0.4):
     fname = graphik.__path__[0] + "/robots/urdfs/lwa4p.urdf"
     urdf_robot = RobotURDF(fname)
     n = urdf_robot.n_q_joints
@@ -498,12 +306,12 @@ def load_schunk_lwa4p(limits=None):
     else:
         lb = limits[0]
         ub = limits[1]
-    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
+    robot = urdf_robot.make_Revolute3d(ub, lb, randomized_links, randomize_percentage)  # make the Revolute class from a URDF
     graph = ProblemGraphRevolute(robot)
     return robot, graph
 
 
-def load_schunk_lwa4d(limits=None):
+def load_schunk_lwa4d(limits=None, randomized_links = False, randomize_percentage = 0.4):
     fname = graphik.__path__[0] + "/robots/urdfs/lwa4d.urdf"
     urdf_robot = RobotURDF(fname)
     n = urdf_robot.n_q_joints
@@ -513,12 +321,12 @@ def load_schunk_lwa4d(limits=None):
     else:
         lb = limits[0]
         ub = limits[1]
-    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
+    robot = urdf_robot.make_Revolute3d(ub, lb, randomized_links, randomize_percentage)  # make the Revolute class from a URDF
     graph = ProblemGraphRevolute(robot)
     return robot, graph
 
 
-def load_kuka(limits=None):
+def load_kuka(limits=None, randomized_links = False, randomize_percentage = 0.4):
     fname = graphik.__path__[0] + "/robots/urdfs/kuka_iiwr.urdf"
     urdf_robot = RobotURDF(fname)
     n = urdf_robot.n_q_joints
@@ -528,12 +336,26 @@ def load_kuka(limits=None):
     else:
         lb = limits[0]
         ub = limits[1]
-    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
+    robot = urdf_robot.make_Revolute3d(ub, lb, randomized_links, randomize_percentage)  # make the Revolute class from a URDF
     graph = ProblemGraphRevolute(robot)
     return robot, graph
 
+def load_panda(limits=None, randomized_links = False, randomize_percentage = 0.4):
+    fname = graphik.__path__[0] + "/robots/urdfs/panda_arm.urdf"
+    urdf_robot = RobotURDF(fname)
+    n = urdf_robot.n_q_joints
+    if limits is None:
+        ub = np.ones(n) * np.pi
+        lb = -ub
+    else:
+        lb = limits[0]
+        ub = limits[1]
+    robot = urdf_robot.make_Revolute3d(ub, lb, randomized_links, randomize_percentage)  # make the Revolute class from a URDF
+    # print(robot.structure.nodes())
+    graph = ProblemGraphRevolute(robot)
+    return robot, graph
 
-def load_ur10(limits=None):
+def load_ur10(limits=None, randomized_links = False, randomize_percentage = 0.4):
     fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
     urdf_robot = RobotURDF(fname)
     n = urdf_robot.n_q_joints
@@ -543,7 +365,7 @@ def load_ur10(limits=None):
     else:
         lb = limits[0]
         ub = limits[1]
-    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
+    robot = urdf_robot.make_Revolute3d(ub, lb, randomized_links, randomize_percentage)  # make the Revolute class from a URDF
     # print(robot.structure.nodes())
     graph = ProblemGraphRevolute(robot)
     return robot, graph
@@ -571,65 +393,6 @@ def load_truncated_ur10(n: int):
         "theta": th[:n],
         "lb": lb[:n],
         "ub": ub[:n],
-        "modified_dh": modified_dh,
-        "num_joints": n,
-    }
-
-    robot = RobotRevolute(params)
-    graph = ProblemGraphRevolute(robot)
-    return robot, graph
-
-def load_panda(limits=None):
-    fname = graphik.__path__[0] + "/robots/urdfs/panda_arm.urdf"
-    urdf_robot = RobotURDF(fname)
-    n = urdf_robot.n_q_joints
-    if limits is None:
-        ub = np.ones(n) * np.pi
-        lb = -ub
-    else:
-        lb = limits[0]
-        ub = limits[1]
-    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
-    graph = ProblemGraphRevolute(robot)
-    return robot, graph
-
-def load_panda_truncated(limits=None):
-    fname = graphik.__path__[0] + "/robots/urdfs/panda_arm_truncated.urdf"
-    urdf_robot = RobotURDF(fname)
-    n = urdf_robot.n_q_joints
-    if limits is None:
-        ub = np.ones(n) * np.pi
-        lb = -ub
-    else:
-        lb = limits[0]
-        ub = limits[1]
-    robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
-    graph = ProblemGraphRevolute(robot)
-    return robot, graph
-
-def load_9_dof(limits=None):
-    """
-    For successive axes to be coplanar, need either a=0 or alpha= +/-pi for all joints.
-    """
-    n = 9
-    a  = list(np.zeros(n))
-    al = list(np.array([-1., 1., -1., 1., -1., 1., -1., 1., 0.])*np.pi/2)
-    d  = list(np.array([0., 0., 0.15655, 0., 0.15215, 0., 0.11985, 0., 0.0739])*3.)  # Inflate for scale similar to table environment
-    th = [0, 0, 0, 0, 0, 0, 0, 0, 0]
-    if limits is None:
-        ub = np.ones(n) * np.pi
-        lb = -ub
-    else:
-        lb = limits[0]
-        ub = limits[1]
-    modified_dh = False
-    params = {
-        "a": a,
-        "alpha": al,
-        "d": d,
-        "theta": th,
-        "lb": lb,
-        "ub": ub,
         "modified_dh": modified_dh,
         "num_joints": n,
     }

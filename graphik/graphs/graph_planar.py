@@ -14,18 +14,20 @@ class ProblemGraphPlanar(ProblemGraph):
     def __init__(self, robot: RobotPlanar, params: Dict = {}):
         super(ProblemGraphPlanar, self).__init__(robot, params)
 
-        #
-        base = self.base_subgraph()
-        structure = self.structure_subgraph()
-
+        # initialize the base and structure subgraphs
+        base = self.init_base_subgraph()
+        structure = self.init_structure_subgraph()
         composition = nx.compose(base, structure)
+
+        # set known node locations and distances for the problem graph
         self.add_nodes_from(composition.nodes(data=True))
         self.add_edges_from(composition.edges(data=True))
 
+        # set distance limits corresponding to joint limits
         self.set_limits()
         self.root_angle_limits()
 
-    def base_subgraph(self) -> nx.DiGraph:
+    def init_base_subgraph(self) -> nx.DiGraph:
         base = nx.DiGraph([("p0", "x"), ("p0", "y"), ("x", "y")])
 
         # Invert x axis because of the way joint limits are set up, makes no difference
@@ -45,7 +47,7 @@ class ProblemGraphPlanar(ProblemGraph):
 
         return base
 
-    def structure_subgraph(self) -> nx.DiGraph:
+    def init_structure_subgraph(self) -> nx.DiGraph:
         robot = self.robot
         end_effectors = self.robot.end_effectors
         kinematic_map = self.robot.kinematic_map
@@ -109,6 +111,7 @@ class ProblemGraphPlanar(ProblemGraph):
         """
         Sets known bounds on the distances between joints.
         This is induced by link length and joint limits.
+        TODO unify with root_angle_limits
         """
         S = self.structure
         for u in S:
@@ -152,7 +155,7 @@ class ProblemGraphPlanar(ProblemGraph):
         """
         joint_variables = {}
 
-        # resolve rotation of entire point set
+        # resolve rotation and translation
         R_, t_ = best_fit_transform(np.vstack((G.nodes[ROOT][POS],
                                                G.nodes["x"][POS],
                                                G.nodes["y"][POS])) ,
