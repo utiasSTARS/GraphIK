@@ -47,7 +47,7 @@ def distance_matrix_from_graph(G: nx.Graph, label=DIST, nonedge=0) -> ArrayLike:
     if isinstance(G, nx.DiGraph):
         G = G.to_undirected(as_view=True)
 
-    return nx.to_numpy_array(G, weight=DIST, nonedge=nonedge) ** 2
+    return nx.to_numpy_array(G, weight=DIST, nonedge=nonedge, dtype=np.dtype(float)) ** 2
 
 
 def adjacency_matrix_from_graph(
