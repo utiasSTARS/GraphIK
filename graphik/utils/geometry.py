@@ -16,6 +16,17 @@ def angle_to_se2(a: float, theta: float) -> SE2:
     R = SO2.from_angle(theta)
     return SE2(R, R.dot(np.array([a, 0.0])))  # TODO: rotate the translation or not?
 
+
+def extract_relative_angle_Z(T_source: np.ndarray, T_target: np.ndarray) -> float:
+    """
+
+    :param T_source: source transformation matrix
+    :param T_target: target transformation matrix that transforms e.e. coords to base coords
+    :return:
+    """
+    T_rel = np.linalg.inv(T_source).dot(T_target)
+    return np.arctan2(T_rel[1, 0], T_rel[0, 0])
+
 def skew(x):
     """
     Creates a skew symmetric matrix from vector x
@@ -41,6 +52,50 @@ def rot_axis(theta, axis="z") -> SE3:
     if axis == "x":
         return SE3(SO3.rotx(theta), np.array([0, 0, 0]))
     raise Exception("Invalid Axis")
+
+def generate_rotation_matrix(theta: float, axis: ArrayLike) -> ArrayLike:
+    R = np.array([])
+
+    c = math.cos(theta)
+    s = math.sin(theta)
+
+    if type(axis).__name__ == "str":
+        if axis == "x":
+            R = np.array([[1, 0, 0], [0, c, -s], [0, s, c]])
+        elif axis == "y":
+            R = np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
+        elif axis == "z":
+            R = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+        else:
+            R = np.array([False])
+    else:
+        x = axis[0]
+        y = axis[1]
+        z = axis[2]
+
+        R = [
+            [c + x ** 2 * (1 - c), x * y * (1 - c) - z * s, x * z * (1 - c) + y * s],
+            [y * x * (1 - c) + z * s, c + y ** 2 * (1 - c), y * z * (1 - c) - x * s],
+            [z * x * (1 - c) - y * s, z * y * (1 - c) + x * s, c + z ** 2 * (1 - c)],
+        ]
+        R = np.array(R)
+
+    return R
+
+
+def cross_symb(x, y):
+    """
+    Returns the cross product of x and y.
+    Supports sympy by not using np.cross()
+    :param x:
+    :param y:
+    :return:
+    """
+    z1 = -x[2] * y[1] + x[1] * y[2]
+    z2 = x[2] * y[0] - x[0] * y[2]
+    z3 = -x[1] * y[0] + x[0] * y[1]
+
+    return np.array([z1, z2, z3])
 
 def max_min_distance_revolute(r, P, C, N):
     delta = P-C
@@ -83,6 +138,8 @@ def best_fit_transform(A: ArrayLike, B: ArrayLike) -> Tuple[ArrayLike, ArrayLike
 
     AA = A - centroid_A
     BB = B - centroid_B
+    # print(AA)
+    # print(BB)
 
     # rotation matrix
     H = np.dot(AA.T, BB)

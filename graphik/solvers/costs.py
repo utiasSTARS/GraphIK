@@ -168,6 +168,56 @@ def lcost_and_grad(Y, D_goal, omega, psi_L, psi_U, inds):
                     )
     return 0.5*cost, 0.5*grad
 
+
+# @cc.export(
+#     "lhess",
+#     "f8[:,:](f8[:,:],f8[:,:],f8[:,:],f8[:,:],f8[:,:],f8[:,:],UniTuple(u8[:],2))",
+# )
+# def lhess(Y, w, D_goal, omega, psi_L, psi_U, inds):
+#     num_el = Y.shape[0]
+#     dim = Y.shape[1]
+#     hess = np.zeros((num_el, dim))
+#     for (idx, jdx) in zip(*inds):
+#         nrm = 0
+#         sc = 0
+#         for kdx in range(dim):
+#             nrm += (Y[idx, kdx] - Y[jdx, kdx]) ** 2
+#             sc += (Y[idx, kdx] - Y[jdx, kdx]) * (w[idx, kdx] - w[jdx, kdx])
+#         if omega[idx, jdx]:
+#             for kdx in range(dim):
+#                 hess[idx, kdx] += (
+#                     2 * sc * (Y[idx, kdx] - Y[jdx, kdx])
+#                     + (nrm - D_goal[idx, jdx]) * (w[idx, kdx] - w[jdx, kdx])
+#                 )
+#                 hess[jdx, kdx] += (
+#                     2 * sc * (Y[jdx, kdx] - Y[idx, kdx])
+#                     + (nrm - D_goal[jdx, idx]) * (w[jdx, kdx] - w[idx, kdx])
+#                 )
+#         if psi_L[idx, jdx]:
+#             if max(psi_L[idx, jdx] - nrm, 0) > 0:
+#                 for kdx in range(dim):
+#                     hess[idx, kdx] += (
+#                         2 * sc * (Y[idx, kdx] - Y[jdx, kdx])
+#                         + (nrm - psi_L[idx, jdx]) * (w[idx, kdx] - w[jdx, kdx])
+#                     )
+#                     hess[jdx, kdx] += (
+#                         2 * sc * (Y[jdx, kdx] - Y[idx, kdx])
+#                         + (nrm - psi_L[jdx, idx]) * (w[jdx, kdx] - w[idx, kdx])
+#                     )
+#         if psi_U[idx, jdx]:
+#             if max(-psi_U[idx, jdx] + nrm, 0) > 0:
+#                 for kdx in range(dim):
+#                     hess[idx, kdx] += (
+#                         2 * sc * (Y[idx, kdx] - Y[jdx, kdx])
+#                         + (nrm - psi_U[idx, jdx]) * (w[idx, kdx] - w[jdx, kdx])
+#                     )
+#                     hess[jdx, kdx] += (
+#                         2 * sc * (Y[jdx, kdx] - Y[idx, kdx])
+#                         + (nrm - psi_U[jdx, idx]) * (w[jdx, kdx] - w[idx, kdx])
+#                     )
+
+#     return 2 * hess
+
 @cc.export(
     "lhess",
     "f8[:,:](f8[:,:],f8[:,:],f8[:,:],f8[:,:],f8[:,:],f8[:,:],UniTuple(u8[:],2))",

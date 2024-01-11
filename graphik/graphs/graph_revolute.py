@@ -1,4 +1,4 @@
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union
 import numpy as np
 import numpy.linalg as la
 from graphik.robots import RobotRevolute
@@ -10,7 +10,6 @@ from liegroups.numpy.so3 import SO3Matrix
 import networkx as nx
 from numpy import cos, pi, sqrt, arctan2, cross
 
-
 class ProblemGraphRevolute(ProblemGraph):
     def __init__(
         self,
@@ -19,17 +18,18 @@ class ProblemGraphRevolute(ProblemGraph):
     ):
         super(ProblemGraphRevolute, self).__init__(robot, params)
 
-        base = self.base_subgraph()
-        structure = self.structure_graph()
-
+        # initialize the base and structure subgraphs
+        base = self.init_base_subgraph()
+        structure = self.init_structure_subgraph()
         composition = nx.compose(base, structure)
+
         self.add_nodes_from(composition.nodes(data=True))
         self.add_edges_from(composition.edges(data=True))
 
         self.set_limits()
         self.root_angle_limits()
 
-    def base_subgraph(self) -> nx.DiGraph:
+    def init_base_subgraph(self) -> nx.DiGraph:
         axis_length = self.axis_length
         base = nx.DiGraph(
             [
@@ -56,7 +56,7 @@ class ProblemGraphRevolute(ProblemGraph):
             base[u][v][BOUNDED] = []
         return base
 
-    def structure_graph(self):
+    def init_structure_subgraph(self):
         trans_z = trans_axis(self.axis_length, "z")
         robot = self.robot
 
@@ -314,16 +314,13 @@ class ProblemGraphRevolute(ProblemGraph):
             if ((T_final is not None) and (la.norm(cross(T_rel.trans, np.asarray([0, 0, 1]))) < tol)):
                 T_th = (T[cur]).inv().dot(T_final[ee]).as_matrix()
                 theta[ee] = wraptopi(theta[ee] +  arctan2(T_th[1, 0], T_th[0, 0]))
-
         return theta
 
     def get_pose(self, joint_angles: Dict[str, float], query_node: str) -> SE3:
         T = self.robot.pose(joint_angles, query_node)
-
         if query_node[0] == AUX_PREFIX:
             T_trans = trans_axis(self.axis_length, "z")
             T = T.dot(T_trans)
-
         return T
 
     def distance_bounds_from_sampling(self):
@@ -349,40 +346,118 @@ class ProblemGraphRevolute(ProblemGraph):
                 if abs(D_max[idx, jdx] - D_min[idx, jdx]) < 1e-5:
                     self[e1][e2][DIST] = abs(D_max[idx, jdx] - D_min[idx, jdx])
 
+def random_revolute_robot_graph(
+    n: int, a_range=(-0.5, 0.5), d_range=(0, 0.5)
+) -> ProblemGraphRevolute:
+
+    params = {
+        "a": [],
+        "alpha": [],
+        "d": [],
+        "theta": [],
+        "num_joints": n,
+        "modified_dh": False,
+    }
+
+    # we fix the first joint for simplicity
+    params["alpha"] += [-np.pi/2 + np.pi * np.random.randint(2)]
+    params["a"] += [0]
+    params["d"] += [(d_range[0] + (d_range[1] - d_range[0]) * np.random.rand()) * np.random.randint(2)]
+    # params["theta"] += [(np.pi) * np.random.randint(2)]
+    params["theta"] += [0]
+
+    for _ in range(n-2):
+        params["theta"] += [0]
+        # if (len(params["alpha"]) > 1) and ((params["alpha"][-1] != 0) and (params["alpha"][-2] != 0)):
+        #     params["alpha"] += [0]
+        # elif (len(params["alpha"]) > 1) and ((params["alpha"][-1] == 0) and (params["alpha"][-2] == 0)):
+        #     params["alpha"] += [-np.pi/2 + (np.pi) * np.random.randint(2)]
+        # elif params["alpha"][-1] != 0:
+        #     # if previous joint had alpha != 0, the next one is either opposite or 0
+        #     params["alpha"] += [-params["alpha"][-1] * np.random.randint(2)]
+        if (len(params["alpha"]) > 1) and ((params["alpha"][-1] == 0) and (params["alpha"][-2] == 0)):
+            params["alpha"] += [-np.pi/2 + (np.pi) * np.random.randint(2)]
+        else:
+            # params["alpha"] += [(-np.pi/2 + np.pi * np.random.randint(2)) * (np.random.randint(2))]
+            params["alpha"] += [(-np.pi/2 + np.pi * np.random.randint(2)) * (np.random.randint(4) > 0)]
+
+        if params["alpha"][-1] != 0:
+            params["a"] += [0]
+            params["d"] += [(d_range[0] + (d_range[1] - d_range[0]) * np.random.rand()) * (np.random.randint(2))]
+        else:
+            params["a"] += [a_range[0] + (a_range[1] - a_range[0]) * np.random.rand()]
+            params["d"] += [0]
+            params["alpha"][-1] += np.pi * np.random.randint(2) # alpha can also be -pi instead of 0
+
+    params["alpha"] += [0]
+    params["a"] += [0]
+    params["d"] += [(d_range[0] + (d_range[1] - d_range[0]) * np.random.rand()) * np.random.randint(2)]
+    params["theta"] += [0]
+
+    robot = RobotRevolute(params)
+    graph = ProblemGraphRevolute(robot)
+    return graph
 
 if __name__ == "__main__":
     import graphik
     from graphik.utils.roboturdf import RobotURDF
+    np.set_printoptions(precision=4, suppress=True)
 
-    n = 6
+    n = 7
     ub = (pi) * np.ones(n)
     lb = -ub
     modified_dh = False
 
-    fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
+    # fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/lwa4p.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/lwa4d.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/panda_arm.urdf"
-    # fname = graphik.__path__[0] + "/robots/urdfs/kuka_iiwr.urdf"
+    fname = graphik.__path__[0] + "/robots/urdfs/kuka_iiwr.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/kuka_lwr.urdf"
     # fname = graphik.__path__[0] + "/robots/urdfs/jaco2arm6DOF_no_hand.urdf"
 
     urdf_robot = RobotURDF(fname)
     robot = urdf_robot.make_Revolute3d(ub, lb)  # make the Revolute class from a URDF
-    graph = ProblemGraphRevolute(robot)
-    print(graph.nodes(data=True))
-    print(graph.base_nodes)
-    print(graph.structure_nodes)
-    print(graph.end_effector_nodes)
-    # import timeit
+    # graph = ProblemGraphRevolute(robot,)
+    # q_init = graph.robot.random_configuration()
+    # q_init[graph.robot.end_effectors[0]] = 0
+    # G_init = graph.realization(q_init)
+    # D = distance_matrix_from_graph(graph)
+    # print(D)
+    T_urdf = list(nx.get_edge_attributes(robot, "T").values())
 
-    # print(
-    #     max(
-    #         timeit.repeat(
-    #             "graph.realization(robot.random_configuration())",
-    #             globals=globals(),
-    #             number=1,
-    #             repeat=1000,
-    #         )
-    #     )
-    # )
+    for idx in range(robot.n):
+        print(T_urdf[idx].as_matrix())
+        print("-------")
+    print("-------")
+    #
+    # # UR10 coordinates for testing
+    modified_dh = False
+    a = [0, 0, 0, 0, 0, 0, 0]
+    d = [0.34, 0, 0.40, 0, 0.40, 0, 0.126]
+    al = [-np.pi / 2, np.pi / 2, np.pi / 2, -np.pi / 2, -np.pi / 2, np.pi / 2, 0]
+    th = [0, 0, 0, 0, 0, 0, 0]
+
+    params = {
+        "a": a,
+        "alpha": al,
+        "d": d,
+        "theta": th,
+        "modified_dh": modified_dh,
+        "num_joints": 7,
+    }
+    robot = RobotRevolute(params)
+    graph = ProblemGraphRevolute(robot)
+    T_dh = list(nx.get_edge_attributes(robot, "T").values())
+    for idx in range(robot.n):
+        print(T_dh[idx].as_matrix())
+        print("-------")
+    print("-------")
+    # #
+    # graph = random_revolute_robot_graph(6)
+    # robot = graph.robot
+    # # robot = RobotRevolute(params)
+    # T_dh = list(nx.get_edge_attributes(robot, "T").values())
+    # for idx in range(robot.n):
+    #     print(T_dh[idx].as_matrix())
+    #     print("-------")
