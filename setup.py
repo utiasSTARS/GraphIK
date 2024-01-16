@@ -11,8 +11,9 @@ setup(
     url="https://github.com/utiasSTARS/graphIK",
     packages=find_packages(),
     package_data={
-        'graphik': ['graphik/robots/urdfs/*'],
+        'graphIK': ['robots/urdfs/*'],
     },
+    include_package_data=True,
     install_requires=[
         "numpy >= 1.16",
         "scipy >= 1.3.0",
