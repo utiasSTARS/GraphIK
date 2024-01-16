@@ -11,7 +11,7 @@ setup(
     url="https://github.com/utiasSTARS/graphIK",
     packages=find_packages(),
     package_data={
-        'graphik': ['robots/urdfs/*'],
+        'graphik': ['robots/urdfs/*', 'robots/urdfs/meshes/**/*'],
     },
     include_package_data=True,
     install_requires=[
