@@ -347,7 +347,7 @@ class ProblemGraphRevolute(ProblemGraph):
                     self[e1][e2][DIST] = abs(D_max[idx, jdx] - D_min[idx, jdx])
 
 def random_revolute_robot_graph(
-    n: int, a_range=(-0.5, 0.5), d_range=(0, 0.5)
+    n: int, a_range=(-0.5, 0.5), d_range=(0, 0.5), modified_dh: bool = False
 ) -> ProblemGraphRevolute:
 
     params = {
@@ -356,7 +356,7 @@ def random_revolute_robot_graph(
         "d": [],
         "theta": [],
         "num_joints": n,
-        "modified_dh": False,
+        "modified_dh": modified_dh,
     }
 
     # we fix the first joint for simplicity
