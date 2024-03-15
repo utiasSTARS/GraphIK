@@ -1,4 +1,4 @@
-from typing import Dict, List, Union, Any
+from typing import Dict, List, Union, Any, Optional
 import numpy as np
 import numpy.linalg as la
 from graphik.robots import RobotPlanar
@@ -144,7 +144,7 @@ class ProblemGraphPlanar(ProblemGraph):
                     pos[v] = T_goal_u.trans - z * d
         return pos
 
-    def joint_variables(self, G: nx.Graph) -> Dict[str, float]:
+    def joint_variables(self, G: nx.Graph, T_final: Optional[Dict[str, SE2]] = None) -> Dict[str, float]:
         """
         Finds the set of decision variables corresponding to the
         graph realization G.
