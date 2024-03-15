@@ -14,6 +14,7 @@ from graphik.utils import (
     graph_from_pos
     )
 from graphik.solvers.riemannian_solver import RiemannianSolver
+from graphik.utils.dgp import bound_smoothing
 
 
 def random_problem_2d_chain():
@@ -54,7 +55,8 @@ def random_problem_2d_chain():
         G = graph.from_pose(T_goal)
         D_goal = distance_matrix_from_graph(G)
         omega = adjacency_matrix_from_graph(G)
-        sol_info = solver.solve(D_goal, omega, Y_init =Y_init, jit=False)
+        lb, ub = bound_smoothing(G)
+        sol_info = solver.solve(D_goal, omega, Y_init =Y_init, bounds=(lb,ub), jit=False)
         G_sol = graph_from_pos(sol_info["x"], graph.node_ids)
         q_sol = graph.joint_variables(G_sol, {f"p{graph.robot.n}": T_goal})
 

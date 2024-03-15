@@ -22,9 +22,10 @@ def random_problem_2d_chain():
     n = 10
     fails = 0
 
-    a = list_to_variable_dict(np.random.rand(n) * 2.0 + 1.0)
+    a = list_to_variable_dict(np.ones(n))
     th = list_to_variable_dict(np.zeros(n))
-    angular_limits = np.minimum(np.random.rand(n) * np.pi + 0.20, np.pi)
+    # angular_limits = np.minimum(np.random.rand(n) * np.pi + 0.20, np.pi)
+    angular_limits = np.array((n-1)*[np.pi/2] + [np.pi])
     upper_angular_limits = list_to_variable_dict(angular_limits)
     lower_angular_limits = list_to_variable_dict(-angular_limits)
     robot_params = {
@@ -56,7 +57,7 @@ def random_problem_2d_chain():
         D_goal = distance_matrix_from_graph(G)
         omega = adjacency_matrix_from_graph(G)
         lb, ub = bound_smoothing(G)
-        sol_info = solver.solve(D_goal, omega, Y_init =Y_init, use_limits=True, bounds=(lb, ub), jit=False)
+        sol_info = solver.solve(D_goal, omega, Y_init =Y_init, use_limits=True, bounds=(lb,ub), jit=False)
         G_sol = graph_from_pos(sol_info["x"], graph.node_ids)
         q_sol = graph.joint_variables(G_sol, {f"p{graph.robot.n}": T_goal})
 
