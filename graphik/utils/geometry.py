@@ -20,7 +20,7 @@ def skew(x):
     """
     Creates a skew symmetric matrix from vector x
     """
-    X = np.array([[0, -x[2], x[1]], [x[2], 0, -x[0]], [-x[1], x[0], 0]])
+    X = np.array([[0., -x[2], x[1]], [x[2], 0., -x[0]], [-x[1], x[0], 0.]])
     return X
 
 def trans_axis(t, axis="z") -> SE3:

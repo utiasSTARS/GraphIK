@@ -7,7 +7,7 @@ from graphik.utils import *
 from liegroups.numpy import SE2, SO2
 import networkx as nx
 from numpy import cos, pi
-from math import sqrt
+from math import sqrt, atan2
 
 
 class ProblemGraphPlanar(ProblemGraph):
@@ -168,7 +168,7 @@ class ProblemGraphPlanar(ProblemGraph):
                 diff_uv = R_.dot(G.nodes[v][POS] - G.nodes[u][POS])
                 len_uv = np.linalg.norm(diff_uv)
                 sol = R[u].as_matrix().T.dot(diff_uv/len_uv)
-                theta_idx = np.math.atan2(sol[1], sol[0])
+                theta_idx = atan2(sol[1], sol[0])
                 joint_variables[v] = wraptopi(theta_idx)
                 Rz = SO2.from_angle(theta_idx)
                 R[v] = R[u].dot(Rz)

@@ -38,7 +38,7 @@ class Robot(nx.DiGraph):
         self.add_edges_from(topology.edges())
 
         # A dict of shortest paths between joints for forward kinematics
-        self.kinematic_map = nx.shortest_path(self)
+        self.kinematic_map = dict(nx.shortest_path(self))
 
         # Lower and upper joint limits
         self.lb = params.get("joint_limits_lower", self.n * [-pi])
