@@ -113,3 +113,38 @@ class RobotPlanar(Robot):
                     Ad = T.adjoint()
                     J[node][:, idx] = Ad.dot(self.nodes[pred]["S"])
         return J
+
+if __name__ == "__main__":
+
+    n = 10
+
+    l = list_to_variable_dict(np.ones(n))
+    # th = list_to_variable_dict(np.zeros(n))
+    lim_u = list_to_variable_dict(np.pi * np.ones(n))
+    lim_l = list_to_variable_dict(-np.pi * np.ones(n))
+    params = {
+        "link_lengths": l,
+        "ub": lim_u,
+        "lb": lim_l,
+        "num_joints": n,
+    }
+
+    # robot = Revolute2dChain(params)
+    robot = RobotPlanar(params)
+    # print(robot.nodes(data=True))
+    # print(robot.edges(data=True))
+    q = robot.random_configuration()
+    # print(robot.pose(q, "p9"))
+    # print(robot.jacobian(q, ["p9"]))
+
+    from graphik.graphs.graph_planar import ProblemGraphPlanar
+
+    graph = ProblemGraphPlanar(robot)
+    # print(graph.directed.nodes(data=True))
+    # print(graph.directed.edges(data=True))
+    G = graph.realization(q)
+    q_ = graph.joint_variables(G)
+    # print(q)
+    # print(q_)
+    print(robot.jacobian(q, robot.end_effectors))
+    print(robot.jacobian_old(q, robot.end_effectors))
