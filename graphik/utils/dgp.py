@@ -183,29 +183,10 @@ def linear_projection(P: ArrayLike, F: ArrayLike, dim):
     return P @ np.fliplr(eigvec)[:, :dim]
 
 
-def linear_projection_randomized(P: ArrayLike, F: ArrayLike, dim):
-    S = 0
-    I = np.nonzero(F)
-    for kdx in range(len(I[0])):
-        idx = I[0][kdx]
-        jdx = I[1][kdx]
-        S += np.outer(P[idx, :] - P[jdx, :], P[idx, :] - P[jdx, :])
-
-    eigval, eigvec = np.linalg.eigh(S)
-    ev = np.fliplr(eigvec)
-    q, r = np.linalg.qr(ev[:, :dim])
-    U = q
-    # U = q[:, :dim]
-    return P @ U
-
-
 ## sample distance matrix
 def sample_matrix(lower_limit, upper_limit):
     m, n = lower_limit.shape
     return lower_limit + np.random.rand(m, n) * (upper_limit - lower_limit)
-    # return lower_limit + np.random.normal(75.0, 0.25, (m, n)) * (
-    #     upper_limit - lower_limit
-    # )
 
 
 def bound_smoothing(G: nx.DiGraph) -> tuple:
@@ -248,7 +229,6 @@ def bound_smoothing(G: nx.DiGraph) -> tuple:
             upper_bounds[ids.index(u), ids.index(v)] = bounds[u][v]
 
     return lower_bounds, upper_bounds
-
 
 def normalize_positions(Y: ArrayLike, scale=False):
     Y_c = Y - Y.mean(0)

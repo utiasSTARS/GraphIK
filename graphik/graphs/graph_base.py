@@ -31,7 +31,7 @@ class ProblemGraph(nx.DiGraph):
     @property
     def base_nodes(self) -> List[str]:
         """
-        :returns: List of nodes in this graph.
+        :returns: List of nodes in this graph describing the base coordinate system.
         """
         try:
             return self._base_nodes
@@ -57,7 +57,7 @@ class ProblemGraph(nx.DiGraph):
     @property
     def end_effector_nodes(self) -> List[str]:
         """
-        :returns: List of nodes in this graph belonging to the end effector
+        :returns: List of nodes in this graph describing the end effectors
         """
         try:
             return self._end_effector_nodes
@@ -70,14 +70,14 @@ class ProblemGraph(nx.DiGraph):
     @property
     def base(self) -> nx.DiGraph:
         """
-        :returns: Base subgraph
+        :returns: base coordinate system subgraph
         """
         return self.to_directed(as_view=True).subgraph(self.base_nodes)
 
     @property
     def structure(self) -> nx.DiGraph:
         """
-        :returns: Structure subgraph
+        :returns: robot structure subgraph
         """
         return self.to_directed(as_view=True).subgraph(self.structure_nodes)
 
@@ -126,7 +126,7 @@ class ProblemGraph(nx.DiGraph):
         """
         return distance_matrix_from_graph(self.to_undirected(as_view=True))
 
-    def distance_matrix_from_joints(self, joint_angles: Dict[str, float]) -> ArrayLike:
+    def distance_matrix_from_joints(self, joint_angles: ArrayLike) -> ArrayLike:
         """
         Given a set of joint angles, return a matrix whose element
         [idx,jdx] corresponds to the squared distance between nodes idx and jdx.
@@ -143,7 +143,7 @@ class ProblemGraph(nx.DiGraph):
         """
         return adjacency_matrix_from_graph(self.to_undirected(as_view=True))
 
-    def from_pos(self, P: Dict, dist: bool = True, overwrite=False) -> nx.DiGraph:
+    def from_pos(self, P: Dict, dist: bool = True, overwrite: bool = False) -> nx.DiGraph:
         """
         Given a dictionary of node name and position key-value pairs,
         generate a copy of the problem graph and fill the POS attributes of

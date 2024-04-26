@@ -69,7 +69,6 @@ class Robot(nx.DiGraph):
         query_nodes: Union[List[str], str],
     ) -> Dict[str, ArrayLike]:
         """
-        TODO planar doesn't have an isolated jacobian method
         Calculate the robot's Jacobian for nodes
         """
         raise NotImplementedError
@@ -99,8 +98,7 @@ class Robot(nx.DiGraph):
     @property
     def end_effectors(self) -> List:
         """
-        Returns a list of end effector node pairs, since it's the
-        last two points that are defined for a full pose.
+        Returns a list of end effector nodes (i.e., final nodes in chain)
         """
         if not hasattr(self, "_end_effectors"):
             self._end_effectors = [x for x in self.nodes() if self.out_degree(x) == 0]
@@ -112,8 +110,8 @@ class Robot(nx.DiGraph):
     @property
     def kinematic_map(self) -> dict:
         """
-        :return: topological graph of the robot's structure, but not auxiliary points q
-        Used for forward kinematics on multi end-effector manipulators.
+        :return: map of shortest paths between nodes representing the robot's joints.
+        Used for generalizing kinematics to multi end-effector manipulators.
         """
         return self._kinematic_map
 
