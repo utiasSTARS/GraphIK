@@ -44,9 +44,7 @@ def flatten(l: list) -> list:
 def list_to_variable_dict(l: list, label="p", index_start=1):
     if type(l) is dict:
         return l
-    var_dict = {}
-    for idx, val in enumerate(l):
-        var_dict[label + str(index_start + idx)] = val
+    var_dict = {label+f'{index_start + idx}': val for idx, val in enumerate(l)}
     return var_dict
 
 

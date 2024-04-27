@@ -1,46 +1,47 @@
 import numpy as np
 
 from typing import Tuple
-from numpy.typing import ArrayLike
-from liegroups.numpy import SO2, SE2, SO3, SE3
-from numpy import sin, cos
+from numpy.typing import ArrayLike, NDArray
+# from liegroups.numpy import SO2, SE2, SO3, SE3
+# from numpy import sin, cos
 
-def angle_to_se2(a: float, theta: float) -> SE2:
-    """Transform a single set of DH parameters into an SE2 matrix
-    :param a: link length
-    :param theta: rotation
-    :returns: SE2 matrix
-    :rtype: lie.SE2Matrix
-    """
-    # R = SO2.from_angle(theta)  # TODO: active or passive (i.e., +/- theta?)
-    R = SO2.from_angle(theta)
-    return SE2(R, R.dot(np.array([a, 0.0])))  # TODO: rotate the translation or not?
+# def dh_to_se2(a: float, theta: float) -> SE2:
+#     """Transform a single set of DH parameters into an SE2 matrix
+#     :param a: link length
+#     :param theta: rotation
+#     :returns: SE2 matrix
+#     """
+#     # R = SO2.from_angle(theta)  # TODO: active or passive (i.e., +/- theta?)
+#     R = SO2.from_angle(theta)
+#     return SE2(R, R.dot(np.array([a, 0.0])))  # TODO: rotate the translation or not?
 
-def skew(x):
+def skew(x: NDArray) -> NDArray:
     """
-    Creates a skew symmetric matrix from vector x
+    Creates a 3x3 skew symmetric matrix from a 3d vector x.
+    :param x: 3d vector
+    "returns: 3x3 skew symmetric matrix
     """
-    X = np.array([[0., -x[2], x[1]], [x[2], 0., -x[0]], [-x[1], x[0], 0.]])
+    X = np.array([[0, -x[2], x[1]], [x[2], 0, -x[0]], [-x[1], x[0], 0]])
     return X
 
-def trans_axis(t, axis="z") -> SE3:
-    if axis == "z":
-        return SE3(SO3.identity(), np.array([0, 0, t]))
-    if axis == "y":
-        return SE3(SO3.identity(), np.array([0, t, 0]))
-    if axis == "x":
-        return SE3(SO3.identity(), np.array([t, 0, 0]))
-    raise Exception("Invalid Axis")
+# def trans_axis(t: float, axis="z") -> SE3:
+#     if axis == "z":
+#         return SE3(SO3.identity(), np.array([0, 0, t]))
+#     if axis == "y":
+#         return SE3(SO3.identity(), np.array([0, t, 0]))
+#     if axis == "x":
+#         return SE3(SO3.identity(), np.array([t, 0, 0]))
+#     raise Exception("Invalid Axis")
 
 
-def rot_axis(theta, axis="z") -> SE3:
-    if axis == "z":
-        return SE3(SO3.rotz(theta), np.array([0, 0, 0]))
-    if axis == "y":
-        return SE3(SO3.roty(theta), np.array([0, 0, 0]))
-    if axis == "x":
-        return SE3(SO3.rotx(theta), np.array([0, 0, 0]))
-    raise Exception("Invalid Axis")
+# def rot_axis(theta: float, axis="z") -> SE3:
+#     if axis == "z":
+#         return SE3(SO3.rotz(theta), np.array([0, 0, 0]))
+#     if axis == "y":
+#         return SE3(SO3.roty(theta), np.array([0, 0, 0]))
+#     if axis == "x":
+#         return SE3(SO3.rotx(theta), np.array([0, 0, 0]))
+#     raise Exception("Invalid Axis")
 
 def max_min_distance_revolute(r, P, C, N):
     delta = P-C
@@ -57,7 +58,7 @@ def max_min_distance_revolute(r, P, C, N):
 
     return d_max, d_min
 
-def best_fit_transform(A: ArrayLike, B: ArrayLike) -> Tuple[ArrayLike, ArrayLike]:
+def best_fit_transform(A: NDArray, B: NDArray) -> Tuple[NDArray, NDArray]:
     """
     Calculates the least-squares best-fit transform that maps corresponding points A to B in m spatial dimensions
     Input:

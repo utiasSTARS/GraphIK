@@ -9,9 +9,10 @@ from graphik.graphs import (
     ProblemGraphRevolute,
 )
 from graphik.robots import RobotRevolute, RobotPlanar
-from graphik.utils.dgp import pos_from_graph, graph_from_pos, bound_smoothing
-from graphik.utils.utils import list_to_variable_dict
-from graphik.utils.geometry import trans_axis
+from graphik.utils import pos_from_graph, graph_from_pos, bound_smoothing, list_to_variable_dict, trans_axis
+# from graphik.utils.dgp import pos_from_graph, graph_from_pos, bound_smoothing
+# from graphik.utils.utils import list_to_variable_dict
+# from graphik.utils.geometry import trans_axis
 from graphik.utils.roboturdf import load_ur10
 
 

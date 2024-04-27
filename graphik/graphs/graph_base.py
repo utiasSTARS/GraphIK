@@ -124,9 +124,9 @@ class ProblemGraph(nx.DiGraph):
         Returns a partial distance matrix of known distances in the problem graph.
         :returns: Distance matrix
         """
-        return distance_matrix_from_graph(self.to_undirected(as_view=True))
+        return distance_matrix_from_graph(self)
 
-    def distance_matrix_from_joints(self, joint_angles: ArrayLike) -> ArrayLike:
+    def distance_matrix_from_joints(self, joint_angles: Dict[str, float]) -> ArrayLike:
         """
         Given a set of joint angles, return a matrix whose element
         [idx,jdx] corresponds to the squared distance between nodes idx and jdx.
@@ -141,7 +141,7 @@ class ProblemGraph(nx.DiGraph):
         given the kinematic and base structure, as well as the end-effector targets.
         :returns: Adjacency matrix
         """
-        return adjacency_matrix_from_graph(self.to_undirected(as_view=True))
+        return adjacency_matrix_from_graph(self)
 
     def from_pos(self, P: Dict, dist: bool = True, overwrite: bool = False) -> nx.DiGraph:
         """
@@ -151,7 +151,9 @@ class ProblemGraph(nx.DiGraph):
         If dist is True, populate all edges between nodes with assinged POS attributes,
         and return the new graph.
         :param P: a dictionary of node name position pairs
-        :returns: graph with connected nodes with POS attribute
+        :param dist: set to True to compute distances
+        :param overwrite: set to True to overwrite fixed distances associated with the problem
+        :returns: graph with connected nodes with POS attribute and edges with DIST attributes
         """
         G = self.to_directed()  # copy of the original object
 

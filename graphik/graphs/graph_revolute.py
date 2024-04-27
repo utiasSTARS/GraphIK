@@ -4,9 +4,9 @@ import numpy.linalg as la
 from graphik.robots import RobotRevolute
 from graphik.graphs.graph_base import ProblemGraph
 from graphik.utils import *
-from liegroups.numpy import SE3
-from liegroups.numpy.se3 import SE3Matrix
-from liegroups.numpy.so3 import SO3Matrix
+from liegroups.numpy import SE3, SO3
+# from liegroups.numpy.se3 import SE3Matrix
+# from liegroups.numpy.so3 import SO3Matrix
 import networkx as nx
 from numpy import cos, pi, sqrt, arctan2, cross
 
@@ -276,7 +276,8 @@ class ProblemGraphRevolute(ProblemGraph):
         y = normalize(y_hat)
         z = normalize(z_hat)
         R = np.vstack((x, -y, z)).T
-        B = SE3Matrix(SO3Matrix(R), G.nodes[ROOT][POS])
+        # B = SE3Matrix(SO3Matrix(R), G.nodes[ROOT][POS])
+        B = SE3(SO3(R), G.nodes[ROOT][POS])
 
         omega_z = skew(np.array([0,0,1]));
 

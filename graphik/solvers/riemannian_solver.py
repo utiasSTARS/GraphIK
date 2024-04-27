@@ -137,7 +137,6 @@ class RiemannianSolver:
             def ehess(Y, v):
                 return K * lhess(Y, v, D_goal, omega, psi_L, psi_U, inds)
         else:
-            # NOTE not tested
             def cost(Y):
                 D = distance_matrix_from_pos(Y)
                 E0 = omega * (D_goal - D)
@@ -201,7 +200,6 @@ class RiemannianSolver:
 
         # Define manifold
         manifold = PSDFixedRank(self.N, self.dim)  # define manifold
-        # manifold = Euclidean(self.N, self.dim)
 
         # Define problem
         problem = pymanopt.Problem(

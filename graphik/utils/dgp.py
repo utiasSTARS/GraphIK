@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-from typing import List
+from typing import List, Optional
 import numpy as np
 import networkx as nx
 import math
-from numpy.typing import ArrayLike
+from numpy.typing import NDArray
 from graphik.utils.constants import *
 from graphik.utils.geometry import best_fit_transform
 
@@ -25,34 +25,47 @@ def orthogonal_procrustes(G1: nx.DiGraph, G2: nx.DiGraph) -> nx.DiGraph:
     return graph_from_pos(P_e, list(G2))  # not really order-dependent
 
 
-def gram_from_distance_matrix(D: ArrayLike) -> ArrayLike:
+def gram_from_distance_matrix(D: NDArray) -> NDArray:
+    """
+    Create an NxN Gram matrix from an NxN Distance matrix
+    :param D: n x n Distance matrix
+    :returns: n x n Gram matrix
+    """
     J = np.identity(D.shape[0]) - (1 / (D.shape[0])) * np.ones(D.shape)
-    G = -0.5 * J @ D @ J  # Gram matrix
-    return G
+    X = -0.5 * J @ D @ J  # Gram matrix
+    return X
 
 
-def distance_matrix_from_gram(X: ArrayLike) -> ArrayLike:
+def distance_matrix_from_gram(X: NDArray) -> NDArray:
+    """
+    Create an NxN distance matrix from an NxN Gram matrix
+    :param X: n x n Gram matrix
+    :returns: n x n matrix of distances between nodes
+    """
     return (X.diagonal()[:, np.newaxis] + X.diagonal()) - 2 * X
 
 
-def distance_matrix_from_pos(Y: ArrayLike) -> ArrayLike:
+def distance_matrix_from_pos(Y: NDArray) -> NDArray:
     return distance_matrix_from_gram(Y @ Y.T)
 
 
-def distance_matrix_from_graph(G: nx.Graph, label=DIST, nonedge=0) -> ArrayLike:
+def distance_matrix_from_graph(G: nx.Graph, label=DIST, nonedge=0) -> NDArray:
     """
     Returns the distance matrix of the graph, where distance is the attribute with label.
     :returns: Adjacency matrix
     """
     if isinstance(G, nx.DiGraph):
+        # if G is a directional graph, ensure both directions have same distance
         G = G.to_undirected(as_view=True)
 
-    return nx.to_numpy_array(G, weight=DIST, nonedge=nonedge, dtype=np.dtype(float)) ** 2
+    return (
+        nx.to_numpy_array(G, weight=DIST, nonedge=nonedge, dtype=np.dtype(float)) ** 2
+    )
 
 
 def adjacency_matrix_from_graph(
-    G: nx.Graph, label: str = DIST, nodelist: List = None
-) -> ArrayLike:
+    G: nx.Graph, label: str = DIST, nodelist: Optional[List] = None
+) -> NDArray:
     """
     Returns the adjacency matrix of the graph, but only for edges with label.
     :returns: Adjacency matrix
@@ -65,42 +78,33 @@ def adjacency_matrix_from_graph(
     )
 
 
-def pos_from_graph(G: nx.DiGraph, node_ids=None) -> ArrayLike:
+def pos_from_graph(G: nx.DiGraph, node_ids=None) -> NDArray:
     """
     Returns an n x m matrix of node positions from a given graph,
     where n is the number of nodes and m is the point dimension.
     :param G: graph where all nodes have a populated POS field
     :returns: n x m matrix of node positions
     """
-    # TODO add check to see if all POS defined
-    # X = np.zeros([len(G), self.dim])  # matrix of vertex positions
     if not node_ids:
         node_ids = list(G)
-    X = []
-    for idx, name in enumerate(node_ids):
-        X += [list(G.nodes[name][POS])]
-    return np.array(X)
+    pos = [G.nodes[n][POS] for n in node_ids if POS in G.nodes[n]]
+    return np.stack(pos)
 
 
-def graph_from_pos(P: ArrayLike, node_ids: list = None, dist=True) -> nx.DiGraph:
+def graph_from_pos(
+    P: NDArray, node_ids: Optional[List] = [], dist: bool = True
+) -> nx.DiGraph:
     """
     Generates an nx.DiGraph object of the subclass type given
     an n x m matrix where n is the number of nodes and m is the dimension.
     Connects all graph nodes.
     :param P: n x m matrix of node positions
+    :param node_ids: sequence of nodes in graph
     :returns: graph where all nodes have a populated POS field + edges
     """
     if not node_ids:
         node_ids = ["p" + str(idx) for idx in range(P.shape[0])]
-
-    G = nx.empty_graph(node_ids, create_using=nx.DiGraph)
-    for idx, name in enumerate(node_ids):
-        G.nodes[name][POS] = P[idx, :]
-
-    if dist:
-        G = graph_complete_edges(G)
-
-    return G
+    return graph_from_pos_dict({n: P[idx] for idx, n in enumerate(node_ids)}, dist=dist)
 
 
 def graph_from_pos_dict(P: dict, dist=True) -> nx.DiGraph:
@@ -112,7 +116,7 @@ def graph_from_pos_dict(P: dict, dist=True) -> nx.DiGraph:
     :param P: a dictionary of node name position pairs
     :returns: graph with connected nodes with POS attribute
     """
-    G = nx.empty_graph(list(P.keys()), create_using=nx.DiGraph)
+    G = nx.empty_graph(P.keys(), create_using=nx.DiGraph)
     nx.set_node_attributes(G, P, POS)
 
     if dist:
@@ -121,33 +125,35 @@ def graph_from_pos_dict(P: dict, dist=True) -> nx.DiGraph:
     return G
 
 
-def graph_complete_edges(G: nx.DiGraph, overwrite=False) -> nx.DiGraph:
+def graph_complete_edges(
+    G: nx.DiGraph, overwrite=False, bidirectional=False
+) -> nx.DiGraph:
     """
     Given a graph with some defined node positions, calculate all possible distances.
+    If overwrite==True, replace existing distances.
+    If bidirectional==True, populate edges in both directions. This is not neccessary for IK
+    since methods account for this in distance matrix computation.
     :param G: Graph with some unknown edges
     :returns: Graph with all known edges
     """
-    # FIXME can still be broken by messing up edges in source graph
-    pos = nx.get_node_attributes(G, POS)  # known positions
-    dst = nx.get_edge_attributes(G, DIST)  # known distances
+    pos = nx.get_node_attributes(G, POS)  # all position attributes
+    dst = nx.get_edge_attributes(G, DIST)  # all distance attributes
 
-    for idx, u in enumerate(pos.keys()):
-        for jdx, v in enumerate(pos.keys()):
-            if (jdx > idx) and (
-                (((v, u) not in dst) and ((u, v) not in dst)) or overwrite
-            ):
+    names = list(pos.keys())
+    edges = []
+    for idx, u in enumerate(names):
+        for v in names[idx + 1 :]:
+            if (((v, u) not in dst) and ((u, v) not in dst)) or overwrite:
                 d = np.linalg.norm(pos[u] - pos[v])
-                G.add_edges_from(
-                    [
-                        (u, v, {DIST: d}),
-                        (u, v, {LOWER: d}),
-                        (u, v, {UPPER: d}),
-                    ]
-                )
+                edges += [(u, v, {DIST: d, LOWER: d, UPPER: d})]
+                if bidirectional:
+                    edges += [(v, u, {DIST: d, LOWER: d, UPPER: d})]
+
+    G.add_edges_from(edges)
     return G
 
 
-def factor(A: ArrayLike):
+def factor(A: NDArray):
     n = A.shape[0]
     (evals, evecs) = np.linalg.eigh(A)
     evals[evals < 0] = 0  # closest SDP matrix
@@ -160,7 +166,7 @@ def factor(A: ArrayLike):
 
 
 ## perform classic Multidimensional scaling
-def MDS(B: ArrayLike, eps: float = 1e-5):
+def MDS(B: NDArray, eps: float = 1e-5):
     n = B.shape[0]
     x = factor(B)
     (evals, evecs) = np.linalg.eigh(x)
@@ -171,7 +177,7 @@ def MDS(B: ArrayLike, eps: float = 1e-5):
     return x
 
 
-def linear_projection(P: ArrayLike, F: ArrayLike, dim):
+def linear_projection(P: NDArray, F: NDArray, dim):
     S = 0
     I = np.nonzero(F)
     for kdx in range(len(I[0])):
@@ -230,7 +236,8 @@ def bound_smoothing(G: nx.DiGraph) -> tuple:
 
     return lower_bounds, upper_bounds
 
-def normalize_positions(Y: ArrayLike, scale=False):
+
+def normalize_positions(Y: NDArray, scale=False):
     Y_c = Y - Y.mean(0)
     C = Y_c.T.dot(Y_c)
     e, v = np.linalg.eig(C)
