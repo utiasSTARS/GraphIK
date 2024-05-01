@@ -29,11 +29,12 @@ def gram_from_distance_matrix(D: NDArray) -> NDArray:
     """
     Create an NxN Gram matrix from an NxN Distance matrix
     :param D: n x n Distance matrix
-    :returns: n x n Gram matrix
+    :returns: n x n Gram matrix X = -0.5 * J @ D @ J
     """
-    J = np.identity(D.shape[0]) - (1 / (D.shape[0])) * np.ones(D.shape)
-    X = -0.5 * J @ D @ J  # Gram matrix
-    return X
+    n = D.shape[0]
+    J = np.eye(n) - np.full((n, n), 1/n)
+    JD = J.dot(D)
+    return -0.5 * JD.dot(J)
 
 
 def distance_matrix_from_gram(X: NDArray) -> NDArray:
@@ -42,11 +43,12 @@ def distance_matrix_from_gram(X: NDArray) -> NDArray:
     :param X: n x n Gram matrix
     :returns: n x n matrix of distances between nodes
     """
-    return (X.diagonal()[:, np.newaxis] + X.diagonal()) - 2 * X
+    diag = X.diagonal()
+    return (diag[:, np.newaxis] + diag) - 2 * X
 
 
 def distance_matrix_from_pos(Y: NDArray) -> NDArray:
-    return distance_matrix_from_gram(Y @ Y.T)
+    return distance_matrix_from_gram(Y.dot(Y.T))
 
 
 def distance_matrix_from_graph(G: nx.Graph, label=DIST, nonedge=0) -> NDArray:
@@ -189,11 +191,9 @@ def linear_projection(P: NDArray, F: NDArray, dim):
     return P @ np.fliplr(eigvec)[:, :dim]
 
 
-## sample distance matrix
 def sample_matrix(lower_limit, upper_limit):
     m, n = lower_limit.shape
     return lower_limit + np.random.rand(m, n) * (upper_limit - lower_limit)
-
 
 def bound_smoothing(G: nx.DiGraph) -> tuple:
     """
