@@ -79,6 +79,14 @@ def adjacency_matrix_from_graph(
         G.edge_subgraph(selected_edges), weight="", nodelist=nodelist
     )
 
+def incidence_matrix_from_adjacency(A):
+    edges = np.nonzero(np.triu(A, 1))  # Get indices of upper triangle non-zeros
+    num_edges = len(edges[0])
+    B = np.zeros((num_edges, A.shape[0]))
+    rows = np.arange(num_edges)
+    B[rows, edges[0]] = 1
+    B[rows, edges[1]] = -1
+    return B
 
 def pos_from_graph(G: nx.DiGraph, node_ids=None) -> NDArray:
     """
