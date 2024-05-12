@@ -242,6 +242,9 @@ def bound_smoothing(G: nx.DiGraph) -> tuple:
                 # lower_bounds[ids.index(u), ids.index(v)] = bounds[u][f"{v}s"]
             upper_bounds[ids.index(u), ids.index(v)] = bounds[u][v]
 
+    lower_bounds[lower_bounds < 1e-8] = 0
+    upper_bounds[upper_bounds < 1e-8] = 0
+
     return lower_bounds, upper_bounds
 
 

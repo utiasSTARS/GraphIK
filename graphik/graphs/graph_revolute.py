@@ -5,6 +5,7 @@ from graphik.robots import RobotRevolute
 from graphik.graphs.graph_base import ProblemGraph
 from graphik.utils import *
 from liegroups.numpy import SE3, SO3
+
 # from liegroups.numpy.se3 import SE3Matrix
 # from liegroups.numpy.so3 import SO3Matrix
 import networkx as nx
@@ -70,12 +71,22 @@ class ProblemGraphRevolute(ProblemGraph):
                     robot.nodes[cur]["T0"].trans,
                     robot.nodes[cur]["T0"].dot(trans_z).trans,
                 )
-                dist = la.norm(cur_pos - aux_cur_pos)
+                type = [ROBOT]
+                if cur == ee:
+                    type += [END_EFFECTOR]
+                if cur == ROOT:
+                    type += [BASE]
 
                 # Add nodes for joint and edge between them
                 structure.add_nodes_from(
-                    [(cur, {POS: cur_pos}), (aux_cur, {POS: aux_cur_pos})]
+                    [
+                        (cur, {POS: cur_pos, TYPE: type}),
+                        (aux_cur, {POS: aux_cur_pos, TYPE: type}),
+                    ]
                 )
+
+                dist = la.norm(cur_pos - aux_cur_pos)
+
                 structure.add_edge(
                     cur, aux_cur, **{DIST: dist, LOWER: dist, UPPER: dist, BOUNDED: []}
                 )
@@ -98,10 +109,10 @@ class ProblemGraphRevolute(ProblemGraph):
         for u in structure.nodes:
             del structure.nodes[u][POS]
 
-        # Set node type to robot
-        nx.set_node_attributes(structure, [ROBOT], TYPE)
-        structure.nodes[ROOT][TYPE] = [ROBOT, BASE]
-        structure.nodes["q0"][TYPE] = [ROBOT, BASE]
+        # # Set node type to robot
+        # nx.set_node_attributes(structure, [ROBOT], TYPE)
+        # structure.nodes[ROOT][TYPE] = [ROBOT, BASE]
+        # structure.nodes["q0"][TYPE] = [ROBOT, BASE]
 
         return structure
 
@@ -217,7 +228,6 @@ class ProblemGraphRevolute(ProblemGraph):
                         limit = None
 
                     if limit:
-
                         rot_limit = rot_axis(upper_limits[cur], "z")
 
                         T_rel = T1.inv().dot(T2)
@@ -248,7 +258,9 @@ class ProblemGraphRevolute(ProblemGraph):
             pos[v] = T_goal_u.dot(trans_axis(self.axis_length, "z")).trans
         return pos
 
-    def joint_variables(self, G: nx.DiGraph, T_final: Optional[Dict[str, SE3]] = None) -> Dict[str, float]:
+    def joint_variables(
+        self, G: nx.DiGraph, T_final: Optional[Dict[str, SE3]] = None
+    ) -> Dict[str, float]:
         """
         Finds the set of decision variables corresponding to the
         graph realization G.
@@ -279,7 +291,7 @@ class ProblemGraphRevolute(ProblemGraph):
         # B = SE3Matrix(SO3Matrix(R), G.nodes[ROOT][POS])
         B = SE3(SO3(R), G.nodes[ROOT][POS])
 
-        omega_z = skew(np.array([0,0,1]));
+        omega_z = skew(np.array([0, 0, 1]))
 
         theta = {}
         for ee in end_effectors:
@@ -290,12 +302,14 @@ class ProblemGraphRevolute(ProblemGraph):
 
                 T_prev = T[pred]
 
-                T_prev_0 = self.robot.nodes[pred]["T0"] # previous p xf at 0
-                T_0 = self.robot.nodes[cur]["T0"] # cur p xf at 0
-                T_0_q = self.robot.nodes[cur]["T0"].dot(trans_axis(axis_length, "z")) # cur q xf at 0
-                T_rel = T_prev_0.inv().dot(T_0) # relative xf
-                ps_0 = T_prev_0.inv().dot(T_0).trans # relative xf
-                qs_0 = T_prev_0.inv().dot(T_0_q).trans # rel q xf
+                T_prev_0 = self.robot.nodes[pred]["T0"]  # previous p xf at 0
+                T_0 = self.robot.nodes[cur]["T0"]  # cur p xf at 0
+                T_0_q = self.robot.nodes[cur]["T0"].dot(
+                    trans_axis(axis_length, "z")
+                )  # cur q xf at 0
+                T_rel = T_prev_0.inv().dot(T_0)  # relative xf
+                ps_0 = T_prev_0.inv().dot(T_0).trans  # relative xf
+                qs_0 = T_prev_0.inv().dot(T_0_q).trans  # rel q xf
 
                 # predicted p and q expressed in previous frame
                 p = B.inv().dot(G.nodes[cur][POS])
@@ -303,18 +317,26 @@ class ProblemGraphRevolute(ProblemGraph):
                     G.nodes[aux_cur][POS] - G.nodes[cur][POS]
                 ) / la.norm(G.nodes[aux_cur][POS] - G.nodes[cur][POS])
                 q = B.inv().dot(qnorm)
-                ps = T_prev.inv().as_matrix()[:3, :3].dot(p - T_prev.trans)  # in prev. joint frame
-                qs = T_prev.inv().as_matrix()[:3, :3].dot(q - T_prev.trans)  # in prev. joint frame
+                ps = (
+                    T_prev.inv().as_matrix()[:3, :3].dot(p - T_prev.trans)
+                )  # in prev. joint frame
+                qs = (
+                    T_prev.inv().as_matrix()[:3, :3].dot(q - T_prev.trans)
+                )  # in prev. joint frame
 
-                theta[cur] = arctan2(-qs_0.dot(omega_z).dot(qs), qs_0.dot(omega_z.dot(omega_z.T)).dot(qs))
+                theta[cur] = arctan2(
+                    -qs_0.dot(omega_z).dot(qs), qs_0.dot(omega_z.dot(omega_z.T)).dot(qs)
+                )
 
                 T[cur] = (T_prev.dot(rot_axis(theta[cur], "z"))).dot(T_rel)
 
             # if the rotation axis of final joint is aligned with ee frame z axis,
             # get angle from EE pose if available
-            if ((T_final is not None) and (la.norm(cross(T_rel.trans, np.asarray([0, 0, 1]))) < tol)):
+            if (T_final is not None) and (
+                la.norm(cross(T_rel.trans, np.asarray([0, 0, 1]))) < tol
+            ):
                 T_th = (T[cur]).inv().dot(T_final[ee]).as_matrix()
-                theta[ee] = wraptopi(theta[ee] +  arctan2(T_th[1, 0], T_th[0, 0]))
+                theta[ee] = wraptopi(theta[ee] + arctan2(T_th[1, 0], T_th[0, 0]))
 
         return theta
 
