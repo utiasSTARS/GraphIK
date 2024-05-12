@@ -16,8 +16,6 @@ from graphik.utils import (
 from graphik.graphs.graph_base import ProblemGraph
 from scipy.optimize import Bounds, minimize
 from graphik.utils.constants import END_EFFECTOR, POS, TYPE
-from graphik.utils.dgp import pos_from_graph
-
 from graphik.utils.operators import sum_square_op_batched
 
 try:
@@ -357,8 +355,8 @@ class NonlinearSolver:
         bounds=None,
         Y_init=None,
         output_log=True,
-        method="BFGS",
-        tol=1e-8,
+        method='L-BFGS-B',
+        options=None,
     ):
         """
         Implementation of solver using base Scipy unconstrained optimization algorithms.
@@ -375,24 +373,25 @@ class NonlinearSolver:
         else:
             cost_and_grad, hessp, hess = self.create_cost(D_goal, omega)
 
-        bnds, options = None, None
-        if method in ["L-BFGS-B"]:
+        # Generate initialization
+        Yi = self.generate_initialization(bounds, self.dim, omega, psi_L, psi_U)
+        Yi = np.ascontiguousarray(Yi.flatten())
+
+        bnds = None
+        if method == 'L-BFGS-B':
             bnds = self.position_constraints(Y_init)
             options = {"xtol": 1e-16, "ftol": 1e-16, "gtol": 1e-16, "iprint": -1}
-
-        # Generate initialization
-        Y_init = self.generate_initialization(bounds, self.dim, omega, psi_L, psi_U)
-        Y_init = Y_init.flatten()
+        elif method == 'BFGS':
+            options = {'xrtol': 0.75*1e-6, 'gtol': 0.25*1e-6, 'norm':np.sqrt(cost_and_grad(Yi)[0])}
 
         start_time = time.time()
         sol = minimize(
             cost_and_grad,
-            Y_init,
+            Yi,
             jac=True,
             hessp=hessp,
             hess=hess,
             method=method,
-            tol=tol,
             bounds=bnds,
             options=options,
         )
@@ -489,14 +488,3 @@ if __name__ == "__main__":
                 )
                 print("Analytical Hessian:\n", H_analytical)
                 print("Numerical Hessian:\n", H_numerical)
-
-        # res_batch_left_dense = res_left_op_batched(omega, dim, vectorized=True, sparse=False) # (d dim N dim)
-        # res_batch_left = res_batch_left_dense.reshape(num_dist*dim, N*dim) # (d*dim N*dim)
-        # res_batch_left = csc_array(np.ascontiguousarray(res_batch_left))
-        # def cost_and_grad_sparse(Y):
-        #     prod = res_batch_left.dot(Y).reshape(num_dist, dim) # Y1 - Y2 in (d dim)
-        #     res = np.sum(prod*prod, axis=1) - dist # (Y1 - Y2)**2 - dist (d)
-        #     cost = res.dot(res)
-        #     grad = res_sq_vec_batch.dot(Y).reshape(num_dist,N*dim) # (res_sq_batch + res_sq_batch.T) = 2*res_sq_batch
-        #     grad = 4*res.dot(grad)
-        #     return cost, grad
