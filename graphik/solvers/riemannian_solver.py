@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from graphik.utils.dgp import adjacency_matrix_from_graph, bound_smoothing, distance_matrix_from_graph, graph_from_pos
+from graphik.utils.dgp import adjacency_matrix_from_graph, bound_smoothing, distance_matrix_from_graph, graph_from_pos, sample_matrix
 import pymanopt
 
 import numpy as np
@@ -15,11 +15,15 @@ from graphik.utils import (
 from graphik.utils.manifolds.fixed_rank_psd_sym import PSDFixedRank
 from graphik.solvers.trust_region import TrustRegions
 from graphik.graphs.graph_base import ProblemGraph
+
+#Workaround for SciPy bug: https://github.com/scipy/scipy/pull/8082
 try:
     from graphik.solvers.costgrd import jcost, jgrad, jhess, lcost, lgrad, lhess
 except ModuleNotFoundError as err:
-    pass
-    # print("AOT compiled functions not found. To improve performance please run solvers/costs.py.")
+    print("AOT compiled functions not found. To improve performance please run solvers/costs.py.")
+
+def add_to_diagonal_fast(X: np.ndarray):
+    X.ravel()[:: X.shape[1] + 1] += -np.sum(X, axis=0)
 
 BetaTypes = tools.make_enum(
     "BetaTypes", "FletcherReeves PolakRibiere HestenesStiefel HagerZhang".split()
@@ -31,31 +35,34 @@ def adjoint(X: np.ndarray) -> np.ndarray:
     return X - D
 
 class RiemannianSolver:
-    def __init__(self, graph: ProblemGraph, params={}):
+    def __init__(self, graph: ProblemGraph, cost_type="dense", jit=False, *args, **kwargs):
 
-        self.params = params
+        self.params = {}
+        for key in kwargs:
+            setattr(self, key, kwargs[key])
         self.graph = graph
         self.dim = graph.dim
         self.N = graph.number_of_nodes()
+        self.jit = jit
 
-        solver_type = params.get("solver", "TrustRegions")
+        solver_type = self.params.get("solver", "TrustRegions")
 
         if solver_type == "TrustRegions":
             self.solver = TrustRegions(
-                mingradnorm=params.get("mingradnorm", 0.5*1e-9),
-                logverbosity=params.get("logverbosity", 0),
-                maxiter=params.get("maxiter", 3000),
-                theta=params.get("theta", 1.0),
-                kappa=params.get("kappa", 0.1),
+                mingradnorm=self.params.get("mingradnorm", 0.5*1e-9),
+                logverbosity=self.params.get("logverbosity", 0),
+                maxiter=self.params.get("maxiter", 3000),
+                theta=self.params.get("theta", 1.0),
+                kappa=self.params.get("kappa", 0.1),
             )
         elif solver_type == "ConjugateGradient":
             self.solver = ConjugateGradient(
-                mingradnorm=params.get("mingradnorm",1e-9),
-                logverbosity=params.get("logverbosity", 0),
-                maxiter=params.get("maxiter", 10e4),
-                minstepsize=params.get("minstepsize", 1e-10),
-                orth_value=params.get("orth_value", 10e10),
-                beta_type=params.get("beta_type", BetaTypes[3]),
+                mingradnorm=self.params.get("mingradnorm",1e-9),
+                logverbosity=self.params.get("logverbosity", 0),
+                maxiter=self.params.get("maxiter", 10e4),
+                minstepsize=self.params.get("minstepsize", 1e-10),
+                orth_value=self.params.get("orth_value", 10e10),
+                beta_type=self.params.get("beta_type", BetaTypes[3]),
             )
         else:
             raise (
@@ -67,30 +74,28 @@ class RiemannianSolver:
     @staticmethod
     def generate_initialization(bounds, dim, omega, psi_L, psi_U):
         # Generates a random EDM within the set bounds
-        lb = bounds[0]
-        ub = bounds[1]
+        lb = np.sqrt(bounds[0])
+        ub = np.sqrt(bounds[1])
         D_rand = (lb + 0.9 * (ub - lb)) ** 2
         X_rand = MDS(gram_from_distance_matrix(D_rand), eps=1e-8)
         Y_rand = linear_projection(X_rand, omega, dim)
         return Y_rand
 
-    @staticmethod
-    def create_cost(D_goal, omega, jit=True):
+    def create_cost(self, D_goal, omega):
         inds = np.nonzero(np.triu(omega))
-        K = 1
 
-        if jit:
+        if self.jit:
 
             def cost(Y):
-                return K * jcost(Y, D_goal, inds)
+                return jcost(Y, D_goal, inds)
 
             def egrad(Y):
-                return K * jgrad(Y, D_goal, inds)
+                return jgrad(Y, D_goal, inds)
 
-            def ehess(Y, v):
-                return K * jhess(Y, v, D_goal, inds)
+            def ehessp(Y, Z):
+                return jhess(Y, Z, D_goal, inds)
 
-            return cost, egrad, ehess
+            return cost, egrad, ehessp
 
         else:
 
@@ -98,51 +103,51 @@ class RiemannianSolver:
                 D = distance_matrix_from_pos(Y)
                 S = omega * (D_goal - D)
                 f = np.linalg.norm(S) ** 2
-                return K * 0.5 * f
+                return f/2
 
             def egrad(Y):
                 D = distance_matrix_from_pos(Y)
                 S = omega * (D_goal - D)
-                dfdY = 2 * (S - np.diag(np.sum(S, axis=1))).dot(Y)
-                return K * dfdY
+                np.fill_diagonal(S, S.diagonal() - np.sum(S, axis=1))
+                dfdY = 2 * S.dot(Y)
+                return dfdY
 
-            def ehess(Y, Z):
+            def ehessp(Y, Z):
                 D = distance_matrix_from_pos(Y)
+                YZT = Y.dot(Z.T)
+                YZT += YZT.T
+                dSdZ = -omega * distance_matrix_from_gram(YZT)
+                np.fill_diagonal(dSdZ, dSdZ.diagonal() - np.sum(dSdZ, axis=1))
                 S = omega * (D_goal - D)
-                dDdZ = distance_matrix_from_gram(Y.dot(Z.T) + Z.dot(Y.T))
-                dSdZ = -omega * dDdZ
-                d1 = 2 * (dSdZ - np.diag(np.sum(dSdZ, axis=1))).dot(Y)
-                d2 = 2 * (S - np.diag(np.sum(S, axis=1))).dot(Z)
-                HZ = d1 + d2
-                return K * HZ
+                np.fill_diagonal(S, S.diagonal() - np.sum(S, axis=1))
+                H = 2 * (dSdZ.dot(Y) + S.dot(Z))
+                return H
 
-            return cost, egrad, ehess
+            return cost, egrad, ehessp
 
-    @staticmethod
-    def create_cost_limits(D_goal, omega, psi_L, psi_U, jit=True):
+    def create_cost_limits(self, D_goal, omega, psi_L, psi_U, jit=True):
         diff = psi_L!=psi_U
         # inds = np.nonzero(np.triu(omega) + np.triu(psi_L>0) + np.triu(psi_U>0))
         inds = np.nonzero(np.triu(omega) + np.triu( diff * (psi_L>0)) + np.triu(diff * (psi_U>0)) )
         LL = diff*(psi_L>0)
         UU = diff*(psi_U>0)
-        K = 1
 
-        if jit:
+        if self.jit:
             def cost(Y):
-                return K * lcost(Y, D_goal, omega, psi_L, psi_U, inds)
+                return lcost(Y, D_goal, omega, psi_L, psi_U, inds)
 
             def egrad(Y):
-                return K * lgrad(Y, D_goal, omega, psi_L, psi_U, inds)
+                return lgrad(Y, D_goal, omega, psi_L, psi_U, inds)
 
             def ehess(Y, v):
-                return K * lhess(Y, v, D_goal, omega, psi_L, psi_U, inds)
+                return lhess(Y, v, D_goal, omega, psi_L, psi_U, inds)
         else:
             def cost(Y):
                 D = distance_matrix_from_pos(Y)
                 E0 = omega * (D_goal - D)
                 E1 = np.maximum(psi_L - LL * D, 0)
                 E2 = np.maximum(-psi_U + UU * D, 0)
-                return K * 0.5 * (np.linalg.norm(E0)**2 + np.linalg.norm(E1)**2 + np.linalg.norm(E2)**2)
+                return (np.linalg.norm(E0)**2 + np.linalg.norm(E1)**2 + np.linalg.norm(E2)**2)/2
 
             def egrad(Y):
                 n = Y.shape[0]
@@ -152,7 +157,7 @@ class RiemannianSolver:
                 A[1,:,:] = np.maximum(psi_L - LL * D, 0)
                 A[2,:,:] = -np.maximum(-psi_U + UU * D, 0)
                 C = adjoint(A).dot(Y)
-                return K * 2*np.sum(C,axis=0)
+                return 2*np.sum(C,axis=0)
 
             def ehess(Y, Z):
                 n = Y.shape[0]
@@ -170,7 +175,7 @@ class RiemannianSolver:
                 A = adjoint(A)
 
                 C = A[3:,:,:].dot(Y) + A[:3,:,:].dot(Z)
-                return K * 2*(np.sum(C,axis=0))
+                return 2*(np.sum(C,axis=0))
 
         return cost, egrad, ehess
 
@@ -181,16 +186,16 @@ class RiemannianSolver:
         use_limits=False,
         bounds=None,
         Y_init=None,
-        jit = True,
+        method=None,
         output_log=True,
     ):
         # Generate cost, gradient and hessian-vector product
         if not use_limits:
             [psi_L, psi_U] = [0 * omega, 0 * omega]
-            cost, egrad, ehess = self.create_cost(D_goal, omega, jit=jit)
+            cost, egrad, ehess = self.create_cost(D_goal, omega)
         else:
             psi_L, psi_U = self.graph.distance_bound_matrices()
-            cost, egrad, ehess = self.create_cost_limits(D_goal, omega, psi_L, psi_U, jit=jit)
+            cost, egrad, ehess = self.create_cost_limits(D_goal, omega, psi_L, psi_U)
 
         # Generate initialization
         if bounds is not None:
@@ -203,7 +208,8 @@ class RiemannianSolver:
 
         # Define problem
         problem = pymanopt.Problem(
-            manifold, cost=cost, egrad=egrad, ehess=ehess, verbosity=0
+            # manifold, cost=cost, egrad=egrad, ehess=ehess, verbosity=0,
+            manifold, cost=cost, egrad=egrad, ehess=ehess, verbosity=0,
         )
 
         # Solve problem

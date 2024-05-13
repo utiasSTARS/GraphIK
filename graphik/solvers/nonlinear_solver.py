@@ -130,7 +130,6 @@ def hessp_dense_(Y, Z, D_goal, omega):
 
 def cost_and_grad_dense_einsum_(x, A, d, dim=3):
     # einsum-only solution with dense matrix
-    # prod = rearrange(res_sq_batch.dot(Y), '(N d) dim -> N d dim', N=N, d=num_dist, dim=dim) # (pxd)xp * pxn -> (pxd)x3
     x = x.reshape(-1, dim)
     prod = np.einsum("i j k, k l -> i j l", A, x, optimize=True)
     res = np.einsum("i j, k j l -> k i l", x.T, prod)
@@ -355,7 +354,7 @@ class NonlinearSolver:
         bounds=None,
         Y_init=None,
         output_log=True,
-        method='L-BFGS-B',
+        method='BFGS',
         options=None,
     ):
         """
