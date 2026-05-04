@@ -372,7 +372,7 @@ if __name__ == "__main__":
         if feasible is FEASIBLE:
             final_eigvalue_sum_list.append(eig_value_sum_vs_iterations[-1])
         else:
-            final_eigvalue_sum_list.append(np.NaN)
+            final_eigvalue_sum_list.append(np.nan)
         primal_sdp_runtime.append(t_primal)
         fantope_runtime.append(t_fantope)
         feasibility_list.append(feasible)
@@ -395,7 +395,7 @@ if __name__ == "__main__":
         if feasible is FEASIBLE:
             final_eigvalue_sum_list_sparse_naive.append(eig_value_sum_vs_iterations[-1])
         else:
-            final_eigvalue_sum_list_sparse_naive.append(np.NaN)
+            final_eigvalue_sum_list_sparse_naive.append(np.nan)
 
         # Run sparse solver where Fantope program has a sparsity pattern matched to the primal SDP's
         (
@@ -415,7 +415,7 @@ if __name__ == "__main__":
         if feasible is FEASIBLE:
             final_eigvalue_sum_list_sparse_sdp.append(eig_value_sum_vs_iterations[-1])
         else:
-            final_eigvalue_sum_list_sparse_sdp.append(np.NaN)
+            final_eigvalue_sum_list_sparse_sdp.append(np.nan)
 
         bar.next()
     bar.finish()

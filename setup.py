@@ -15,17 +15,17 @@ setup(
     },
     include_package_data=True,
     install_requires=[
-        "numpy >= 1.16, < 2",        # numpy 2 is step 5 of the dep ladder
+        "numpy >= 2",
         "scipy >= 1.17",
         "sympy >= 1.14",
         "matplotlib >= 3.1",
-        "cvxpy >= 1.6, < 1.7",       # cvxpy 1.7+ requires numpy 2; deferred to step 5
+        "cvxpy >= 1.8",
         "networkx >= 3.6",
         # "networkx <= 2.8.7",
         "pymanopt >= 2.2.1",
         "progress",
         "yourdfpy >= 0.0.60",
-        "trimesh >= 3.11.2",         # floor required by yourdfpy
+        "trimesh >= 4.6.1",
         "numba >= 0.65",
         "pymlg @ git+https://github.com/decargroup/pymlg@8e6dc5ea61327ddfc2c8c1d16f276ae829f22db8#egg=pymlg",
         "pandas >= 0.24.2",
