@@ -1,3 +1,6 @@
+import pytest
+pytest.importorskip("mosek")  # SDP tests require commercial mosek; skip when unavailable
+
 import numpy as np
 from graphik.solvers.sdp_snl import (
     cvxpy_inequality_constraints,

@@ -10,21 +10,26 @@ setup(
     license="MIT",
     url="https://github.com/utiasSTARS/graphIK",
     packages=find_packages(),
+    package_data={
+        'graphik': ['robots/urdfs/*', 'robots/urdfs/meshes/**/*'],
+    },
+    include_package_data=True,
     install_requires=[
-        "numpy >= 1.16",
-        "scipy >= 1.3.0",
-        "sympy >= 1.5",
+        "numpy >= 1.16, < 2",        # numpy 2 is step 5 of the dep ladder
+        "scipy >= 1.17",
+        "sympy >= 1.14",
         "matplotlib >= 3.1",
-        "cvxpy >= 1.1.0a1",
-        "networkx <= 2.8.7",
-        "pymanopt == 0.2.5",
+        "cvxpy >= 1.6, < 1.7",       # cvxpy 1.7+ requires numpy 2; deferred to step 5
+        "networkx >= 3.6",
+        # "networkx <= 2.8.7",
+        "pymanopt == 0.2.5",         # pymanopt 2.x port is step 4
         "progress",
         "urdfpy @ git+ssh://git@github.com/utiasSTARS/urdfpy@master#egg=urdfpy",
-        "trimesh <= 3.7.12",
-        "numba",
+        "trimesh",
+        "numba >= 0.65",
         "liegroups @ git+ssh://git@github.com/utiasSTARS/liegroups@generative_ik#egg=liegroups",
         "pandas >= 0.24.2",
         "pytest",
     ],
-    python_requires=">=3.7",
+    python_requires=">=3.10",
 )

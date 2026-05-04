@@ -1,3 +1,6 @@
+import pytest
+pytest.importorskip("mosek")  # SDP tests require commercial mosek; skip when unavailable
+
 import numpy as np
 import unittest
 import networkx as nx
