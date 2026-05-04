@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 from graphik.utils.dgp import adjacency_matrix_from_graph, bound_smoothing, distance_matrix_from_graph, graph_from_pos, sample_matrix
 import pymanopt
+import pymanopt.function
 
 import numpy as np
-from pymanopt import tools
-from pymanopt.solvers import ConjugateGradient
+from pymanopt.optimizers import ConjugateGradient, TrustRegions
 from graphik.utils import (
     distance_matrix_from_gram,
     distance_matrix_from_pos,
@@ -13,25 +13,16 @@ from graphik.utils import (
     gram_from_distance_matrix,
 )
 from graphik.utils.manifolds.fixed_rank_psd_sym import PSDFixedRank
-from graphik.solvers.trust_region import TrustRegions
 from graphik.graphs.graph_base import ProblemGraph
 
-#Workaround for SciPy bug: https://github.com/scipy/scipy/pull/8082
 try:
     from graphik.solvers.costgrd import jcost, jgrad, jhess, lcost, lgrad, lhess
-except ModuleNotFoundError as err:
+except ModuleNotFoundError:
     print("AOT compiled functions not found. To improve performance please run solvers/costs.py.")
-
-def add_to_diagonal_fast(X: np.ndarray):
-    X.ravel()[:: X.shape[1] + 1] += -np.sum(X, axis=0)
-
-BetaTypes = tools.make_enum(
-    "BetaTypes", "FletcherReeves PolakRibiere HestenesStiefel HagerZhang".split()
-)
 
 def adjoint(X: np.ndarray) -> np.ndarray:
     D = np.zeros_like(X)
-    np.einsum('ijj->ij',D)[...] = np.sum(X, axis=-1)
+    np.einsum('ijj->ij', D)[...] = np.sum(X, axis=-1)
     return X - D
 
 class RiemannianSolver:
@@ -47,27 +38,29 @@ class RiemannianSolver:
 
         solver_type = self.params.get("solver", "TrustRegions")
 
+        common_kwargs = dict(
+            min_gradient_norm=self.params.get("mingradnorm", 0.5*1e-9),
+            log_verbosity=self.params.get("logverbosity", 0),
+            max_iterations=self.params.get("maxiter", 3000),
+            verbosity=0,
+        )
+
         if solver_type == "TrustRegions":
             self.solver = TrustRegions(
-                mingradnorm=self.params.get("mingradnorm", 0.5*1e-9),
-                logverbosity=self.params.get("logverbosity", 0),
-                maxiter=self.params.get("maxiter", 3000),
+                **common_kwargs,
                 theta=self.params.get("theta", 1.0),
                 kappa=self.params.get("kappa", 0.1),
             )
         elif solver_type == "ConjugateGradient":
             self.solver = ConjugateGradient(
-                mingradnorm=self.params.get("mingradnorm",1e-9),
-                logverbosity=self.params.get("logverbosity", 0),
-                maxiter=self.params.get("maxiter", 10e4),
-                minstepsize=self.params.get("minstepsize", 1e-10),
+                **common_kwargs,
+                min_step_size=self.params.get("minstepsize", 1e-10),
                 orth_value=self.params.get("orth_value", 10e10),
-                beta_type=self.params.get("beta_type", BetaTypes[3]),
+                beta_rule=self.params.get("beta_type", "HagerZhang"),
             )
         else:
-            raise (
-                ValueError,
-                "params[\"solver\"] must be one of 'ConjugateGradient', 'TrustRegions'",
+            raise ValueError(
+                "params[\"solver\"] must be one of 'ConjugateGradient', 'TrustRegions'"
             )
 
 
@@ -125,10 +118,9 @@ class RiemannianSolver:
 
             return cost, egrad, ehessp
 
-    def create_cost_limits(self, D_goal, omega, psi_L, psi_U, jit=True):
-        diff = psi_L!=psi_U
-        # inds = np.nonzero(np.triu(omega) + np.triu(psi_L>0) + np.triu(psi_U>0))
-        inds = np.nonzero(np.triu(omega) + np.triu( diff * (psi_L>0)) + np.triu(diff * (psi_U>0)) )
+    def create_cost_limits(self, D_goal, omega, psi_L, psi_U):
+        diff = psi_L != psi_U
+        inds = np.nonzero(np.triu(omega) + np.triu(diff * (psi_L > 0)) + np.triu(diff * (psi_U > 0)))
         LL = diff*(psi_L>0)
         UU = diff*(psi_U>0)
 
@@ -189,6 +181,8 @@ class RiemannianSolver:
         method=None,
         output_log=True,
     ):
+        manifold = PSDFixedRank(self.N, self.dim)
+
         # Generate cost, gradient and hessian-vector product
         if not use_limits:
             [psi_L, psi_U] = [0 * omega, 0 * omega]
@@ -197,29 +191,36 @@ class RiemannianSolver:
             psi_L, psi_U = self.graph.distance_bound_matrices()
             cost, egrad, ehess = self.create_cost_limits(D_goal, omega, psi_L, psi_U)
 
+        numpy_decorator = pymanopt.function.numpy(manifold)
+        cost = numpy_decorator(cost)
+        egrad = numpy_decorator(egrad)
+        ehess = numpy_decorator(ehess)
+
         # Generate initialization
         if bounds is not None:
             Y_init = self.generate_initialization(bounds, self.dim, omega, psi_L, psi_U)
         elif Y_init is None:
             raise Exception("If not using bounds, provide an initialization!")
 
-        # Define manifold
-        manifold = PSDFixedRank(self.N, self.dim)  # define manifold
-
         # Define problem
         problem = pymanopt.Problem(
-            # manifold, cost=cost, egrad=egrad, ehess=ehess, verbosity=0,
-            manifold, cost=cost, egrad=egrad, ehess=ehess, verbosity=0,
+            manifold, cost,
+            euclidean_gradient=egrad,
+            euclidean_hessian=ehess,
         )
 
-        # Solve problem
+        result = self.solver.run(problem, initial_point=Y_init)
         if output_log:
-            self.solver._logverbosity = 2
-            Y_sol, optlog = self.solver.solve(problem, x=Y_init)
-            return optlog["final_values"]
+            return {
+                "x": result.point,
+                "f(x)": result.cost,
+                "iterations": result.iterations,
+                "stopping_criterion": result.stopping_criterion,
+                "time": result.time,
+                "gradnorm": result.gradient_norm,
+            }
         else:
-            Y_sol = self.solver.solve(problem, x=Y_init)
-            return Y_sol
+            return result.point
 
 def solve_with_riemannian(graph, T_goal, use_jit=True):
     G = graph.from_pose(T_goal)

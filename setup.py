@@ -22,7 +22,7 @@ setup(
         "cvxpy >= 1.6, < 1.7",       # cvxpy 1.7+ requires numpy 2; deferred to step 5
         "networkx >= 3.6",
         # "networkx <= 2.8.7",
-        "pymanopt == 0.2.5",         # pymanopt 2.x port is step 4
+        "pymanopt >= 2.2.1",
         "progress",
         "yourdfpy >= 0.0.60",
         "trimesh >= 3.11.2",         # floor required by yourdfpy

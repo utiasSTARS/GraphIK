@@ -1,5 +1,5 @@
-from graphik.robots.robot_base import RobotPlanar
-from graphik.graphs.graph_base import RobotGraph
+from graphik.robots import RobotPlanar
+from graphik.graphs.graph_base import ProblemGraph as RobotGraph
 import numpy as np
 
 from graphik.utils.manifolds.fixed_rank_psd_sym import PSDFixedRank
@@ -14,16 +14,9 @@ from graphik.utils.dgp import (
     bound_smoothing,
 )
 
-from pymanopt import Problem
-from pymanopt.solvers import ConjugateGradient
-from pymanopt.tools import make_enum
-
-from graphik.solvers.trust_region import TrustRegions
-
-
-BetaTypes = make_enum(
-    "BetaTypes", "FletcherReeves PolakRibiere HestenesStiefel HagerZhang".split()
-)
+import pymanopt
+import pymanopt.function
+from pymanopt.optimizers import ConjugateGradient, TrustRegions
 
 
 def add_to_diagonal_fast(X: np.ndarray):
@@ -39,19 +32,20 @@ class RiemannianSolver(GraphProblemSolver):
     def __init__(self, params: dict) -> None:
         self.params = params
 
+        common_kwargs = dict(
+            min_gradient_norm=params["mingradnorm"],
+            max_iterations=params["maxiter"],
+            log_verbosity=params["logverbosity"],
+            verbosity=0,
+        )
+
         if params["solver"] == "TrustRegions":
-            self.solver = TrustRegions(
-                mingradnorm=params["mingradnorm"],
-                maxiter=params["maxiter"],
-                logverbosity=params["logverbosity"],
-            )
+            self.solver = TrustRegions(**common_kwargs)
         elif params["solver"] == "ConjugateGradient":
             self.solver = ConjugateGradient(
-                mingradnorm=params["mingradnorm"],
-                maxiter=params["maxiter"],
-                logverbosity=params["logverbosity"],
-                minstepsize=1e-6,
-                beta_type=BetaTypes[2],
+                **common_kwargs,
+                min_step_size=1e-6,
+                beta_rule="PolakRibiere",
                 orth_value=4,
             )
         else:
@@ -184,16 +178,33 @@ class RiemannianSolver(GraphProblemSolver):
         D_goal = distance_matrix_from_graph(G)
         omega = adjacency_matrix_from_graph(G)
 
+        manifold = PSDFixedRank(N, dim)
+
         if params["joint_limits"]:
             psi_L, psi_U = graph.distance_bound_matrices()
             cost, egrad, ehess = self.create_cost(D_goal, omega, True, psi_L, psi_U)
         else:
             cost, egrad, ehess = self.create_cost(D_goal, omega, False)
 
-        manifold = PSDFixedRank(N, dim)
-        problem = Problem(manifold, cost=cost, egrad=egrad, ehess=ehess, verbosity=0)
+        numpy_decorator = pymanopt.function.numpy(manifold)
+        cost = numpy_decorator(cost)
+        egrad = numpy_decorator(egrad)
+        ehess = numpy_decorator(ehess)
+
+        problem = pymanopt.Problem(
+            manifold, cost,
+            euclidean_gradient=egrad,
+            euclidean_hessian=ehess,
+        )
 
         X = params["init"]
-        Y_sol, optlog = self.solver.solve(problem, x=X)
+        result = self.solver.run(problem, initial_point=X)
 
-        return optlog["final_values"]
+        return {
+            "x": result.point,
+            "f(x)": result.cost,
+            "iterations": result.iterations,
+            "stopping_criterion": result.stopping_criterion,
+            "time": result.time,
+            "gradnorm": result.gradient_norm,
+        }
