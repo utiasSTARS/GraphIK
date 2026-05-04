@@ -1,10 +1,11 @@
 """Generate the solver-correctness baseline JSON.
 
 Usage:
-    python -m tests.baselines.generate --output tests/baselines/2026-05-01-solver-baseline.json
+    python -m tests.baselines.generate --output tests/baselines/2026-05-02-yourdfpy-solver-baseline.json
 
-The output is committed to git. Regeneration is allowed only when the spec
-allows it (currently: at the start of the ladder and at the end of step 4).
+The output is committed to git. Regeneration is allowed when a step's
+spec justifies it (per-step decision recorded in that step's design doc).
+Existing baseline files stay committed for traceability.
 """
 from __future__ import annotations
 import argparse
@@ -18,6 +19,7 @@ from tests.baselines.runner import run_case
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--output", required=True)
+    ap.add_argument("--label", required=True, help="baseline_label written into the JSON")
     args = ap.parse_args()
 
     results = [run_case(c) for c in CASES]
@@ -27,7 +29,7 @@ def main() -> int:
 
     payload = {
         "schema_version": 1,
-        "baseline_label": "2026-05-01-pre-step-1",
+        "baseline_label": args.label,
         "cases": results,
     }
     with open(args.output, "w") as f:

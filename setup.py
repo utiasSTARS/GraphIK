@@ -24,8 +24,8 @@ setup(
         # "networkx <= 2.8.7",
         "pymanopt == 0.2.5",         # pymanopt 2.x port is step 4
         "progress",
-        "urdfpy @ git+ssh://git@github.com/utiasSTARS/urdfpy@master#egg=urdfpy",
-        "trimesh",
+        "yourdfpy >= 0.0.60",
+        "trimesh >= 3.11.2",         # floor required by yourdfpy
         "numba >= 0.65",
         "pymlg @ git+https://github.com/decargroup/pymlg@8e6dc5ea61327ddfc2c8c1d16f276ae829f22db8#egg=pymlg",
         "pandas >= 0.24.2",

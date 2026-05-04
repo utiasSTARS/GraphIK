@@ -16,20 +16,28 @@ def make_scene(
     transparency=None,
 ):
 
-    if q is not None:
-        urdf_q = robot.map_to_urdf_ind(q)
-        cfg = urdf_q
-    else:
-        cfg = {}
+    # Build a full cfg covering every actuated joint so update_cfg behaves
+    # statelessly (same compensation as RobotURDF.extract_T_zero_from_URDF;
+    # yourdfpy's update_cfg only mutates joints whose names appear in cfg).
+    partial_cfg = robot.map_to_urdf_ind(q) if q is not None else {}
+    cfg = {j.name: partial_cfg.get(j.name, 0.0) for j in robot.urdf.actuated_joints}
     if with_robot:
-        robot_scene = robot.urdf.show(
-            cfg=cfg, return_scene=True, transparency=transparency
-        )
+        robot.urdf.update_cfg(cfg)
+        tm_scene = robot.urdf.scene
         if scene is None:
-            scene = robot_scene
-        else:
-            for node in robot_scene.get_nodes():
-                scene.add_node(node)
+            scene = pyrender.Scene()
+        for geom_name, tm_geom in tm_scene.geometry.items():
+            pose, _ = tm_scene.graph.get(geom_name)
+            pr_mesh = pyrender.Mesh.from_trimesh(tm_geom)
+            if transparency is not None:
+                for prim in pr_mesh.primitives:
+                    base = prim.material.baseColorFactor
+                    if base is None:
+                        continue
+                    prim.material.baseColorFactor = (
+                        float(base[0]), float(base[1]), float(base[2]), float(transparency),
+                    )
+            scene.add(pr_mesh, pose=pose)
 
     Ts_dict = robot.extract_T_zero_from_URDF(q=q)
     Ts = []
