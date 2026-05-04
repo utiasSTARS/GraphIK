@@ -9,10 +9,7 @@ from graphik.utils import list_to_variable_dict, flatten
 from graphik.utils.constants import ROOT
 
 # from graphik.utils import *
-from liegroups.numpy import SE2, SE3
 from math import pi
-
-SEMatrix = Union[SE2, SE3]
 
 
 class Robot(nx.DiGraph):
@@ -51,14 +48,13 @@ class Robot(nx.DiGraph):
         raise NotImplementedError
 
     @abstractmethod
-    def pose(self, joint_angles: Dict[str, Any], query_node: str) -> SEMatrix:
+    def pose(self, joint_angles: Dict[str, Any], query_node: str) -> np.ndarray:
         """
         Given a list of N joint variables, calculate the Nth joint's pose.
 
         :param node_inputs: joint variables node names as keys mapping to values
         :param query_node: node ID of node whose pose we want
-        :returns: SE2 or SE3 pose
-        :rtype: lie.SE3Matrix
+        :returns: SE2 (3x3) or SE3 (4x4) homogeneous transform
         """
         raise NotImplementedError
 
@@ -128,9 +124,9 @@ class Robot(nx.DiGraph):
             return self._joint_ids
 
     @property
-    def T_base(self) -> SEMatrix:
+    def T_base(self) -> np.ndarray:
         """
-        :return: SE(dim) Transform to robot base frame
+        :return: SE(dim) homogeneous transform to robot base frame (4x4 or 3x3 ndarray)
         """
         try:
             return self._T_base
@@ -182,7 +178,7 @@ class Robot(nx.DiGraph):
     #         CONVENIENCE METHODS
     ########################################
 
-    def get_all_poses(self, joint_angles: Dict[str, Any]) -> Dict[str, SEMatrix]:
+    def get_all_poses(self, joint_angles: Dict[str, Any]) -> Dict[str, np.ndarray]:
         """
         Convenient method for getting all poses of coordinate systems attached to each point in the robot's graph description.
         """
@@ -199,5 +195,5 @@ class Robot(nx.DiGraph):
         goals = {}
         for ee in self.end_effectors:
             for node in ee:
-                goals[node] = self.pose(q, node).trans
+                goals[node] = self.pose(q, node)[:-1, -1]
         return goals

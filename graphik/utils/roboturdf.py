@@ -1,6 +1,6 @@
 from graphik.utils import skew, normalize
 from urdfpy import URDF
-from liegroups import SE3, SO3
+from pymlg.numpy import SE3
 import numpy as np
 from graphik.graphs import ProblemGraphRevolute
 from graphik.robots import RobotRevolute
@@ -134,21 +134,18 @@ class RobotURDF(object):
         for joint in self.urdf.actuated_joints:
             # get child link frame
             child_link = self.find_link_by_name(joint.child)
-            T_link = SE3.from_matrix(fk[child_link])
+            T_link = fk[child_link]  # already a 4x4 ndarray
             if frame == "joint":
-                # URDF frames are aligned with the links
-                # An additional rotation needs to be applied
-                # to align the Z axis with the joint frame
                 joint_axis = joint.axis
                 T_joint_axis = get_T_from_joint_axis(joint_axis)
-                T_joint = np.dot(T_link.as_matrix(), T_joint_axis.inv().as_matrix())
-                T[joint] = SE3.from_matrix(T_joint)
+                T_joint = T_link @ SE3.inverse(T_joint_axis)
+                T[joint] = T_joint
             else:
                 T[joint] = T_link
 
         for ee_joint in self.ee_joints:
             ee_link = self.find_link_by_name(ee_joint.child)
-            T[ee_joint] = SE3.from_matrix(fk[ee_link])
+            T[ee_joint] = fk[ee_link]
 
         return T
 
@@ -234,22 +231,24 @@ class RobotURDF(object):
 
         T_list = list(self.T_zero.values())
         if randomized_links:
-            T_mod = T_list
-            for idx in range(len(T_list)-1):
-                T_delta = T_list[idx].inv().dot(T_list[idx+1]) # delta translation
-                t_delta = T_delta.trans*((1-randomize_percentage) + 2*randomize_percentage*np.random.rand()) # variation
+            T_mod = list(T_list)
+            for idx in range(len(T_list) - 1):
+                T_delta = SE3.inverse(T_list[idx]) @ T_list[idx + 1]
+                t_delta = T_delta[:3, 3] * (
+                    (1 - randomize_percentage) + 2 * randomize_percentage * np.random.rand()
+                )
                 t_delta[np.abs(t_delta) < 1e-6] = 0
-                T_delta.trans = t_delta
-                T_mod[idx+1] = T_mod[idx].dot(T_delta)
+                T_delta = T_delta.copy()
+                T_delta[:3, 3] = t_delta
+                T_mod[idx + 1] = T_mod[idx] @ T_delta
             T_list = T_mod
 
         # Assign Transforms
         T_labels = self.get_graphik_labels(joints)
-        # T_zero = dict(zip(T_labels, self.T_zero.values()))
         T_zero = dict(zip(T_labels, T_list))
         T0 = T_zero["p0"]
         for key, val in T_zero.items():
-            T_zero[key] = T0.inv().dot(val)
+            T_zero[key] = SE3.inverse(T0) @ val
         params["T_zero"] = T_zero
         params["num_joints"] = self.n_q_joints
 
@@ -265,20 +264,19 @@ class RobotURDF(object):
 
 def get_T_from_joint_axis(axis: np.ndarray):
     """
-    Take in the axis string from urdf "X X X" and return the rotation matrix
-    assoicated with that axis
+    Take in the axis vector from urdf and return the 4x4 SE(3) transform
+    that aligns the z-axis with the joint axis.
     """
     norm = np.linalg.norm
     z_hat = np.array([0, 0, 1])
 
     if all(np.isclose(axis, -z_hat)):
-        R = SO3.rotx(np.pi).as_matrix()
+        from graphik.utils.kinematics import Rx
+        R = Rx(np.pi)
     elif not all(np.isclose(axis, z_hat)):
         rot_axis = np.cross(axis, z_hat)
-        # rot_axis = np.cross(z_hat, axis)
         ang = -np.arcsin(norm(rot_axis) / (norm(axis) * norm(z_hat)))
         rot_axis = normalize(rot_axis)
-
         rot_axis = rot_axis.reshape(3, 1)
 
         R = (
@@ -292,7 +290,6 @@ def get_T_from_joint_axis(axis: np.ndarray):
     T = np.eye(4)
     T[0:3, 0:3] = R
     T[0:3, 3] = np.zeros(3)
-    T = SE3.from_matrix(T)
 
     return T
 

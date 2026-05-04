@@ -27,7 +27,7 @@ setup(
         "urdfpy @ git+ssh://git@github.com/utiasSTARS/urdfpy@master#egg=urdfpy",
         "trimesh",
         "numba >= 0.65",
-        "liegroups @ git+ssh://git@github.com/utiasSTARS/liegroups@generative_ik#egg=liegroups",
+        "pymlg @ git+https://github.com/decargroup/pymlg@8e6dc5ea61327ddfc2c8c1d16f276ae829f22db8#egg=pymlg",
         "pandas >= 0.24.2",
         "pytest",
     ],

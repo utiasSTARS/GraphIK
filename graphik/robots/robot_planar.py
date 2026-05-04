@@ -5,7 +5,7 @@ import networkx as nx
 import numpy as np
 from graphik.robots.robot_base import Robot
 from graphik.utils import *
-from liegroups.numpy import SE2, SO2
+from pymlg.numpy import SE2
 from numpy import cos, pi, sqrt, inf
 
 
@@ -37,20 +37,20 @@ class RobotPlanar(Robot):
 
                 # Twists representing rotation axes as node attributes
                 cur = k_map[idx]
-                omega = np.array([0,0,1])
-                q = np.hstack((self.nodes[cur]["T0"].as_matrix()[:2, 2], 0))
-                self.nodes[cur]["S"] = np.hstack((np.cross(-omega, q), omega))[[0,1,5]]
+                omega = np.array([0, 0, 1])
+                q = np.hstack((self.nodes[cur]["T0"][:2, 2], 0))
+                self.nodes[cur]["S"] = np.hstack((np.cross(-omega, q), omega))[[5, 0, 1]]
 
                 # Relative transforms between coordinate frames as edge attributes
                 if idx != 0:
                     pred = k_map[idx - 1]
                     self[pred][cur][TRANSFORM] = (
-                        self.nodes[pred]["T0"].inv().dot(self.nodes[cur]["T0"])
+                        SE2.inverse(self.nodes[pred]["T0"]) @ self.nodes[cur]["T0"]
                     )
 
     def from_params(self):
         self.l = self.params["link_lengths"]
-        T = {ROOT: SE2.identity()}
+        T = {ROOT: np.eye(3)}
         q0 = self.zero_configuration()
         kinematic_map = self.kinematic_map
         for ee in self.end_effectors:
@@ -59,14 +59,13 @@ class RobotPlanar(Robot):
                 T[node] = fk_tree_2d(self.l, q0, q0, path_nodes)
         return T
 
-    def pose(self, joint_angles: Dict[str, float], query_node: str) -> SE3:
+    def pose(self, joint_angles: Dict[str, float], query_node: str) -> np.ndarray:
         """
-        Given a list of N joint variables, calculate the Nth joint's pose.
+        Given a list of N joint variables, calculate the Nth joint's pose (3x3 SE(2)).
 
         :param node_inputs: joint variables node names as keys mapping to values
         :param query_node: node ID of node whose pose we want
-        :returns: SE2 or SE3 pose
-        :rtype: lie.SE3Matrix
+        :returns: 3x3 SE(2) homogeneous transform
         """
         # TODO support multiple query nodes
         # TODO avoid for loop by vectorizing matrix exponential
@@ -74,8 +73,8 @@ class RobotPlanar(Robot):
         T = self.nodes[ROOT]["T0"]
         for idx in range(len(kinematic_map) - 1):
             pred, cur = kinematic_map[idx], kinematic_map[idx + 1]
-            T = T.dot(SE2.exp(self.nodes[pred]["S"] * joint_angles[cur]))
-        T = T.dot(self.nodes[query_node]["T0"])
+            T = T @ SE2.Exp(self.nodes[pred]["S"] * joint_angles[cur])
+        T = T @ self.nodes[query_node]["T0"]
 
         return T
 
@@ -109,7 +108,7 @@ class RobotPlanar(Robot):
                     J[node][:, idx] = self.nodes[pred]["S"]
                 else:
                     ppred = list(self.predecessors(pred))[0]
-                    T = T.dot(SE2.exp(self.nodes[ppred]["S"] * joint_angles[pred]))
-                    Ad = T.adjoint()
-                    J[node][:, idx] = Ad.dot(self.nodes[pred]["S"])
+                    T = T @ SE2.Exp(self.nodes[ppred]["S"] * joint_angles[pred])
+                    Ad = SE2.adjoint(T)
+                    J[node][:, idx] = Ad @ self.nodes[pred]["S"]
         return J

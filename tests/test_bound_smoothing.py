@@ -85,7 +85,7 @@ class TestBoundSmoothing(unittest.TestCase):
 
             goals = {}
             for idx, ee_pair in enumerate(robot.end_effectors):
-                goals[ee_pair] = robot.pose(q_goal, ee_pair).trans
+                goals[ee_pair] = robot.pose(q_goal, ee_pair)[:2, 2]
 
             G = graph.from_pos(goals)
 
@@ -106,7 +106,7 @@ class TestBoundSmoothing(unittest.TestCase):
             T_goal = robot.pose(q_goal, "p" + str(robot.n))
 
             G = graph.from_pos(
-                {f"p{robot.n}": T_goal.trans, f"q{robot.n}": T_goal.dot(trans_axis(1, "z")).trans}
+                {f"p{robot.n}": T_goal[:3, 3], f"q{robot.n}": (T_goal @ trans_axis(1, "z"))[:3, 3]}
             )
             lb, ub = bound_smoothing(G)
 

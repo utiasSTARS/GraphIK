@@ -1,13 +1,11 @@
 from abc import abstractmethod
-from liegroups.numpy.se2 import SE2Matrix
-from liegroups.numpy.se3 import SE3Matrix
 
 import networkx as nx
 import numpy as np
 import numpy.linalg as la
 from typing import Dict, List, Any, Union
 from numpy.typing import ArrayLike
-from graphik.robots.robot_base import Robot, SEMatrix
+from graphik.robots.robot_base import Robot
 from graphik.utils.constants import *
 from graphik.utils import (
     distance_matrix_from_graph,
@@ -167,16 +165,17 @@ class ProblemGraph(nx.DiGraph):
         return G
 
     @abstractmethod
-    def _pose_goal(self, T_goal: Dict[str, SEMatrix]) -> Dict[str, ArrayLike]:
+    def _pose_goal(self, T_goal: Dict[str, np.ndarray]) -> Dict[str, ArrayLike]:
         raise NotImplementedError
 
-    def from_pose(self, T_goal: Union[SEMatrix, Dict[str, SEMatrix]]) -> nx.DiGraph:
+    def from_pose(self, T_goal) -> nx.DiGraph:
         """
-        Given a dictionary of node name and pose key-value pairs,
-        generate a copy of the problem graph and fill the POS attributes of nodes
-        such that it represents the induced IK problem.
+        Given a dictionary of node name and pose key-value pairs (or a single
+        pose ndarray, applied to the default end-effector), generate a copy of
+        the problem graph with POS attributes filled to represent the induced
+        IK problem.
         """
-        if isinstance(T_goal, (SE2Matrix, SE3Matrix)):
+        if not isinstance(T_goal, dict):
             T_goal = {self.robot.end_effectors[0]: T_goal}
 
         return self.from_pos(self._pose_goal(T_goal))

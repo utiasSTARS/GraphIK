@@ -4,7 +4,6 @@ import numpy.linalg as la
 from graphik.robots import RobotPlanar
 from graphik.graphs.graph_base import ProblemGraph
 from graphik.utils import *
-from liegroups.numpy import SE2, SO2
 import networkx as nx
 from numpy import cos, pi
 from math import sqrt, atan2
@@ -58,7 +57,7 @@ class ProblemGraphPlanar(ProblemGraph):
             k_map = kinematic_map[ROOT][ee]
             for idx in range(len(k_map)):
                 cur = k_map[idx]
-                cur_pos = robot.nodes[cur]["T0"].trans
+                cur_pos = robot.nodes[cur]["T0"][:2, 2]
 
                 # Add nodes for joint and edge between them
                 structure.add_nodes_from([(cur, {POS: cur_pos, TYPE: [ROBOT]})])
@@ -133,18 +132,18 @@ class ProblemGraphPlanar(ProblemGraph):
                 )
                 self[u][v][BOUNDED] = BELOW
 
-    def _pose_goal(self, T_goal: Dict[str, SE2]) -> Dict[str, ArrayLike]:
+    def _pose_goal(self, T_goal: Dict[str, np.ndarray]) -> Dict[str, ArrayLike]:
         pos = {}
         for u, T_goal_u in T_goal.items():
             for v in self.structure.predecessors(u):
                 if DIST in self[v][u]:
                     d = self[v][u][DIST]
-                    z = T_goal_u.rot.as_matrix()[0:2, 0]
-                    pos[u] = T_goal_u.trans
-                    pos[v] = T_goal_u.trans - z * d
+                    z = T_goal_u[:2, 0]
+                    pos[u] = T_goal_u[:2, 2]
+                    pos[v] = T_goal_u[:2, 2] - z * d
         return pos
 
-    def joint_variables(self, G: nx.Graph, T_final: Optional[Dict[str, SE2]] = None) -> Dict[str, float]:
+    def joint_variables(self, G: nx.Graph, T_final: Optional[Dict[str, np.ndarray]] = None) -> Dict[str, float]:
         """
         Finds the set of decision variables corresponding to the
         graph realization G.
@@ -158,24 +157,24 @@ class ProblemGraphPlanar(ProblemGraph):
         # resolve rotation and translation
         R_, t_ = best_fit_transform(np.vstack((G.nodes[ROOT][POS],
                                                G.nodes["x"][POS],
-                                               G.nodes["y"][POS])) ,
-                                    np.vstack(([0,0], [-1,0], [0,1])))
+                                               G.nodes["y"][POS])),
+                                    np.vstack(([0, 0], [-1, 0], [0, 1])))
 
-        R = {ROOT: SO2.identity()}
+        R = {ROOT: np.eye(2)}
 
         for u, v, dat in self.structure.edges(data=DIST):
             if dat:
-                diff_uv = R_.dot(G.nodes[v][POS] - G.nodes[u][POS])
+                diff_uv = R_ @ (G.nodes[v][POS] - G.nodes[u][POS])
                 len_uv = np.linalg.norm(diff_uv)
-                sol = R[u].as_matrix().T.dot(diff_uv/len_uv)
+                sol = R[u].T @ (diff_uv / len_uv)
                 theta_idx = atan2(sol[1], sol[0])
                 joint_variables[v] = wraptopi(theta_idx)
-                Rz = SO2.from_angle(theta_idx)
-                R[v] = R[u].dot(Rz)
+                Rz = R2(theta_idx)
+                R[v] = R[u] @ Rz
 
         return joint_variables
 
     def get_pose(
         self, joint_angles: Dict[str, float], query_node: Union[List[str], str]
-    ) -> Union[Dict[str, SE2], SE2]:
+    ) -> np.ndarray:
         return self.robot.pose(joint_angles, query_node)

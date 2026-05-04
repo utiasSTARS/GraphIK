@@ -81,8 +81,8 @@ class TestAdjacencyMatrices(unittest.TestCase):
 
         q_goal = graph.robot.random_configuration()
         goals = {
-            f"p{n}": robot.pose(q_goal, f"p{n}").trans,
-            f"p{n-1}": robot.pose(q_goal, f"p{n-1}").trans,
+            f"p{n}": robot.pose(q_goal, f"p{n}")[:2, 2],
+            f"p{n-1}": robot.pose(q_goal, f"p{n-1}")[:2, 2],
         }
         G = graph.from_pos(goals)
 
@@ -117,7 +117,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
 
         q_goal = graph.robot.random_configuration()
         goals = {
-            f"p{n}": robot.pose(q_goal, f"p{n}").trans,
+            f"p{n}": robot.pose(q_goal, f"p{n}")[:2, 2],
             # f"p{n-1}": robot.pose(q_goal, f"p{n-1}").trans,
         }
         G = graph.from_pos(goals)
@@ -167,7 +167,7 @@ class TestAdjacencyMatrices(unittest.TestCase):
         q_goal = robot.random_configuration()
         goals = {}
         for idx, ee in enumerate(robot.end_effectors):
-            goals[ee] = robot.pose(q_goal, ee).trans
+            goals[ee] = robot.pose(q_goal, ee)[:2, 2]
 
         G = graph.from_pos(goals)
 
@@ -225,8 +225,8 @@ class TestAdjacencyMatrices(unittest.TestCase):
         goals = {}
         for idx, ee in enumerate(robot.end_effectors):
             ee_p = list(robot.predecessors(ee))
-            goals[ee] = robot.pose(q_goal, ee).trans
-            goals[ee_p[0]] = robot.pose(q_goal, ee_p[0]).trans
+            goals[ee] = robot.pose(q_goal, ee)[:2, 2]
+            goals[ee_p[0]] = robot.pose(q_goal, ee_p[0])[:2, 2]
 
         G = graph.from_pos(goals)
 

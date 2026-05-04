@@ -4,10 +4,7 @@ import numpy.linalg as la
 from graphik.robots import RobotRevolute
 from graphik.graphs.graph_base import ProblemGraph
 from graphik.utils import *
-from liegroups.numpy import SE3, SO3
-
-# from liegroups.numpy.se3 import SE3Matrix
-# from liegroups.numpy.so3 import SO3Matrix
+from pymlg.numpy import SE3
 import networkx as nx
 from numpy import cos, pi, sqrt, arctan2, cross
 
@@ -68,8 +65,8 @@ class ProblemGraphRevolute(ProblemGraph):
             for idx in range(len(k_map)):
                 cur, aux_cur = k_map[idx], f"q{k_map[idx][1:]}"
                 cur_pos, aux_cur_pos = (
-                    robot.nodes[cur]["T0"].trans,
-                    robot.nodes[cur]["T0"].dot(trans_z).trans,
+                    robot.nodes[cur]["T0"][:3, 3],
+                    (robot.nodes[cur]["T0"] @ trans_z)[:3, 3],
                 )
                 type = [ROBOT]
                 if cur == ee:
@@ -109,11 +106,6 @@ class ProblemGraphRevolute(ProblemGraph):
         for u in structure.nodes:
             del structure.nodes[u][POS]
 
-        # # Set node type to robot
-        # nx.set_node_attributes(structure, [ROBOT], TYPE)
-        # structure.nodes[ROOT][TYPE] = [ROBOT, BASE]
-        # structure.nodes["q0"][TYPE] = [ROBOT, BASE]
-
         return structure
 
     def root_angle_limits(self):
@@ -128,19 +120,19 @@ class ProblemGraphRevolute(ProblemGraph):
 
         for base_node in base_names:
             for node in names:
-                T0 = SE3.from_matrix(np.identity(4))
-                T0.trans = self.nodes[base_node][POS]
+                T0 = np.eye(4)
+                T0[:3, 3] = self.nodes[base_node][POS]
                 if node[0] == "p":
                     T2 = robot.nodes["p1"]["T0"]
                 else:
-                    T2 = robot.nodes["p1"]["T0"].dot(T_axis)
+                    T2 = robot.nodes["p1"]["T0"] @ T_axis
 
-                N = T1.as_matrix()[0:3, 2]
-                C = T1.trans + (N.dot(T2.trans - T1.trans)) * N
-                r = np.linalg.norm(T2.trans - C)
-                P = T0.trans
+                N = T1[:3, 2]
+                C = T1[:3, 3] + (N.dot(T2[:3, 3] - T1[:3, 3])) * N
+                r = np.linalg.norm(T2[:3, 3] - C)
+                P = T0[:3, 3]
                 d_max, d_min = max_min_distance_revolute(r, P, C, N)
-                d = np.linalg.norm(T2.trans - T0.trans)
+                d = np.linalg.norm(T2[:3, 3] - T0[:3, 3])
 
                 if d_max == d_min:
                     limit = False
@@ -153,20 +145,20 @@ class ProblemGraphRevolute(ProblemGraph):
 
                 if limit:
                     if node[0] == "p":
-                        T_rel = T1.inv().dot(robot.nodes["p1"]["T0"])
+                        T_rel = SE3.inverse(T1) @ robot.nodes["p1"]["T0"]
                     else:
-                        T_rel = T1.inv().dot(robot.nodes["p1"]["T0"].dot(T_axis))
+                        T_rel = SE3.inverse(T1) @ (robot.nodes["p1"]["T0"] @ T_axis)
 
                     d_limit = la.norm(
-                        T1.dot(rot_axis(upper_limits["p1"], "z")).dot(T_rel).trans
-                        - T0.trans
+                        (T1 @ rot_axis(upper_limits["p1"], "z") @ T_rel)[:3, 3]
+                        - T0[:3, 3]
                     )
 
                     if limit == ABOVE:
                         d_max = d_limit
                     else:
                         d_min = d_limit
-                    limited_joints += ["p1"]  # joint at p0 is limited
+                    limited_joints += ["p1"]
 
                 self.add_edge(base_node, node)
                 if d_max == d_min:
@@ -207,17 +199,17 @@ class ProblemGraphRevolute(ProblemGraph):
                     ]
 
                     if AUX_PREFIX in ids[0]:
-                        T0 = T0.dot(T_axis)
+                        T0 = T0 @ T_axis
                     if AUX_PREFIX in ids[1]:
-                        T2 = T2.dot(T_axis)
+                        T2 = T2 @ T_axis
 
-                    N = T1.as_matrix()[0:3, 2]
-                    C = T1.trans + (N.dot(T2.trans - T1.trans)) * N
-                    r = la.norm(T2.trans - C)
-                    P = T0.trans
+                    N = T1[:3, 2]
+                    C = T1[:3, 3] + (N.dot(T2[:3, 3] - T1[:3, 3])) * N
+                    r = la.norm(T2[:3, 3] - C)
+                    P = T0[:3, 3]
                     d_max, d_min = max_min_distance_revolute(r, P, C, N)
 
-                    d = la.norm(T2.trans - T0.trans)
+                    d = la.norm(T2[:3, 3] - T0[:3, 3])
                     if d_max == d_min:
                         limit = False
                     elif d == d_max:
@@ -230,9 +222,9 @@ class ProblemGraphRevolute(ProblemGraph):
                     if limit:
                         rot_limit = rot_axis(upper_limits[cur], "z")
 
-                        T_rel = T1.inv().dot(T2)
+                        T_rel = SE3.inverse(T1) @ T2
 
-                        d_limit = la.norm(T1.dot(rot_limit).dot(T_rel).trans - T0.trans)
+                        d_limit = la.norm((T1 @ rot_limit @ T_rel)[:3, 3] - T0[:3, 3])
 
                         if limit == ABOVE:
                             d_max = d_limit
@@ -250,25 +242,20 @@ class ProblemGraphRevolute(ProblemGraph):
 
         self.limited_joints = limited_joints
 
-    def _pose_goal(self, T_goal: Dict[str, SE3]) -> Dict[str, ArrayLike]:
+    def _pose_goal(self, T_goal: Dict[str, np.ndarray]) -> Dict[str, ArrayLike]:
         pos = {}
         for u, T_goal_u in T_goal.items():
             v = AUX_PREFIX + u[1:]
-            pos[u] = T_goal_u.trans
-            pos[v] = T_goal_u.dot(trans_axis(self.axis_length, "z")).trans
+            pos[u] = T_goal_u[:3, 3]
+            pos[v] = (T_goal_u @ trans_axis(self.axis_length, "z"))[:3, 3]
         return pos
 
     def joint_variables(
-        self, G: nx.DiGraph, T_final: Optional[Dict[str, SE3]] = None
+        self, G: nx.DiGraph, T_final: Optional[Dict[str, np.ndarray]] = None
     ) -> Dict[str, float]:
         """
         Finds the set of decision variables corresponding to the
         graph realization G.
-
-        :param G: networkx.DiGraph with known vertex positions
-        :param T_final: poses of end-effectors in case two final frames aligned along z
-        :returns: Dictionary of joint angles
-        :rtype: Dict[str, float]
         """
         tol = 1e-10
         axis_length = self.axis_length
@@ -288,8 +275,10 @@ class ProblemGraphRevolute(ProblemGraph):
         y = normalize(y_hat)
         z = normalize(z_hat)
         R = np.vstack((x, -y, z)).T
-        # B = SE3Matrix(SO3Matrix(R), G.nodes[ROOT][POS])
-        B = SE3(SO3(R), G.nodes[ROOT][POS])
+        B = np.eye(4)
+        B[:3, :3] = R
+        B[:3, 3] = G.nodes[ROOT][POS]
+        B_inv = SE3.inverse(B)
 
         omega_z = skew(np.array([0, 0, 1]))
 
@@ -302,50 +291,45 @@ class ProblemGraphRevolute(ProblemGraph):
 
                 T_prev = T[pred]
 
-                T_prev_0 = self.robot.nodes[pred]["T0"]  # previous p xf at 0
-                T_0 = self.robot.nodes[cur]["T0"]  # cur p xf at 0
-                T_0_q = self.robot.nodes[cur]["T0"].dot(
-                    trans_axis(axis_length, "z")
-                )  # cur q xf at 0
-                T_rel = T_prev_0.inv().dot(T_0)  # relative xf
-                ps_0 = T_prev_0.inv().dot(T_0).trans  # relative xf
-                qs_0 = T_prev_0.inv().dot(T_0_q).trans  # rel q xf
+                T_prev_0 = self.robot.nodes[pred]["T0"]
+                T_0 = self.robot.nodes[cur]["T0"]
+                T_0_q = self.robot.nodes[cur]["T0"] @ trans_axis(axis_length, "z")
+                T_rel = SE3.inverse(T_prev_0) @ T_0
+                ps_0 = (SE3.inverse(T_prev_0) @ T_0)[:3, 3]
+                qs_0 = (SE3.inverse(T_prev_0) @ T_0_q)[:3, 3]
 
                 # predicted p and q expressed in previous frame
-                p = B.inv().dot(G.nodes[cur][POS])
+                p = B_inv[:3, :3] @ G.nodes[cur][POS] + B_inv[:3, 3]
                 qnorm = G.nodes[cur][POS] + (
                     G.nodes[aux_cur][POS] - G.nodes[cur][POS]
                 ) / la.norm(G.nodes[aux_cur][POS] - G.nodes[cur][POS])
-                q = B.inv().dot(qnorm)
-                ps = (
-                    T_prev.inv().as_matrix()[:3, :3].dot(p - T_prev.trans)
-                )  # in prev. joint frame
-                qs = (
-                    T_prev.inv().as_matrix()[:3, :3].dot(q - T_prev.trans)
-                )  # in prev. joint frame
+                q = B_inv[:3, :3] @ qnorm + B_inv[:3, 3]
+
+                T_prev_inv = SE3.inverse(T_prev)
+                ps = T_prev_inv[:3, :3] @ (p - T_prev[:3, 3])
+                qs = T_prev_inv[:3, :3] @ (q - T_prev[:3, 3])
 
                 theta[cur] = arctan2(
-                    -qs_0.dot(omega_z).dot(qs), qs_0.dot(omega_z.dot(omega_z.T)).dot(qs)
+                    -qs_0.dot(omega_z).dot(qs),
+                    qs_0.dot(omega_z.dot(omega_z.T)).dot(qs),
                 )
 
-                T[cur] = (T_prev.dot(rot_axis(theta[cur], "z"))).dot(T_rel)
+                T[cur] = (T_prev @ rot_axis(theta[cur], "z")) @ T_rel
 
-            # if the rotation axis of final joint is aligned with ee frame z axis,
-            # get angle from EE pose if available
             if (T_final is not None) and (
-                la.norm(cross(T_rel.trans, np.asarray([0, 0, 1]))) < tol
+                la.norm(cross(T_rel[:3, 3], np.asarray([0, 0, 1]))) < tol
             ):
-                T_th = (T[cur]).inv().dot(T_final[ee]).as_matrix()
+                T_th = SE3.inverse(T[cur]) @ T_final[ee]
                 theta[ee] = wraptopi(theta[ee] + arctan2(T_th[1, 0], T_th[0, 0]))
 
         return theta
 
-    def get_pose(self, joint_angles: Dict[str, float], query_node: str) -> SE3:
+    def get_pose(self, joint_angles: Dict[str, float], query_node: str) -> np.ndarray:
         T = self.robot.pose(joint_angles, query_node)
 
         if query_node[0] == AUX_PREFIX:
             T_trans = trans_axis(self.axis_length, "z")
-            T = T.dot(T_trans)
+            T = T @ T_trans
 
         return T
 
@@ -397,15 +381,3 @@ if __name__ == "__main__":
     print(graph.base_nodes)
     print(graph.structure_nodes)
     print(graph.end_effector_nodes)
-    # import timeit
-
-    # print(
-    #     max(
-    #         timeit.repeat(
-    #             "graph.realization(robot.random_configuration())",
-    #             globals=globals(),
-    #             number=1,
-    #             repeat=1000,
-    #         )
-    #     )
-    # )

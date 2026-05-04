@@ -4,7 +4,6 @@ import numpy as np
 import pyrender
 from itertools import combinations
 from graphik.utils.roboturdf import RobotURDF
-from liegroups import SE3, SO3
 
 def make_scene(
     robot: RobotURDF,
@@ -56,7 +55,7 @@ def make_scene(
             m = _create_edge_cylinder_mesh(Ts[e[0]], Ts[e[1]])
             # None means the cylinder has zero height (duplicate Ts?)
             if m is not None:
-                scene.add(m, pose=SE3.identity().as_matrix())
+                scene.add(m, pose=np.eye(4))
     return scene
 
 def _create_edge_cylinder_mesh(T_i, T_j, radius=0.005):
@@ -74,8 +73,8 @@ def _create_edge_cylinder_mesh(T_i, T_j, radius=0.005):
     """
     # Generate each segment
     seg = np.zeros((2, 3))
-    seg[0] = T_i.trans
-    seg[1] = T_j.trans
+    seg[0] = T_i[:3, 3]
+    seg[1] = T_j[:3, 3]
 
     # Check that the cylinder has non-negligible size
     if np.linalg.norm(seg[1] - seg[0]) < 0.001:
@@ -112,7 +111,7 @@ def view_dae(dae: str, T_zero: list, scene=None, return_scene_only=False, colour
     meshes = pyrender.Mesh.from_trimesh(frame_tm.dump(), material=material)
 
     for T in T_zero:
-        scene.add(meshes, pose=T.as_matrix())
+        scene.add(meshes, pose=T)
     if return_scene_only:
         return scene
     else:
@@ -147,8 +146,7 @@ def plot_balls_from_points(
     for i in range(n):
         T_id = np.eye(4)
         T_id[0:3, 3] = points[i, :]
-        T_zero = SE3.from_matrix(T_id)
-        T.append(T_zero)
+        T.append(T_id)
 
     scene = view_dae(
         dae, T, scene=scene, return_scene_only=return_scene_only, colour=colour

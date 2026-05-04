@@ -40,8 +40,8 @@ def _measure(robot, T_goal, q_sol) -> dict:
     if q_sol is None:
         return {"solved": False, "trans_err": None, "rot_err": None, "q_sol": None}
     T_sol = robot.pose(q_sol, f"p{robot.n}")
-    t_err = float(np.linalg.norm(T_goal.trans - T_sol.trans))
-    R_rel = T_goal.rot.as_matrix() @ T_sol.rot.as_matrix().T
+    t_err = float(np.linalg.norm(T_goal[:3, 3] - T_sol[:3, 3]))
+    R_rel = T_goal[:3, :3] @ T_sol[:3, :3].T
     cos_theta = (np.trace(R_rel) - 1.0) / 2.0
     rot_err = float(np.arccos(np.clip(cos_theta, -1.0, 1.0)))
     # q_sol stored as a list sorted by joint id for forensic comparison only;

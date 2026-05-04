@@ -112,8 +112,8 @@ def plot_planar_manipulator_robot(
     joint_y = []
 
     for i in range(robot.n + 1):
-        joint_x += [robot.pose(config, "p" + str(i)).trans[0]]
-        joint_y += [robot.pose(config, "p" + str(i)).trans[1]]
+        joint_x += [robot.pose(config, "p" + str(i))[:-1, -1][0]]
+        joint_y += [robot.pose(config, "p" + str(i))[:-1, -1][1]]
     joint_x = np.array(joint_x)
     joint_y = np.array(joint_y)
 
@@ -231,8 +231,8 @@ def plot_3d_chain_manipulator(robot: RobotRevolute, input_angles, fig=None, ax=N
     # ax.set_aspect('equal', adjustable='box')
     ax.autoscale(False)
     for pose in pose_list:
-        R = pose.rot.as_matrix()
-        t = pose.trans
+        R = pose[:3, :3]
+        t = pose[:3, 3]
         print("t: {:}".format(t))
         print("type of t: {:}".format(type(t)))
         x.append(t[0])

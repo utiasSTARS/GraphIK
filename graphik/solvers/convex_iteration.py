@@ -7,7 +7,6 @@ import cvxpy as cp
 import networkx as nx
 from timeit import default_timer
 from progress.bar import ShadyBar as Bar
-from liegroups.numpy import SE3
 
 from graphik.solvers.sdp_formulations import SdpSolverParams
 from graphik.solvers.sdp_snl import (
@@ -276,7 +275,7 @@ def convex_iterate_sdp_snl_graph(
     )
 
 
-def solve_with_cidgik(graph: ProblemGraphRevolute, T_goal: SE3) -> (dict, dict):
+def solve_with_cidgik(graph: ProblemGraphRevolute, T_goal: np.ndarray) -> (dict, dict):
     robot = graph.robot
     n = robot.n
 
@@ -284,8 +283,8 @@ def solve_with_cidgik(graph: ProblemGraphRevolute, T_goal: SE3) -> (dict, dict):
     anchors = {
         "p0": graph.nodes["p0"][POS],
         "q0": graph.nodes["q0"][POS],
-        f"p{n}": T_goal.trans,
-        f"q{n}": T_goal.trans + T_goal.rot.as_matrix()[:, 2]
+        f"p{n}": T_goal[:3, 3],
+        f"q{n}": T_goal[:3, 3] + T_goal[:3, 2]
     }
 
     # Solve with CIDGIK
