@@ -124,9 +124,9 @@ class ProblemGraph(nx.DiGraph):
         Returns a partial distance matrix of known distances in the problem graph.
         :returns: Distance matrix
         """
-        return distance_matrix_from_graph(self.to_undirected(as_view=True))
+        return distance_matrix_from_graph(self)
 
-    def distance_matrix_from_joints(self, joint_angles: ArrayLike) -> ArrayLike:
+    def distance_matrix_from_joints(self, joint_angles: Dict[str, float]) -> ArrayLike:
         """
         Given a set of joint angles, return a matrix whose element
         [idx,jdx] corresponds to the squared distance between nodes idx and jdx.
@@ -141,7 +141,7 @@ class ProblemGraph(nx.DiGraph):
         given the kinematic and base structure, as well as the end-effector targets.
         :returns: Adjacency matrix
         """
-        return adjacency_matrix_from_graph(self.to_undirected(as_view=True))
+        return adjacency_matrix_from_graph(self)
 
     def from_pos(self, P: Dict, dist: bool = True, overwrite: bool = False) -> nx.DiGraph:
         """
@@ -151,7 +151,9 @@ class ProblemGraph(nx.DiGraph):
         If dist is True, populate all edges between nodes with assinged POS attributes,
         and return the new graph.
         :param P: a dictionary of node name position pairs
-        :returns: graph with connected nodes with POS attribute
+        :param dist: set to True to compute distances
+        :param overwrite: set to True to overwrite fixed distances associated with the problem
+        :returns: graph with connected nodes with POS attribute and edges with DIST attributes
         """
         G = self.to_directed()  # copy of the original object
 
@@ -200,11 +202,11 @@ class ProblemGraph(nx.DiGraph):
 
     def add_spherical_obstacle(self, name: str, position: ArrayLike, radius: float):
         # Add a fixed node representing the obstacle to the graph
-        self.add_anchor_node(name, {POS: position, TYPE: OBSTACLE})
+        self.add_anchor_node(name, {POS: position, TYPE: [OBSTACLE]})
 
         # Set lower (and upper) distance limits to robot nodes
         for node, node_type in self.nodes(data=TYPE):
-            if node_type == ROBOT and node[0] == MAIN_PREFIX:
+            if (node_type == [ROBOT] and node[0] == MAIN_PREFIX):
                 self.add_edge(node, name)
                 self[node][name][BOUNDED] = [BELOW]
                 self[node][name][LOWER] = radius
@@ -213,7 +215,7 @@ class ProblemGraph(nx.DiGraph):
     def clear_obstacles(self):
         # Clears all obstacles from the graph
         node_types = nx.get_node_attributes(self, TYPE)
-        obstacles = [node for node, typ in node_types.items() if typ == OBSTACLE]
+        obstacles = [node for node, typ in node_types.items() if typ == [OBSTACLE]]
         self.remove_nodes_from(obstacles)
 
     def check_distance_limits(
@@ -226,15 +228,15 @@ class ProblemGraph(nx.DiGraph):
             if BELOW in data[BOUNDED] or ABOVE in data[BOUNDED]:
                 if G[u][v][DIST] < data[LOWER] - tol:
                     broken_limit = {}
-                    if (typ[u] == ROBOT and typ[v] == OBSTACLE) or (
-                        typ[u] == OBSTACLE and typ[v] == ROBOT
+                    if (ROBOT in typ[u] and OBSTACLE in typ[v]) or (
+                        OBSTACLE in typ[u] and ROBOT in typ[v]
                     ):
                         broken_limit["edge"] = (u, v)
                         broken_limit["value"] = G[u][v][DIST] - data[LOWER]
                         broken_limit["type"] = OBSTACLE
                         broken_limit["side"] = LOWER
                         broken_limits += [broken_limit]
-                    if typ[u] == ROBOT and typ[v] == ROBOT:
+                    if ROBOT in typ[u] and ROBOT in typ[v]:
                         broken_limit["edge"] = (u, v)
                         broken_limit["value"] = G[u][v][DIST] - data[LOWER]
                         broken_limit["type"] = "joint"
@@ -242,15 +244,15 @@ class ProblemGraph(nx.DiGraph):
                         broken_limits += [broken_limit]
                 if G[u][v][DIST] > data[UPPER] + tol:
                     broken_limit = {}
-                    if (typ[u] == ROBOT and typ[v] == OBSTACLE) or (
-                        typ[u] == OBSTACLE and typ[v] == ROBOT
+                    if (ROBOT in typ[u] and OBSTACLE in typ[v]) or (
+                        OBSTACLE in typ[u] and ROBOT in typ[v]
                     ):
                         broken_limit["edge"] = (u, v)
                         broken_limit["value"] = G[u][v][DIST] - data[UPPER]
                         broken_limit["type"] = OBSTACLE
                         broken_limit["side"] = UPPER
                         broken_limits += [broken_limit]
-                    if typ[u] == ROBOT and typ[v] == ROBOT:
+                    if ROBOT in typ[u] and ROBOT in typ[v]:
                         broken_limit["edge"] = (u, v)
                         broken_limit["value"] = G[u][v][DIST] - data[UPPER]
                         broken_limit["type"] = "joint"

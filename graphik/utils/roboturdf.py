@@ -284,7 +284,7 @@ def get_T_from_joint_axis(axis: np.ndarray):
         R = (
             np.eye(3) * np.cos(ang)
             + (1 - np.cos(ang)) * np.dot(rot_axis, rot_axis.transpose())
-            - np.sin(ang) * skew(rot_axis)
+            - np.sin(ang) * skew(rot_axis.ravel())
         )
     else:
         R = np.eye(3)
