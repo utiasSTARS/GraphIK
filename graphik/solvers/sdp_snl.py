@@ -11,7 +11,7 @@ from graphik.utils.chordal import complete_to_chordal_graph
 from graphik.robots import RobotRevolute
 from graphik.graphs import ProblemGraphRevolute
 from graphik.solvers.constraints import get_full_revolute_nearest_point
-from graphik.solvers.sdp_formulations import SdpSolverParams
+from graphik.solvers.sdp_formulations import SdpSolverParams, solve_sdp
 
 
 def prepare_set_cover_problem(
@@ -842,7 +842,7 @@ def solve_nearest_point_sdp(
     )
     if solver_params is None:
         solver_params = SdpSolverParams()
-    prob.solve(verbose=verbose, solver="MOSEK", mosek_params=solver_params.mosek_params)
+    solve_sdp(prob, solver_params, verbose=verbose)
     # Z_exact = list(sdp_variable_map_exact.values())[0].value
     # _, s_exact, _ = np.linalg.svd(Z_exact)
     # solution_rank_exact = np.linalg.matrix_rank(Z_exact, tol=1e-6, hermitian=True)
@@ -949,7 +949,7 @@ def solve_linear_cost_sdp(
     solver_error = False
     try:
         if not scs:
-            prob.solve(verbose=verbose, solver="MOSEK", warm_start=warm_start, mosek_params=solver_params.mosek_params)
+            solve_sdp(prob, solver_params, verbose=verbose, warm_start=warm_start)
         else:
             prob.solve(verbose=verbose, warm_start=warm_start, solver="SCS", eps=1e-4, max_iters=1000, alpha=1.8, scale=5.0,
                        normalize=True, use_indirect=True, qcp=False)

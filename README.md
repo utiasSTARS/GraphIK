@@ -31,11 +31,13 @@ cd graphik/solvers && python costs.py
 
 This produces a per-platform `.so` that's gitignored and env-local — regenerate it after each environment recreation.
 
-## Mosek (optional, SDP solvers)
+## SDP solvers (Mosek recommended)
 
-GraphIK's SDP-relaxation solvers (`solve_with_cidgik` in `graphik/solvers/convex_iteration.py`, the SDP formulations in `graphik/solvers/sdp_*.py`) require [Mosek](https://www.mosek.com/), a commercial solver with a free academic license. SDP tests skip cleanly when mosek isn't installed, so the rest of the library works without it.
+GraphIK's SDP-relaxation solvers (`solve_with_cidgik` in `graphik/solvers/convex_iteration.py`, the SDP formulations in `graphik/solvers/sdp_*.py`) run out of the box on a free solver (Clarabel by default, falling back to SCS or CVXOPT) bundled with `cvxpy`. `experiments/cidgik_example.py` works without any extra setup.
 
-To enable the SDP path:
+[Mosek](https://www.mosek.com/) is **recommended**: it's faster and gives tighter precision than the free alternatives on these SDPs. It's a commercial solver with a free academic license. If installed, GraphIK auto-detects it and uses it as the default — no code changes required.
+
+To enable the Mosek path:
 
 1. Request an academic license at https://www.mosek.com/products/academic-licenses/.
 2. Install the Mosek Python interface into the active env:
@@ -46,7 +48,7 @@ To enable the SDP path:
 
 3. Place the license file (`mosek.lic`) at the path Mosek expects (typically `~/mosek/mosek.lic`).
 
-After this, `experiments/cidgik_example.py` runs end-to-end and the previously-skipped `tests/test_sdp_snl*.py` collect and pass.
+The SDP tests in `tests/test_sdp_snl*.py` are tuned to Mosek's tolerances and skip cleanly when it isn't installed.
 
 ## Usage
 Use of GraphIK can be summarized by four key steps, which we'll walk through below (see the scripts in [experiments/](https://github.com/utiasSTARS/GraphIK/tree/main/experiments) for more details).

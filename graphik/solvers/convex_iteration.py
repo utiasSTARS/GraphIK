@@ -8,7 +8,7 @@ import networkx as nx
 from timeit import default_timer
 from progress.bar import ShadyBar as Bar
 
-from graphik.solvers.sdp_formulations import SdpSolverParams
+from graphik.solvers.sdp_formulations import SdpSolverParams, solve_sdp
 from graphik.solvers.sdp_snl import (
     distance_range_constraints,
     solve_linear_cost_sdp,
@@ -82,7 +82,7 @@ def solve_fantope_iterate(
     prob = cp.Problem(cp.Minimize(cp.trace(G @ Z)), constraints)
     if solver_params is None:
         solver_params = SdpSolverParams()
-    prob.solve(verbose=verbose, solver="MOSEK", mosek_params=solver_params.mosek_params)
+    solve_sdp(prob, solver_params, verbose=verbose)
     return prob
 
 
@@ -120,7 +120,7 @@ def solve_fantope_sdp_sparse(constraint_clique_dict: dict, sdp_variable_map: dic
         G_clique = sdp_variable_map[clique].value
         cost += cp.trace(G_clique @ Z_clique)
     prob = cp.Problem(cp.Minimize(cost), constraints)
-    prob.solve(verbose=verbose, solver="MOSEK", mosek_params=solver_params.mosek_params)
+    solve_sdp(prob, solver_params, verbose=verbose)
 
     # Return the desired cost function matrices
     C_mapping = {}

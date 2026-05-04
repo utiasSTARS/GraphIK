@@ -2,12 +2,12 @@ from graphik.utils.utils import table_environment
 from graphik.solvers.convex_iteration import solve_with_cidgik
 
 # Multiple robot models to try out, or you can implement your own
-from graphik.utils.roboturdf import load_ur10, load_kuka, load_schunk_lwa4d, load_9_dof
+from graphik.utils.roboturdf import load_ur10, load_kuka, load_schunk_lwa4d
 
 
 if __name__ == "__main__":
     # Load an example robot
-    robot, graph = load_ur10()  # load_9_dof()
+    robot, graph = load_ur10()
 
     # Load an example obstacle environment, or construct your own (see implementation of table_environment())
     obstacles = table_environment()
