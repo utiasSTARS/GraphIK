@@ -3,11 +3,53 @@ GraphIK is a library for solving inverse kinematics problems by modelling robots
 
 <img src="https://raw.githubusercontent.com/utiasSTARS/GraphIK/main/assets/graph_ik_logo.png" width="250px"/>
 
-## Dependencies
-GraphIK is implemented in Python 3. See [setup.py](https://github.com/utiasSTARS/graphIK/blob/main/setup.py) for a full list of dependencies.
+## Installation
+
+GraphIK is implemented in Python 3.11. The recommended setup uses conda for the Python environment and pip for runtime dependencies (declared in [`setup.py`](https://github.com/utiasSTARS/GraphIK/blob/main/setup.py)).
+
+```bash
+git clone https://github.com/utiasSTARS/GraphIK.git
+cd GraphIK
+conda env create -f environment.yml
+conda activate graphik_public
+```
+
+This produces a working install on linux, macOS, and Windows by letting pip resolve runtime deps for your platform.
+
+**macOS arm64 fallback.** If pip resolution against `setup.py` picks a bad combination on macOS arm64 (you already ran the primary recipe above and the install completed but doesn't work), reinstall from the known-good lockfile we ship:
+
+```bash
+pip install -r requirements-macos-arm64.txt
+pip install -e . --no-deps
+```
+
+**Optional: numba AOT compilation.** GraphIK's Riemannian solver has an AOT-compiled cost-gradient kernel for speed. The default solver path runs without it (`use_jit=False`); for the JIT path, build the extension once after install:
+
+```bash
+cd graphik/solvers && python costs.py
+```
+
+This produces a per-platform `.so` that's gitignored and env-local — regenerate it after each environment recreation.
+
+## Mosek (optional, SDP solvers)
+
+GraphIK's SDP-relaxation solvers (`solve_with_cidgik` in `graphik/solvers/convex_iteration.py`, the SDP formulations in `graphik/solvers/sdp_*.py`) require [Mosek](https://www.mosek.com/), a commercial solver with a free academic license. SDP tests skip cleanly when mosek isn't installed, so the rest of the library works without it.
+
+To enable the SDP path:
+
+1. Request an academic license at https://www.mosek.com/products/academic-licenses/.
+2. Install the Mosek Python interface into the active env:
+
+   ```bash
+   pip install mosek
+   ```
+
+3. Place the license file (`mosek.lic`) at the path Mosek expects (typically `~/mosek/mosek.lic`).
+
+After this, `experiments/cidgik_example.py` runs end-to-end and the previously-skipped `tests/test_sdp_snl*.py` collect and pass.
 
 ## Usage
-Use of GraphIK can be summarized by four key steps, which we'll walk through below (see the scripts in [experiments/](https://github.com/utiasSTARS/graphik-internal/tree/main/experiments) for more details).
+Use of GraphIK can be summarized by four key steps, which we'll walk through below (see the scripts in [experiments/](https://github.com/utiasSTARS/GraphIK/tree/main/experiments) for more details).
 
 ### 1. Load a Robot
 In this example, we'll parse a [URDF file](https://industrial-training-master.readthedocs.io/en/melodic/_source/session3/Intro-to-URDF.html) describing a [Schunk LWA4P manipulator](https://github.com/marselap/schunk_lwa4p). 
@@ -16,7 +58,7 @@ In this example, we'll parse a [URDF file](https://industrial-training-master.re
 from graphik.utils.roboturdf import load_schunk_lwa4d
 robot, graph = load_schunk_lwa4d()
 ```
-GraphIK's interface between robot models and IK solvers is the abstract [`ProblemGraph`](https://github.com/utiasSTARS/graphIK/blob/main/graphik/graphs/graph_base.py) class. For the LWA4P, we'll use `ProblemGraphRevolute`, a subclass of `ProblemGraph` that can represent 3D robots with revolute joints.
+GraphIK's interface between robot models and IK solvers is the abstract [`ProblemGraph`](https://github.com/utiasSTARS/GraphIK/blob/main/graphik/graphs/graph_base.py) class. For the LWA4P, we'll use `ProblemGraphRevolute`, a subclass of `ProblemGraph` that can represent 3D robots with revolute joints.
 
 ### 2. Instantiate a ProblemGraph Object with Obstacles
 If you are considering an environment with spherical obstacles, you can include constraints that prevent collisions. In this example, we will use a set of spheres that approximate a table: 
@@ -30,7 +72,7 @@ for idx, obs in enumerate(obstacles):
 ```
 
 ### 3. Specify a Goal Pose
-Interfaces to our solvers require a goal pose defined by the [`liegroups`](https://github.com/utiasSTARS/liegroups) library. For this simple example, using the robot's forward kinematics is the fastest way to get a sample goal pose:
+Interfaces to our solvers require a goal pose defined as a 4×4 SE(3) numpy array (we use the [`pymlg`](https://github.com/decargroup/pymlg) library internally for SE(3) operations). For this simple example, using the robot's forward kinematics is the fastest way to get a sample goal pose:
 
 ```python
 q_goal = robot.random_configuration()
@@ -38,15 +80,14 @@ T_goal = robot.pose(q_goal, f"p{robot.n}")
 ```
 
 ### 4. Solve the IK Problem
-The main purpose of our graphical interpretation of robot kinematics is to develop distance-geometric IK solvers. One example is the [Riemannian optimization-based solver](https://arxiv.org/abs/2011.04850) implemented in [`RiemannianSolver`](https://github.com/utiasSTARS/graphIK/blob/main/graphik/solvers/riemannian_solver.py). 
+The main purpose of our graphical interpretation of robot kinematics is to develop distance-geometric IK solvers. One example is the [Riemannian optimization-based solver](https://arxiv.org/abs/2011.04850) implemented in [`RiemannianSolver`](https://github.com/utiasSTARS/GraphIK/blob/main/graphik/solvers/riemannian_solver.py). 
 
 ```python
 from graphik.solvers.riemannian_solver import solve_with_riemannian
-q_sol, solution_points = solve_with_riemannian(graph, T_goal, jit=False)  # Returns None if infeasible or didn't solve
+q_sol, solution_points = solve_with_riemannian(graph, T_goal, use_jit=False)  # Returns None if infeasible or didn't solve
 ```
-For faster computation, precompile costs and gradients using numba by running `python costs.py` in `graphik/solvers/`.
 
-For a similar example using [`CIDGIK`](https://arxiv.org/abs/2109.03374), a convex optimization-based approach, please see [experiments/cidgik_example.py](https://github.com/utiasSTARS/graphIK/blob/main/experiments/cidgik_example.py).
+For a similar example using [`CIDGIK`](https://arxiv.org/abs/2109.03374), a convex optimization-based approach, please see [experiments/cidgik_example.py](https://github.com/utiasSTARS/GraphIK/blob/main/experiments/cidgik_example.py).
 
 ## Publications and Related Work
 If you use any of this code in your research work, please kindly cite the relevant publications listed here.

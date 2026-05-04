@@ -110,15 +110,6 @@ def fk_3d(a: list, alpha: list, d: list, theta: list) -> np.ndarray:
     return out
 
 
-def fk_tree_3d(a: list, alpha: list, d: list, theta: list, path_indices: list) -> np.ndarray:
-    idx = path_indices[0]
-    if len(path_indices) > 1:
-        return dh_to_se3(a[idx], alpha[idx], d[idx], theta[idx]) @ fk_tree_3d(
-            a[1:], alpha[1:], d[1:], theta[1:], path_indices[1:]
-        )
-    return dh_to_se3(a[idx], alpha[idx], d[idx], theta[idx])
-
-
 def modified_fk_3d(a: list, alpha: list, d: list, theta: list) -> np.ndarray:
     out = modified_dh_to_se3(a[0], alpha[0], d[0], theta[0])
     for idx in range(1, len(a)):

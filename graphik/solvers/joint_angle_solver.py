@@ -26,7 +26,7 @@ class LocalSolver:
         pairs = []
         for u, v, data in self.graph.edges(data=True):
             if "below" in data[BOUNDED]:
-                if typ[u] == ROBOT and typ[v] == OBSTACLE and u != ROOT:
+                if ROBOT in typ[u] and OBSTACLE in typ[v] and u != ROOT:
                     pairs += [(u, v)]
         self.m = len(pairs)
         self.g = []

@@ -1,0 +1,88 @@
+# graphIK reference lockfile — macOS arm64 + Python 3.11.0
+#
+# Snapshot of the graphik_public env on 2026-05-03 (post-step-7 of the
+# dep-ladder migration). Use this file as a known-good fallback if
+# `pip install -e .` resolution gives you trouble on macOS arm64:
+#
+#     conda env create -f environment.yml
+#     conda activate graphik_public
+#     pip install -r requirements-macos-arm64.txt
+#     pip install -e . --no-deps
+#
+# This file is reference-only — no hashes, no platform tags. Other
+# platforms (linux, windows) should follow environment.yml's primary
+# path and let pip's resolver pick wheels.
+#
+# Regenerate: pip freeze (then strip any local editable-install line).
+
+anyio==4.13.0
+attrs==26.1.0
+certifi==2026.4.22
+chardet==7.4.3
+charset-normalizer==3.4.7
+clarabel==0.7.1
+colorlog==6.10.1
+contourpy==1.2.1
+cvxpy==1.8.2
+cycler==0.12.1
+ecos==2.0.14
+einops==0.8.0
+embreex==4.4.0
+fonttools==4.51.0
+freetype-py==2.4.0
+future==1.0.0
+h11==0.16.0
+highspy==1.14.0
+httpcore==1.0.9
+httpx==0.28.1
+idna==3.13
+imageio==2.34.1
+iniconfig==2.0.0
+Jinja2==3.1.6
+joblib==1.5.3
+jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
+kiwisolver==1.4.5
+llvmlite==0.47.0
+lxml==5.2.1
+manifold3d==3.4.1
+mapbox_earcut==2.0.0
+MarkupSafe==3.0.3
+matplotlib==3.8.4
+mpmath==1.3.0
+networkx==3.6.1
+numba==0.65.1
+numpy==2.4.4
+osqp==1.1.1
+packaging==24.0
+pandas==2.2.2
+pillow==10.3.0
+pluggy==1.5.0
+progress==1.6
+pybind11==2.12.0
+pycollada==0.6
+pyglet==1.5.31
+pymanopt==2.2.1
+pymlg @ git+https://github.com/decargroup/pymlg@8e6dc5ea61327ddfc2c8c1d16f276ae829f22db8
+PyOpenGL==3.1.0
+pyparsing==3.1.2
+pytest==8.1.1
+python-dateutil==2.9.0.post0
+pytz==2024.1
+qdldl==0.1.7.post2
+referencing==0.37.0
+rpds-py==0.30.0
+rtree==1.4.1
+scipy==1.17.1
+scs==3.2.11
+shapely==2.1.2
+six==1.16.0
+svg.path==7.0
+sympy==1.14.0
+trimesh==4.12.2
+typing_extensions==4.15.0
+tzdata==2024.1
+vhacdx==0.0.10
+xatlas==0.0.11
+xxhash==3.7.0
+yourdfpy==0.0.60
