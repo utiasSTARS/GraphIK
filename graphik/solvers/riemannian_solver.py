@@ -27,7 +27,15 @@ def adjoint(X: np.ndarray) -> np.ndarray:
 
 
 class RiemannianSolver:
-    def __init__(self, graph: ProblemGraph, cost_type="dense", jit=False, *args, **kwargs):
+    def __init__(
+        self,
+        graph: ProblemGraph,
+        cost_type="dense",
+        jit=False,
+        init="bsmooth",
+        *args,
+        **kwargs,
+    ):
 
         self.params = {}
         for key in kwargs:
@@ -36,6 +44,9 @@ class RiemannianSolver:
         self.dim = graph.dim
         self.N = graph.number_of_nodes()
         self.jit = jit
+        if init not in ("spectral", "bsmooth"):
+            raise ValueError("init must be 'spectral' or 'bsmooth'")
+        self.init = init
 
         solver_type = self.params.get("solver", "TrustRegions")
 
@@ -65,15 +76,41 @@ class RiemannianSolver:
             )
 
 
-    @staticmethod
-    def generate_initialization(bounds, dim, omega, psi_L, psi_U):
-        # Generates a random EDM within the set bounds
-        lb = np.sqrt(bounds[0])
-        ub = np.sqrt(bounds[1])
-        D_rand = (lb + 0.9 * (ub - lb)) ** 2
+    def generate_initialization(self, D_goal, omega, bounds=None):
+        """Build a starting point for RTR. Dispatches on `self.init`:
+
+        - 'spectral' (default): Smith–Cai–Tasissa style. Center the partially-
+          observed distance matrix (zeros for unknowns), eigendecompose, take
+          the top-d eigenvectors weighted by sqrt(eigvals). One N×N symmetric
+          eigendecomposition.
+        - 'bsmooth': legacy. Triangle-inequality smoothing of distance bounds
+          (networkx all-pairs Bellman-Ford), sample an EDM at 0.9 of (lb, ub),
+          classical MDS, then project to dim along the known-edge structure.
+          Requires a ``bounds=(lb, ub)`` tuple (e.g. from ``bound_smoothing``).
+        """
+        if self.init == "spectral":
+            n = D_goal.shape[0]
+            D_partial = omega * D_goal
+            J = np.eye(n) - np.full((n, n), 1.0 / n)
+            G = -0.5 * J @ D_partial @ J
+            eigvals, eigvecs = np.linalg.eigh(G)            # ascending
+            top = np.argsort(-eigvals)[:self.dim]
+            # Floor eigenvalues to keep Y full-rank: PSDFixedRank requires
+            # rank == dim, and degenerate problems can yield fewer than dim
+            # positive eigvals here, which would otherwise produce zero
+            # columns and break the manifold projection.
+            lam = np.maximum(eigvals[top], 1e-12)
+            return eigvecs[:, top] * np.sqrt(lam)
+
+        # bsmooth
+        if bounds is None:
+            raise ValueError("init='bsmooth' requires bounds=(lb, ub)")
+        lb, ub = bounds
+        lb_sqrt = np.sqrt(lb)
+        ub_sqrt = np.sqrt(ub)
+        D_rand = (lb_sqrt + 0.9 * (ub_sqrt - lb_sqrt)) ** 2
         X_rand = MDS(gram_from_distance_matrix(D_rand), eps=1e-8)
-        Y_rand = linear_projection(X_rand, omega, dim)
-        return Y_rand
+        return linear_projection(X_rand, omega, self.dim)
 
     def create_cost(self, D_goal, omega):
         inds = np.nonzero(np.triu(omega))
@@ -197,11 +234,8 @@ class RiemannianSolver:
         egrad = numpy_decorator(egrad)
         ehess = numpy_decorator(ehess)
 
-        # Generate initialization
-        if bounds is not None:
-            Y_init = self.generate_initialization(bounds, self.dim, omega, psi_L, psi_U)
-        elif Y_init is None:
-            raise Exception("If not using bounds, provide an initialization!")
+        if Y_init is None:
+            Y_init = self.generate_initialization(D_goal, omega, bounds=bounds)
 
         # Define problem
         problem = pymanopt.Problem(
@@ -228,8 +262,7 @@ def solve_with_riemannian(graph, T_goal, use_jit=True):
     solver = RiemannianSolver(graph, jit=use_jit)
     D_goal = distance_matrix_from_graph(G)
     omega = adjacency_matrix_from_graph(G)
-    lb, ub = bound_smoothing(G)
-    sol_info = solver.solve(D_goal, omega, use_limits=True, bounds=(lb, ub))
+    sol_info = solver.solve(D_goal, omega, use_limits=True)
     G_sol = graph_from_pos(sol_info["x"], graph.node_ids)
     q_sol = graph.joint_variables(G_sol, {f"p{graph.robot.n}": T_goal})
 
