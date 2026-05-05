@@ -25,6 +25,7 @@ def adjoint(X: np.ndarray) -> np.ndarray:
     np.einsum('ijj->ij', D)[...] = np.sum(X, axis=-1)
     return X - D
 
+
 class RiemannianSolver:
     def __init__(self, graph: ProblemGraph, cost_type="dense", jit=False, *args, **kwargs):
 
@@ -90,33 +91,35 @@ class RiemannianSolver:
 
             return cost, egrad, ehessp
 
-        else:
+        # Per-Y cache: RTR's inner CG calls ehess many times with fixed Y.
+        cache = {"Y": None}
 
-            def cost(Y):
-                D = distance_matrix_from_pos(Y)
-                S = omega * (D_goal - D)
-                f = np.linalg.norm(S) ** 2
-                return f/2
+        def _S(Y):
+            if cache["Y"] is Y:
+                return cache["S"], cache["S_diag"]
+            S = omega * (D_goal - distance_matrix_from_pos(Y))
+            S_diag = S.copy()
+            np.fill_diagonal(S_diag, S_diag.diagonal() - np.sum(S_diag, axis=1))
+            cache.update(Y=Y, S=S, S_diag=S_diag)
+            return S, S_diag
 
-            def egrad(Y):
-                D = distance_matrix_from_pos(Y)
-                S = omega * (D_goal - D)
-                np.fill_diagonal(S, S.diagonal() - np.sum(S, axis=1))
-                dfdY = 2 * S.dot(Y)
-                return dfdY
+        def cost(Y):
+            S, _ = _S(Y)
+            return np.linalg.norm(S) ** 2 / 2
 
-            def ehessp(Y, Z):
-                D = distance_matrix_from_pos(Y)
-                YZT = Y.dot(Z.T)
-                YZT += YZT.T
-                dSdZ = -omega * distance_matrix_from_gram(YZT)
-                np.fill_diagonal(dSdZ, dSdZ.diagonal() - np.sum(dSdZ, axis=1))
-                S = omega * (D_goal - D)
-                np.fill_diagonal(S, S.diagonal() - np.sum(S, axis=1))
-                H = 2 * (dSdZ.dot(Y) + S.dot(Z))
-                return H
+        def egrad(Y):
+            _, S_diag = _S(Y)
+            return 2 * S_diag.dot(Y)
 
-            return cost, egrad, ehessp
+        def ehessp(Y, Z):
+            _, S_diag = _S(Y)
+            YZT = Y.dot(Z.T)
+            YZT += YZT.T
+            dSdZ = -omega * distance_matrix_from_gram(YZT)
+            np.fill_diagonal(dSdZ, dSdZ.diagonal() - np.sum(dSdZ, axis=1))
+            return 2 * (dSdZ.dot(Y) + S_diag.dot(Z))
+
+        return cost, egrad, ehessp
 
     def create_cost_limits(self, D_goal, omega, psi_L, psi_U):
         diff = psi_L != psi_U
@@ -133,41 +136,39 @@ class RiemannianSolver:
 
             def ehess(Y, v):
                 return lhess(Y, v, D_goal, omega, psi_L, psi_U, inds)
-        else:
-            def cost(Y):
-                D = distance_matrix_from_pos(Y)
-                E0 = omega * (D_goal - D)
-                E1 = np.maximum(psi_L - LL * D, 0)
-                E2 = np.maximum(-psi_U + UU * D, 0)
-                return (np.linalg.norm(E0)**2 + np.linalg.norm(E1)**2 + np.linalg.norm(E2)**2)/2
 
-            def egrad(Y):
-                n = Y.shape[0]
-                A = np.zeros([3, n, n])
-                D = distance_matrix_from_pos(Y)
-                A[0,:,:] = omega * (D_goal - D)
-                A[1,:,:] = np.maximum(psi_L - LL * D, 0)
-                A[2,:,:] = -np.maximum(-psi_U + UU * D, 0)
-                C = adjoint(A).dot(Y)
-                return 2*np.sum(C,axis=0)
+            return cost, egrad, ehess
 
-            def ehess(Y, Z):
-                n = Y.shape[0]
-                D = distance_matrix_from_pos(Y)
+        # Per-Y cache: A0/A1/A2, the pre-adjoint stack, and the active masks
+        # depend only on Y, so they're reused across RTR's inner-CG ehess calls.
+        cache = {"Y": None}
 
-                A = np.zeros([6, n, n])
-                A[0,:,:] = omega * (D_goal - D)
-                A[1,:,:] = np.maximum(psi_L - LL * D, 0)
-                A[2,:,:] = -np.maximum(-psi_U + UU * D, 0)
-                A[3,:,:] = -omega # dSdZ
-                A[4,:,:] = - np.where(A[1,:,:] > 0, 1, 0) * LL # dSldZ
-                A[5,:,:] = - np.where(-A[2,:,:] > 0, 1, 0) * UU # dSudZ
-                A[3:,:,:] *= distance_matrix_from_gram(Y.dot(Z.T) + Z.dot(Y.T))
+        def _Y_state(Y):
+            if cache["Y"] is Y:
+                return cache
+            D = distance_matrix_from_pos(Y)
+            A0 = omega * (D_goal - D)
+            A1 = np.maximum(psi_L - LL * D, 0)
+            A2 = -np.maximum(-psi_U + UU * D, 0)
+            A_adj = adjoint(np.stack([A0, A1, A2], axis=0))
+            m4 = -np.where(A1 > 0, 1, 0) * LL
+            m5 = -np.where(-A2 > 0, 1, 0) * UU
+            cache.update(Y=Y, A0=A0, A1=A1, A2=A2, A_adj=A_adj, m4=m4, m5=m5)
+            return cache
 
-                A = adjoint(A)
+        def cost(Y):
+            s = _Y_state(Y)
+            return (np.linalg.norm(s["A0"])**2 + np.linalg.norm(s["A1"])**2 + np.linalg.norm(s["A2"])**2) / 2
 
-                C = A[3:,:,:].dot(Y) + A[:3,:,:].dot(Z)
-                return 2*(np.sum(C,axis=0))
+        def egrad(Y):
+            s = _Y_state(Y)
+            return 2 * np.sum(s["A_adj"].dot(Y), axis=0)
+
+        def ehess(Y, Z):
+            s = _Y_state(Y)
+            d_yz = distance_matrix_from_gram(Y.dot(Z.T) + Z.dot(Y.T))
+            A_z = np.stack([-omega * d_yz, s["m4"] * d_yz, s["m5"] * d_yz], axis=0)
+            return 2 * np.sum(adjoint(A_z).dot(Y) + s["A_adj"].dot(Z), axis=0)
 
         return cost, egrad, ehess
 
