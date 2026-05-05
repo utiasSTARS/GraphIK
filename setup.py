@@ -20,7 +20,6 @@ setup(
         "matplotlib >= 3.1",
         "cvxpy >= 1.8",
         "networkx >= 3.6",
-        "pymanopt >= 2.2.1",
         "progress",
         "yourdfpy >= 0.0.60",
         "trimesh >= 4.6.1",

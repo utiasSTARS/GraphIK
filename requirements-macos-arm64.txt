@@ -62,7 +62,6 @@ progress==1.6
 pybind11==2.12.0
 pycollada==0.6
 pyglet==1.5.31
-pymanopt==2.2.1
 pymlg @ git+https://github.com/decargroup/pymlg@8e6dc5ea61327ddfc2c8c1d16f276ae829f22db8
 PyOpenGL==3.1.0
 pyparsing==3.1.2
