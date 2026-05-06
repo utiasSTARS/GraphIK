@@ -133,3 +133,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Local-only planning/design notes
+docs/superpowers/
+
+# Per-environment solver baselines (regenerate with tests/baselines/generate.py)
+tests/baselines/*.json

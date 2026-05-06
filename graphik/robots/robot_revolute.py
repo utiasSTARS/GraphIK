@@ -3,12 +3,12 @@ from numpy.typing import ArrayLike
 
 import networkx as nx
 import numpy as np
-from graphik.robots.robot_base import Robot, SEMatrix
+from graphik.robots.robot_base import Robot
 from graphik.utils import list_to_variable_dict, flatten, fk_3d, modified_fk_3d
 from graphik.utils.constants import ROOT, TRANSFORM, MAIN_PREFIX
 # from graphik.utils import *
 
-from liegroups.numpy import SE3
+from pymlg.numpy import SE3
 
 
 class RobotRevolute(Robot):
@@ -39,15 +39,15 @@ class RobotRevolute(Robot):
 
                 # Twists representing rotation axes as node attributes
                 cur = k_map[idx]
-                omega = self.nodes[cur]["T0"].as_matrix()[:3, 2]
-                q = self.nodes[cur]["T0"].as_matrix()[:3, 3]
-                self.nodes[cur]["S"] = np.hstack((np.cross(-omega, q), omega))
+                omega = self.nodes[cur]["T0"][:3, 2]
+                q = self.nodes[cur]["T0"][:3, 3]
+                self.nodes[cur]["S"] = np.hstack((omega, np.cross(-omega, q)))
 
                 # Relative transforms between coordinate frames as edge attributes
                 if idx != 0:
                     pred = k_map[idx - 1]
                     self[pred][cur][TRANSFORM] = (
-                        self.nodes[pred]["T0"].inv().dot(self.nodes[cur]["T0"])
+                        SE3.inverse(self.nodes[pred]["T0"]) @ self.nodes[cur]["T0"]
                     )
 
     def from_dh_params(self, params):
@@ -64,7 +64,7 @@ class RobotRevolute(Robot):
         al = al if type(al) is dict else list_to_variable_dict(flatten([al]))
         th = th if type(th) is dict else list_to_variable_dict(flatten([th]))
 
-        T = {ROOT: SE3.identity()}
+        T = {ROOT: np.eye(4)}
         kinematic_map = self.kinematic_map
         for ee in self.end_effectors:
             for node in kinematic_map[ROOT][ee][1:]:
@@ -82,14 +82,13 @@ class RobotRevolute(Robot):
                     T[node] = modified_fk_3d(a_, alpha_, d_, q + th_)
         return T
 
-    def pose(self, joint_angles: Dict[str, float], query_node: str) -> SE3:
+    def pose(self, joint_angles: Dict[str, float], query_node: str) -> np.ndarray:
         """
         Given a list of N joint variables, calculate the Nth joint's pose.
 
         :param node_inputs: joint variables node names as keys mapping to values
         :param query_node: node ID of node whose pose we want
-        :returns: SE2 or SE3 pose
-        :rtype: lie.SE3Matrix
+        :returns: 4x4 SE(3) homogeneous transform
         """
         # TODO support multiple query nodes
         # TODO avoid for loop by vectorizing matrix exponential
@@ -97,8 +96,8 @@ class RobotRevolute(Robot):
         T = self.nodes[ROOT]["T0"]
         for idx in range(len(kinematic_map) - 1):
             pred, cur = kinematic_map[idx], kinematic_map[idx + 1]
-            T = T.dot(SE3.exp(self.nodes[pred]["S"] * joint_angles[cur]))
-        T = T.dot(self.nodes[query_node]["T0"])
+            T = T @ SE3.Exp(self.nodes[pred]["S"] * joint_angles[cur])
+        T = T @ self.nodes[query_node]["T0"]
 
         return T
 
@@ -132,9 +131,9 @@ class RobotRevolute(Robot):
                     J[node][:, idx] = self.nodes[pred]["S"]
                 else:
                     ppred = list(self.predecessors(pred))[0]
-                    T = T.dot(SE3.exp(self.nodes[ppred]["S"] * joint_angles[pred]))
-                    Ad = T.adjoint()
-                    J[node][:, idx] = Ad.dot(self.nodes[pred]["S"])
+                    T = T @ SE3.Exp(self.nodes[ppred]["S"] * joint_angles[pred])
+                    Ad = SE3.adjoint(T)
+                    J[node][:, idx] = Ad @ self.nodes[pred]["S"]
         return J
 
 
@@ -142,7 +141,7 @@ class RobotRevolute(Robot):
         self,
         joint_angles: Dict[str, float],
         nodes: Union[List[str], str],
-        Ts: Dict[str, SEMatrix] = None,
+        Ts: Dict[str, np.ndarray] = None,
     ) -> Dict[str, ArrayLike]:
 
         """
@@ -170,37 +169,21 @@ class RobotRevolute(Robot):
         J = {}
         for node in nodes:  # iterate through nodes
             path = kinematic_map[node][1:]  # find joints that move node
-            p_ee = Ts[node].trans
+            p_ee = Ts[node][:3, 3]
 
             J[node] = np.zeros([6, self.n])
             for idx, joint in enumerate(path):  # algorithm fills Jac per column
                 T_0_i = Ts[list(self.parents.predecessors(joint))[0]]
-                z_hat_i = T_0_i.rot.mat[:3, 2]
-                p_i = T_0_i.trans
+                z_hat_i = T_0_i[:3, 2]
+                p_i = T_0_i[:3, 3]
                 J[node][:3, idx] = np.cross(z_hat_i, p_ee - p_i)
                 J[node][3:, idx] = z_hat_i
         return J
 
 if __name__ == "__main__":
-    from graphik.utils.roboturdf import load_ur10, load_kuka, load_schunk_lwa4d
-
-    # robot, graph = load_schunk_lwa4d()
+    from graphik.utils.roboturdf import load_ur10
     robot, graph = load_ur10()
-    # print(robot.nodes(data=True))
-    # print(robot.edges(data=True))
-    # print(robot.random_configuration())
     q = robot.random_configuration()
     print(robot.pose(q, "p6"))
     print(graph.get_pose(q, "p6"))
     print(robot.jacobian(q, ["p6"]))
-    # print(robot.edges())
-    # q = robot.random_configuration()
-    # q = robot.random_configuration()
-    # T = robot.get_pose(q, "p6")
-    # print(robot.get_pose(q, "p6"))
-    # print(robot.pose_exp(q, "p6"))
-    # print(robot.get_jacobian(q, ["p6"])["p6"])
-    # print("---------------------------")
-    # print(SE3.adjoint(T.inv()).dot(robot.jacobian(q, ["p6"])["p6"]))
-    # print("---------------------------")
-    # print(robot.jacobian(q, ["p6"])["p6"] - robot.get_jacobian(q, ["p6"])["p6"])

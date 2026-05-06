@@ -1,17 +1,39 @@
 from graphik.utils import skew, normalize
-from urdfpy import URDF
-from liegroups import SE3, SO3
+from yourdfpy import URDF
+from yourdfpy.urdf import Joint as _YJoint, Link as _YLink
+from pymlg.numpy import SE3
 import numpy as np
 from graphik.graphs import ProblemGraphRevolute
 from graphik.robots import RobotRevolute
 import graphik
 from operator import itemgetter
 
+# yourdfpy 0.0.60's Joint and Link are @dataclass(eq=False) but define a
+# custom structural __eq__ that compares fields. Per the dataclass spec, this
+# combination leaves __hash__ set to None, making instances unhashable.
+# yourdfpy itself acknowledges this in urdf.py with a TODO at the top of
+# update_cfg. RobotURDF.T_zero is keyed by Joint objects (see line ~157
+# below: T[joint] = T_joint), so we need them hashable.
+#
+# Restore identity-based __hash__. WARNING: this intentionally violates the
+# Python invariant a == b ⇒ hash(a) == hash(b). Two distinct Joint instances
+# with identical fields will compare equal under == but hash differently.
+# Safe for graphIK only because every T_zero key/lookup uses the canonical
+# instance from self._joints / self.urdf.actuated_joints. Do NOT put Joint
+# or Link objects from independent URDF.load() calls into the same set or
+# dict — dedup by hash will not match dedup by ==.
+if _YJoint.__hash__ is None:
+    _YJoint.__hash__ = object.__hash__
+if _YLink.__hash__ is None:
+    _YLink.__hash__ = object.__hash__
+
 
 class RobotURDF(object):
     def __init__(self, fname):
         self.fname = fname
         self.urdf = URDF.load(fname)
+        self._joints = list(self.urdf.robot.joints)
+        self._links = list(self.urdf.robot.links)
 
         self.urdf_ind_to_q, self.q_to_urdf_ind = self.joint_map()
         self.n_q_joints = len(self.q_to_urdf_ind)
@@ -30,7 +52,7 @@ class RobotURDF(object):
         label = "p{0}"
 
         for joint in self.urdf.actuated_joints:
-            j = self.urdf.joints.index(joint)
+            j = self._joints.index(joint)
             urdf_ind_to_q[j] = label.format(q_ind)
             q_to_urdf_ind[label.format(q_ind)] = j
             q_ind += 1
@@ -47,7 +69,7 @@ class RobotURDF(object):
 
     def find_actuated_joints_with_parent_link(self, link):
         parent_joints = []
-        for joint in self.urdf.joints:
+        for joint in self._joints:
             if joint.parent == link.name:
                 if not (joint in self.urdf.actuated_joints):
                     joints = self.find_actuated_joints_with_parent_link(
@@ -61,7 +83,7 @@ class RobotURDF(object):
 
     def find_joints_with_parent_link(self, link):
         parent_joints = []
-        for joint in self.urdf.joints:
+        for joint in self._joints:
             if joint.parent == link.name:
                 parent_joints.append(joint)
 
@@ -108,13 +130,13 @@ class RobotURDF(object):
             raise ("joint not an actuated joint")
 
     def find_link_by_name(self, name):
-        for link in self.urdf.links:
+        for link in self._links:
             if link.name == name:
                 return link
         return None
 
     def find_joint_by_name(self, name):
-        for joint in self.urdf.joints:
+        for joint in self._joints:
             if joint.name == name:
                 return joint
         return None
@@ -124,31 +146,30 @@ class RobotURDF(object):
         T is located at the joint's origin, the rotation such that
         z_hat points along the joint rotation axis.
         """
-        if q is not None:
-            urdf_q = self.map_to_urdf_ind(q)
-            cfg = urdf_q
-        else:
-            cfg = {}
-        fk = self.urdf.link_fk(cfg=cfg)
+        # yourdfpy's update_cfg is stateful and partial (only mutates joints
+        # whose names appear in cfg), unlike urdfpy's link_fk which was
+        # stateless. Build a full cfg covering every actuated joint, defaulting
+        # unspecified ones to 0, so this method behaves like urdfpy's link_fk
+        # regardless of what q the URDF was last queried at.
+        partial_cfg = self.map_to_urdf_ind(q) if q is not None else {}
+        cfg = {j.name: partial_cfg.get(j.name, 0.0) for j in self.urdf.actuated_joints}
+        self.urdf.update_cfg(cfg)
         T = {}
         for joint in self.urdf.actuated_joints:
             # get child link frame
             child_link = self.find_link_by_name(joint.child)
-            T_link = SE3.from_matrix(fk[child_link])
+            T_link = self.urdf.get_transform(child_link.name)  # 4x4 ndarray
             if frame == "joint":
-                # URDF frames are aligned with the links
-                # An additional rotation needs to be applied
-                # to align the Z axis with the joint frame
                 joint_axis = joint.axis
                 T_joint_axis = get_T_from_joint_axis(joint_axis)
-                T_joint = np.dot(T_link.as_matrix(), T_joint_axis.inv().as_matrix())
-                T[joint] = SE3.from_matrix(T_joint)
+                T_joint = T_link @ SE3.inverse(T_joint_axis)
+                T[joint] = T_joint
             else:
                 T[joint] = T_link
 
         for ee_joint in self.ee_joints:
             ee_link = self.find_link_by_name(ee_joint.child)
-            T[ee_joint] = SE3.from_matrix(fk[ee_link])
+            T[ee_joint] = self.urdf.get_transform(ee_link.name)
 
         return T
 
@@ -161,12 +182,12 @@ class RobotURDF(object):
         -------
 
         ee_joints : list
-            List of urdfpy joints that correspond to the End Effectors
+            List of URDF Joint objects that correspond to the End Effectors
 
         """
         ee_joints = []
 
-        for joint in self.urdf.joints:
+        for joint in self._joints:
             child_joints = self.find_joints_actuated_child_joints(joint)
             if child_joints == []:
                 ee_joints.append(joint)
@@ -183,7 +204,7 @@ class RobotURDF(object):
 
         q_keys = list(q.keys())
         urdf_ind = itemgetter(*q_keys)(self.q_to_urdf_ind)
-        names = [self.urdf.joints[i].name for i in urdf_ind]
+        names = [self._joints[i].name for i in urdf_ind]
         # urdf_q = dict(zip(urdf_ind, list(q.values())))
         urdf_q = dict(zip(names, list(q.values())))
 
@@ -210,7 +231,7 @@ class RobotURDF(object):
         Parameters
         ----------
         joints : list
-            list of urdfpy joints
+            list of URDF Joint objects
 
         Returns
         -------
@@ -234,22 +255,24 @@ class RobotURDF(object):
 
         T_list = list(self.T_zero.values())
         if randomized_links:
-            T_mod = T_list
-            for idx in range(len(T_list)-1):
-                T_delta = T_list[idx].inv().dot(T_list[idx+1]) # delta translation
-                t_delta = T_delta.trans*((1-randomize_percentage) + 2*randomize_percentage*np.random.rand()) # variation
+            T_mod = list(T_list)
+            for idx in range(len(T_list) - 1):
+                T_delta = SE3.inverse(T_list[idx]) @ T_list[idx + 1]
+                t_delta = T_delta[:3, 3] * (
+                    (1 - randomize_percentage) + 2 * randomize_percentage * np.random.rand()
+                )
                 t_delta[np.abs(t_delta) < 1e-6] = 0
-                T_delta.trans = t_delta
-                T_mod[idx+1] = T_mod[idx].dot(T_delta)
+                T_delta = T_delta.copy()
+                T_delta[:3, 3] = t_delta
+                T_mod[idx + 1] = T_mod[idx] @ T_delta
             T_list = T_mod
 
         # Assign Transforms
         T_labels = self.get_graphik_labels(joints)
-        # T_zero = dict(zip(T_labels, self.T_zero.values()))
         T_zero = dict(zip(T_labels, T_list))
         T0 = T_zero["p0"]
         for key, val in T_zero.items():
-            T_zero[key] = T0.inv().dot(val)
+            T_zero[key] = SE3.inverse(T0) @ val
         params["T_zero"] = T_zero
         params["num_joints"] = self.n_q_joints
 
@@ -265,26 +288,25 @@ class RobotURDF(object):
 
 def get_T_from_joint_axis(axis: np.ndarray):
     """
-    Take in the axis string from urdf "X X X" and return the rotation matrix
-    assoicated with that axis
+    Take in the axis vector from urdf and return the 4x4 SE(3) transform
+    that aligns the z-axis with the joint axis.
     """
     norm = np.linalg.norm
     z_hat = np.array([0, 0, 1])
 
     if all(np.isclose(axis, -z_hat)):
-        R = SO3.rotx(np.pi).as_matrix()
+        from graphik.utils.kinematics import Rx
+        R = Rx(np.pi)
     elif not all(np.isclose(axis, z_hat)):
         rot_axis = np.cross(axis, z_hat)
-        # rot_axis = np.cross(z_hat, axis)
         ang = -np.arcsin(norm(rot_axis) / (norm(axis) * norm(z_hat)))
         rot_axis = normalize(rot_axis)
-
         rot_axis = rot_axis.reshape(3, 1)
 
         R = (
             np.eye(3) * np.cos(ang)
             + (1 - np.cos(ang)) * np.dot(rot_axis, rot_axis.transpose())
-            - np.sin(ang) * skew(rot_axis)
+            - np.sin(ang) * skew(rot_axis.ravel())
         )
     else:
         R = np.eye(3)
@@ -292,7 +314,6 @@ def get_T_from_joint_axis(axis: np.ndarray):
     T = np.eye(4)
     T[0:3, 0:3] = R
     T[0:3, 3] = np.zeros(3)
-    T = SE3.from_matrix(T)
 
     return T
 

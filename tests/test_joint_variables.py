@@ -127,7 +127,7 @@ class TestJointVariables(unittest.TestCase):
 
             q_goal = robot.random_configuration()
             # TODO: was T_goal supposed to be tested too?
-            T_goal = robot.pose(q_goal, f"p{n}").trans
+            T_goal = robot.pose(q_goal, f"p{n}")[:2, 2]
             X = graph.realization(q_goal)
 
             q_rec = graph.joint_variables(X)
@@ -148,7 +148,7 @@ class TestJointVariables(unittest.TestCase):
             robot = RobotPlanar(params)
             graph = ProblemGraphPlanar(robot)
             q_goal = robot.random_configuration()
-            T_goal = robot.pose(q_goal, f"p{n}").trans
+            T_goal = robot.pose(q_goal, f"p{n}")[:2, 2]
             X = graph.realization(q_goal)
             q_rec = graph.joint_variables(X)
             self.assertIsNone(

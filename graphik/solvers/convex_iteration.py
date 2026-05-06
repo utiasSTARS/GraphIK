@@ -7,9 +7,8 @@ import cvxpy as cp
 import networkx as nx
 from timeit import default_timer
 from progress.bar import ShadyBar as Bar
-from liegroups.numpy import SE3
 
-from graphik.solvers.sdp_formulations import SdpSolverParams
+from graphik.solvers.sdp_formulations import SdpSolverParams, solve_sdp
 from graphik.solvers.sdp_snl import (
     distance_range_constraints,
     solve_linear_cost_sdp,
@@ -83,7 +82,7 @@ def solve_fantope_iterate(
     prob = cp.Problem(cp.Minimize(cp.trace(G @ Z)), constraints)
     if solver_params is None:
         solver_params = SdpSolverParams()
-    prob.solve(verbose=verbose, solver="MOSEK", mosek_params=solver_params.mosek_params)
+    solve_sdp(prob, solver_params, verbose=verbose)
     return prob
 
 
@@ -121,7 +120,7 @@ def solve_fantope_sdp_sparse(constraint_clique_dict: dict, sdp_variable_map: dic
         G_clique = sdp_variable_map[clique].value
         cost += cp.trace(G_clique @ Z_clique)
     prob = cp.Problem(cp.Minimize(cost), constraints)
-    prob.solve(verbose=verbose, solver="MOSEK", mosek_params=solver_params.mosek_params)
+    solve_sdp(prob, solver_params, verbose=verbose)
 
     # Return the desired cost function matrices
     C_mapping = {}
@@ -276,7 +275,7 @@ def convex_iterate_sdp_snl_graph(
     )
 
 
-def solve_with_cidgik(graph: ProblemGraphRevolute, T_goal: SE3) -> (dict, dict):
+def solve_with_cidgik(graph: ProblemGraphRevolute, T_goal: np.ndarray) -> (dict, dict):
     robot = graph.robot
     n = robot.n
 
@@ -284,8 +283,8 @@ def solve_with_cidgik(graph: ProblemGraphRevolute, T_goal: SE3) -> (dict, dict):
     anchors = {
         "p0": graph.nodes["p0"][POS],
         "q0": graph.nodes["q0"][POS],
-        f"p{n}": T_goal.trans,
-        f"q{n}": T_goal.trans + T_goal.rot.as_matrix()[:, 2]
+        f"p{n}": T_goal[:3, 3],
+        f"q{n}": T_goal[:3, 3] + T_goal[:3, 2]
     }
 
     # Solve with CIDGIK
@@ -373,7 +372,7 @@ if __name__ == "__main__":
         if feasible is FEASIBLE:
             final_eigvalue_sum_list.append(eig_value_sum_vs_iterations[-1])
         else:
-            final_eigvalue_sum_list.append(np.NaN)
+            final_eigvalue_sum_list.append(np.nan)
         primal_sdp_runtime.append(t_primal)
         fantope_runtime.append(t_fantope)
         feasibility_list.append(feasible)
@@ -396,7 +395,7 @@ if __name__ == "__main__":
         if feasible is FEASIBLE:
             final_eigvalue_sum_list_sparse_naive.append(eig_value_sum_vs_iterations[-1])
         else:
-            final_eigvalue_sum_list_sparse_naive.append(np.NaN)
+            final_eigvalue_sum_list_sparse_naive.append(np.nan)
 
         # Run sparse solver where Fantope program has a sparsity pattern matched to the primal SDP's
         (
@@ -416,7 +415,7 @@ if __name__ == "__main__":
         if feasible is FEASIBLE:
             final_eigvalue_sum_list_sparse_sdp.append(eig_value_sum_vs_iterations[-1])
         else:
-            final_eigvalue_sum_list_sparse_sdp.append(np.NaN)
+            final_eigvalue_sum_list_sparse_sdp.append(np.nan)
 
         bar.next()
     bar.finish()

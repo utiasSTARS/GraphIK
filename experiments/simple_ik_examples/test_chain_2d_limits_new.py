@@ -5,7 +5,6 @@ import time
 from graphik.graphs.graph_planar import ProblemGraphPlanar
 from graphik.robots.robot_planar import RobotPlanar
 from graphik.utils.dgp import bound_smoothing
-# from graphik.solvers.solver_rfr import RiemannianSolver
 from graphik.utils import (
     pos_from_graph,
     list_to_variable_dict,
