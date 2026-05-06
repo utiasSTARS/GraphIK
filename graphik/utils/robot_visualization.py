@@ -1,11 +1,10 @@
-from typing import Union
 import numpy as np
 from matplotlib import pyplot as plt
 
 # from matplotlib.cbook import get_sample_data
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from matplotlib import rc, cm
-from graphik.robots import RobotRevolute, RobotPlanar
+from graphik.robots import Robot
 import matplotlib as mpl
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -93,7 +92,7 @@ def get_tree_paths(parent_nodes):
 
 
 def plot_planar_manipulator_robot(
-    robot: Union[RobotPlanar, RobotRevolute],
+    robot: Robot,
     config,
     fig_handle=None,
     ax_handle=None,
@@ -200,7 +199,7 @@ def add_fixed_point_to_graphic(fig, ax, joint_location=(0.0, 0.0), orientation=0
     plot_image("assets/fixed_point.png", x, y, ax, zoom=0.13)
 
 
-def plot_3d_chain_manipulator(robot: RobotRevolute, input_angles, fig=None, ax=None):
+def plot_3d_chain_manipulator(robot: Robot, input_angles, fig=None, ax=None):
     """
     TODO: add tree capability (same as 2D)
     :param robot:

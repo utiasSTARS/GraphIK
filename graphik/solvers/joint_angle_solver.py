@@ -9,7 +9,7 @@ from pymlg.numpy import SE3, SO3, SE2, SO2
 from numpy import pi
 from graphik.utils.roboturdf import RobotURDF
 from graphik.utils.constants import *
-from graphik.graphs.graph_base import ProblemGraph
+from graphik.graphs.graph import ProblemGraph
 from graphik.utils.utils import list_to_variable_dict
 from graphik.utils.roboturdf import load_kuka, load_ur10
 
@@ -206,8 +206,8 @@ def main():
     # # sol = problem.solve(goals, list_to_variable_dict(x0))
     # print(sol)
 
-    from graphik.robots import RobotPlanar
-    from graphik.graphs import ProblemGraphPlanar
+    from graphik.robots import Robot
+    from graphik.graphs import ProblemGraph
     n = 10
 
     a = list_to_variable_dict(np.ones(n))
@@ -222,8 +222,8 @@ def main():
         "num_joints": n
     }
 
-    robot = RobotPlanar(params)
-    graph = ProblemGraphPlanar(robot)
+    robot = Robot({**params, "dim": 2})
+    graph = ProblemGraph(robot)
     q_goal = robot.random_configuration()
     T_goal = robot.pose(q_goal, f"p{robot.n}")
     goals = {f"p{robot.n}": T_goal}

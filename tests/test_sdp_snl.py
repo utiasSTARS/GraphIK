@@ -5,10 +5,9 @@ import numpy as np
 import unittest
 import networkx as nx
 from numpy.testing import assert_allclose
-from graphik.graphs import ProblemGraphRevolute
+from graphik.graphs import ProblemGraph
 
-from graphik.robots.robot_base import Robot
-from graphik.robots import RobotRevolute
+from graphik.robots import Robot
 from graphik.solvers.constraints import get_full_revolute_nearest_point
 from graphik.solvers.sdp_snl import (
     distance_constraints,
@@ -239,8 +238,8 @@ class TestTruncatedUR10(unittest.TestCase):
             "modified_dh": modified_dh,
             "num_joints": n
         }
-        self.robot = RobotRevolute(params)
-        self.graph = ProblemGraphRevolute(self.robot)
+        self.robot = Robot({**params, "dim": 3})
+        self.graph = ProblemGraph(self.robot)
 
     def test_cost(self):
         n_runs = 10

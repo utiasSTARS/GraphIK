@@ -14,7 +14,7 @@ from graphik.utils import (
     memoize_last,
 )
 from graphik.utils.manifolds.fixed_rank_psd_sym import PSDFixedRank
-from graphik.graphs.graph_base import ProblemGraph
+from graphik.graphs.graph import ProblemGraph
 from graphik.solvers import rtr
 
 

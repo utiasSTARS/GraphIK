@@ -10,7 +10,7 @@ from graphik.utils import (
     gram_from_distance_matrix,
     adjacency_matrix_from_graph,
 )
-from graphik.graphs.graph_base import ProblemGraph
+from graphik.graphs.graph import ProblemGraph
 from scipy.optimize import Bounds, minimize
 from graphik.utils.constants import END_EFFECTOR, POS, TYPE
 from graphik.utils.operators import sum_square_op_batched

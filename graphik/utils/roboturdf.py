@@ -3,8 +3,8 @@ from yourdfpy import URDF
 from yourdfpy.urdf import Joint as _YJoint, Link as _YLink
 from pymlg.numpy import SE3
 import numpy as np
-from graphik.graphs import ProblemGraphRevolute
-from graphik.robots import RobotRevolute
+from graphik.graphs import ProblemGraph
+from graphik.robots import Robot
 import graphik
 from operator import itemgetter
 
@@ -282,9 +282,9 @@ class RobotURDF(object):
         if l == len(self.parents.keys()) - 1:
             params["joint_limits_upper"] = ub
             params["joint_limits_lower"] = lb
-            return RobotRevolute(params)
+            return Robot({**params, "dim": 3})
         else:
-            return RobotRevolute(params)
+            return Robot({**params, "dim": 3})
 
 def get_T_from_joint_axis(axis: np.ndarray):
     """
@@ -328,7 +328,7 @@ def load_schunk_lwa4p(limits=None, randomized_links = False, randomize_percentag
         lb = limits[0]
         ub = limits[1]
     robot = urdf_robot.make_Revolute3d(ub, lb, randomized_links, randomize_percentage)  # make the Revolute class from a URDF
-    graph = ProblemGraphRevolute(robot)
+    graph = ProblemGraph(robot)
     return robot, graph
 
 
@@ -343,7 +343,7 @@ def load_schunk_lwa4d(limits=None, randomized_links = False, randomize_percentag
         lb = limits[0]
         ub = limits[1]
     robot = urdf_robot.make_Revolute3d(ub, lb, randomized_links, randomize_percentage)  # make the Revolute class from a URDF
-    graph = ProblemGraphRevolute(robot)
+    graph = ProblemGraph(robot)
     return robot, graph
 
 
@@ -358,7 +358,7 @@ def load_kuka(limits=None, randomized_links = False, randomize_percentage = 0.4)
         lb = limits[0]
         ub = limits[1]
     robot = urdf_robot.make_Revolute3d(ub, lb, randomized_links, randomize_percentage)  # make the Revolute class from a URDF
-    graph = ProblemGraphRevolute(robot)
+    graph = ProblemGraph(robot)
     return robot, graph
 
 def load_panda(limits=None, randomized_links = False, randomize_percentage = 0.4):
@@ -373,7 +373,7 @@ def load_panda(limits=None, randomized_links = False, randomize_percentage = 0.4
         ub = limits[1]
     robot = urdf_robot.make_Revolute3d(ub, lb, randomized_links, randomize_percentage)  # make the Revolute class from a URDF
     # print(robot.structure.nodes())
-    graph = ProblemGraphRevolute(robot)
+    graph = ProblemGraph(robot)
     return robot, graph
 
 def load_ur10(limits=None, randomized_links = False, randomize_percentage = 0.4):
@@ -388,7 +388,7 @@ def load_ur10(limits=None, randomized_links = False, randomize_percentage = 0.4)
         ub = limits[1]
     robot = urdf_robot.make_Revolute3d(ub, lb, randomized_links, randomize_percentage)  # make the Revolute class from a URDF
     # print(robot.structure.nodes())
-    graph = ProblemGraphRevolute(robot)
+    graph = ProblemGraph(robot)
     return robot, graph
 
 
@@ -418,6 +418,6 @@ def load_truncated_ur10(n: int):
         "num_joints": n,
     }
 
-    robot = RobotRevolute(params)
-    graph = ProblemGraphRevolute(robot)
+    robot = Robot({**params, "dim": 3})
+    graph = ProblemGraph(robot)
     return robot, graph

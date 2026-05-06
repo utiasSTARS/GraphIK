@@ -1,8 +1,5 @@
 from copy import deepcopy
-from graphik.graphs.graph_base import (
-    ProblemGraph,
-)
-from graphik.graphs import ProblemGraphRevolute
+from graphik.graphs import ProblemGraph
 import networkx as nx
 import numpy as np
 import sympy as sp
@@ -10,7 +7,7 @@ import numpy.linalg as la
 from numpy import pi
 from graphik.utils.utils import norm_sq
 from graphik.utils.dgp import pos_from_graph
-from graphik.robots import RobotRevolute
+from graphik.robots import Robot
 
 
 def apply_angular_offset_2d(joint_angle_offset, z0):
@@ -246,7 +243,7 @@ if __name__ == "__main__":
 
     # params = {"a": a, "theta": th}
 
-    # robot = RobotPlanar(params)
+    # robot = Robot({**params, "dim": 2})
     # graph = PlanarRobotGraph(robot)
     # constraints = constraints_from_graph(graph)
 
@@ -260,9 +257,9 @@ if __name__ == "__main__":
     lb = -ub
 
     params = {"a": a, "alpha": al, "d": d, "theta": th, "lb": lb, "ub": ub}
-    robot = RobotRevolute(params)  # instantiate robot
+    robot = Robot({**params, "dim": 3})  # instantiate robot
     end_effector_assignments = {"p6": np.array([1.0, 1.0, 1.0])}
-    graph = ProblemGraphRevolute(robot)
+    graph = ProblemGraph(robot)
     constraints = constraints_from_graph(graph, end_effector_assignments)
     print(graph.directed.edges())
     print(constraints)

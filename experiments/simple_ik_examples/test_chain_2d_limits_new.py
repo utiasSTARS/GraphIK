@@ -2,8 +2,8 @@
 import numpy as np
 from numpy.testing import assert_array_less
 import time
-from graphik.graphs.graph_planar import ProblemGraphPlanar
-from graphik.robots.robot_planar import RobotPlanar
+from graphik.graphs import ProblemGraph
+from graphik.robots import Robot
 from graphik.utils.dgp import bound_smoothing
 from graphik.utils import (
     pos_from_graph,
@@ -35,8 +35,8 @@ def random_problem_2d_chain():
         "num_joints": 10,
     }
 
-    robot = RobotPlanar(robot_params)
-    graph = ProblemGraphPlanar(robot)
+    robot = Robot({**robot_params, "dim": 2})
+    graph = ProblemGraph(robot)
     solver = RiemannianSolver(graph)
 
     # solver = RiemannianSolver(solver_params)

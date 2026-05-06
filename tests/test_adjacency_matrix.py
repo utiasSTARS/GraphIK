@@ -6,8 +6,8 @@ from numpy.testing import assert_array_equal
 import unittest
 from graphik.utils.constants import *
 from itertools import combinations, groupby
-from graphik.graphs import ProblemGraphPlanar
-from graphik.robots import RobotPlanar
+from graphik.graphs import ProblemGraph
+from graphik.robots import Robot
 
 from graphik.utils.dgp import adjacency_matrix_from_graph
 from graphik.utils.utils import list_to_variable_dict
@@ -76,8 +76,8 @@ class TestAdjacencyMatrices(unittest.TestCase):
             ]
         )
 
-        robot = RobotPlanar(params)
-        graph = ProblemGraphPlanar(robot)
+        robot = Robot({**params, "dim": 2})
+        graph = ProblemGraph(robot)
 
         q_goal = graph.robot.random_configuration()
         goals = {
@@ -112,8 +112,8 @@ class TestAdjacencyMatrices(unittest.TestCase):
             ]
         )
 
-        robot = RobotPlanar(params)
-        graph = ProblemGraphPlanar(robot)
+        robot = Robot({**params, "dim": 2})
+        graph = ProblemGraph(robot)
 
         q_goal = graph.robot.random_configuration()
         goals = {
@@ -161,8 +161,8 @@ class TestAdjacencyMatrices(unittest.TestCase):
             [1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1],
             [1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0],
         ])
-        robot = RobotPlanar(params)
-        graph = ProblemGraphPlanar(robot)
+        robot = Robot({**params, "dim": 2})
+        graph = ProblemGraph(robot)
 
         q_goal = robot.random_configuration()
         goals = {}
@@ -218,8 +218,8 @@ class TestAdjacencyMatrices(unittest.TestCase):
             [1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
             [1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
         ])
-        robot = RobotPlanar(params)
-        graph = ProblemGraphPlanar(robot)
+        robot = Robot({**params, "dim": 2})
+        graph = ProblemGraph(robot)
 
         q_goal = robot.random_configuration()
         goals = {}

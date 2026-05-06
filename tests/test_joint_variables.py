@@ -7,11 +7,8 @@ import graphik
 from numpy.testing import assert_allclose
 from numpy.random import rand, randint
 from numpy import pi
-from graphik.graphs import (
-    ProblemGraphPlanar,
-    ProblemGraphRevolute,
-)
-from graphik.robots import RobotPlanar, RobotRevolute
+from graphik.graphs import ProblemGraph
+from graphik.robots import Robot
 from graphik.utils.roboturdf import RobotURDF
 from graphik.utils import *
 
@@ -39,7 +36,7 @@ class TestJointVariables(unittest.TestCase):
                 ub, lb
             )  # make the Revolute class from a URDF
 
-            graph = ProblemGraphRevolute(robot)
+            graph = ProblemGraph(robot)
 
             for _ in range(10):
                 q_goal = robot.random_configuration()
@@ -64,7 +61,7 @@ class TestJointVariables(unittest.TestCase):
                 ub, lb
             )  # make the Revolute class from a URDF
 
-            graph = ProblemGraphRevolute(robot)
+            graph = ProblemGraph(robot)
             for _ in range(10):
                 q_goal = robot.random_configuration()
                 T_goal = {}
@@ -98,8 +95,8 @@ class TestJointVariables(unittest.TestCase):
                 "modified_dh": modified_dh,
                 "num_joints": n,
             }
-            robot = RobotRevolute(params)  # instantiate robot
-            graph = ProblemGraphRevolute(robot)  # instantiate graph
+            robot = Robot({**params, "dim": 3})  # instantiate robot
+            graph = ProblemGraph(robot)  # instantiate graph
 
             q_goal = robot.random_configuration()
             T_goal = {}
@@ -122,8 +119,8 @@ class TestJointVariables(unittest.TestCase):
             lim_l = list_to_variable_dict(-pi * np.ones(n))
             params = {"link_lengths": a, "num_joints": n}
 
-            robot = RobotPlanar(params)
-            graph = ProblemGraphPlanar(robot)
+            robot = Robot({**params, "dim": 2})
+            graph = ProblemGraph(robot)
 
             q_goal = robot.random_configuration()
             # TODO: was T_goal supposed to be tested too?
@@ -145,8 +142,8 @@ class TestJointVariables(unittest.TestCase):
             th = list_to_variable_dict(np.zeros(n))
             parents = nx.to_dict_of_lists(gen)
             params = {"link_lengths": a, "num_joints": n}
-            robot = RobotPlanar(params)
-            graph = ProblemGraphPlanar(robot)
+            robot = Robot({**params, "dim": 2})
+            graph = ProblemGraph(robot)
             q_goal = robot.random_configuration()
             T_goal = robot.pose(q_goal, f"p{n}")[:2, 2]
             X = graph.realization(q_goal)
@@ -176,8 +173,8 @@ class TestJointVariables(unittest.TestCase):
             "modified_dh": modified_dh,
             "num_joints": n,
         }
-        robot = RobotRevolute(params)
-        graph = ProblemGraphRevolute(robot)
+        robot = Robot({**params, "dim": 3})
+        graph = ProblemGraph(robot)
 
         for _ in range(100):
             q_goal = robot.random_configuration()
@@ -210,8 +207,8 @@ class TestJointVariables(unittest.TestCase):
             "parents": parents,
             "num_joints": n,
         }
-        robot = RobotRevolute(params)
-        graph = ProblemGraphRevolute(robot)
+        robot = Robot({**params, "dim": 3})
+        graph = ProblemGraph(robot)
 
         for _ in range(100):
             q_goal = robot.random_configuration()

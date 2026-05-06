@@ -8,7 +8,7 @@ from graphik.utils import (
     linear_projection,
     gram_from_distance_matrix,
 )
-from graphik.graphs.graph_base import ProblemGraph
+from graphik.graphs.graph import ProblemGraph
 from scipy.optimize import least_squares
 from graphik.utils.operators import sum_square_op_batched
 

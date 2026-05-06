@@ -20,8 +20,7 @@ from graphik.solvers.sdp_snl import (
 from graphik.solvers.constraints import get_full_revolute_nearest_point
 from graphik.utils.roboturdf import load_ur10
 from graphik.utils.constants import *
-from graphik.graphs.graph_base import ProblemGraph
-from graphik.graphs.graph_revolute import ProblemGraphRevolute
+from graphik.graphs import ProblemGraph
 
 
 def random_psd_matrix(N: int, d: int = None, normalize: bool = True) -> np.ndarray:
@@ -275,7 +274,7 @@ def convex_iterate_sdp_snl_graph(
     )
 
 
-def solve_with_cidgik(graph: ProblemGraphRevolute, T_goal: np.ndarray) -> (dict, dict):
+def solve_with_cidgik(graph: ProblemGraph, T_goal: np.ndarray) -> (dict, dict):
     robot = graph.robot
     n = robot.n
 

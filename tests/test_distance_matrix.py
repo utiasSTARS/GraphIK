@@ -3,12 +3,9 @@ import unittest
 import networkx as nx
 from numpy.testing import assert_allclose
 from numpy import pi
-from graphik.graphs import (
-    ProblemGraphPlanar,
-    ProblemGraphRevolute,
-)
+from graphik.graphs import ProblemGraph
 
-from graphik.robots import RobotRevolute, RobotPlanar
+from graphik.robots import Robot
 from graphik.utils import best_fit_transform, list_to_variable_dict, MDS, gram_from_distance_matrix, pos_from_graph
 
 class TestDistanceMatrix(unittest.TestCase):
@@ -32,8 +29,8 @@ class TestDistanceMatrix(unittest.TestCase):
             "parents": parents,
             "num_joints": n
         }
-        robot = RobotRevolute(params)
-        graph = ProblemGraphRevolute(robot)
+        robot = Robot({**params, "dim": 3})
+        graph = ProblemGraph(robot)
         n_nodes = graph.number_of_nodes()
 
         for _ in range(100):
@@ -82,8 +79,8 @@ class TestDistanceMatrix(unittest.TestCase):
                 "modified_dh": True,
                 "num_joints": n
             }
-            robot = RobotRevolute(params)  # instantiate robot
-            graph = ProblemGraphRevolute(robot)  # instantiate graph
+            robot = Robot({**params, "dim": 3})  # instantiate robot
+            graph = ProblemGraph(robot)  # instantiate graph
             n_nodes = graph.number_of_nodes()
 
             q = robot.random_configuration()
@@ -123,8 +120,8 @@ class TestDistanceMatrix(unittest.TestCase):
                 "num_joints": n
             }
 
-            robot = RobotPlanar(params)
-            graph = ProblemGraphPlanar(robot)
+            robot = Robot({**params, "dim": 2})
+            graph = ProblemGraph(robot)
             n_nodes = graph.number_of_nodes()
 
             q = robot.random_configuration()
@@ -170,8 +167,8 @@ class TestDistanceMatrix(unittest.TestCase):
                 "num_joints": n
             }
 
-            robot = RobotPlanar(params)
-            graph = ProblemGraphPlanar(robot)
+            robot = Robot({**params, "dim": 2})
+            graph = ProblemGraph(robot)
             n_nodes = graph.number_of_nodes()
 
             q = robot.random_configuration()

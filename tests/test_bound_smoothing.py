@@ -4,11 +4,8 @@ from numpy import pi
 from numpy.testing import assert_array_less
 import unittest
 import networkx as nx
-from graphik.graphs import (
-    ProblemGraphPlanar,
-    ProblemGraphRevolute,
-)
-from graphik.robots import RobotRevolute, RobotPlanar
+from graphik.graphs import ProblemGraph
+from graphik.robots import Robot
 from graphik.utils import pos_from_graph, graph_from_pos, bound_smoothing, list_to_variable_dict, trans_axis
 # from graphik.utils.dgp import pos_from_graph, graph_from_pos, bound_smoothing
 # from graphik.utils.utils import list_to_variable_dict
@@ -36,8 +33,8 @@ class TestBoundSmoothing(unittest.TestCase):
                 "num_joints": n,
             }
 
-            robot = RobotPlanar(params)
-            graph = ProblemGraphPlanar(robot)
+            robot = Robot({**params, "dim": 2})
+            graph = ProblemGraph(robot)
 
             q_goal = graph.robot.random_configuration()
             G_goal = graph.realization(q_goal)
@@ -76,8 +73,8 @@ class TestBoundSmoothing(unittest.TestCase):
                 "num_joints": n,
             }
 
-            robot = RobotPlanar(params)
-            graph = ProblemGraphPlanar(robot)
+            robot = Robot({**params, "dim": 2})
+            graph = ProblemGraph(robot)
 
             q_goal = graph.robot.random_configuration()
             G_goal = graph.realization(q_goal)

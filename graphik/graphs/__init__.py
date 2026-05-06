@@ -1,2 +1,1 @@
-from graphik.graphs.graph_planar import ProblemGraphPlanar
-from graphik.graphs.graph_revolute import ProblemGraphRevolute
+from graphik.graphs.graph import ProblemGraph
