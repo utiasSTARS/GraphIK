@@ -10,7 +10,15 @@ import numpy as np
 
 from graphik.utils.roboturdf import load_schunk_lwa4d, load_ur10
 from graphik.utils.utils import table_environment
+from graphik.utils.dgp import (
+    adjacency_matrix_from_graph,
+    bound_smoothing,
+    distance_matrix_from_graph,
+    graph_from_pos,
+)
 from graphik.solvers.riemannian_solver import solve_with_riemannian
+from graphik.solvers.nonlinear_solver import NonlinearSolver
+from graphik.solvers.least_squares_solver import LeastSquaresSolver
 
 from tests.baselines.cases import Case
 
@@ -36,6 +44,36 @@ def _solve_riemannian(graph, T_goal):
     return q_sol
 
 
+def _solve_nonlinear(graph, T_goal, method: str):
+    G = graph.from_pose(T_goal)
+    D_goal = distance_matrix_from_graph(G)
+    omega = adjacency_matrix_from_graph(G)
+    lb, ub = bound_smoothing(G)
+    # Must be cost_type="sparse" because "dense" has cost_and_grad_limits_=None
+    # and use_limits=True would dereference it.
+    solver = NonlinearSolver(graph, cost_type="sparse", jit=False)
+    sol = solver.solve(D_goal, omega, use_limits=True, bounds=(lb, ub), method=method)
+    G_sol = graph_from_pos(sol["x"], graph.node_ids)
+    q_sol = graph.joint_variables(G_sol, {f"p{graph.robot.n}": T_goal})
+    if len(graph.check_distance_limits(graph.realization(q_sol), tol=1e-6)) > 0:
+        return None
+    return q_sol
+
+
+def _solve_least_squares(graph, T_goal):
+    G = graph.from_pose(T_goal)
+    D_goal = distance_matrix_from_graph(G)
+    omega = adjacency_matrix_from_graph(G)
+    lb, ub = bound_smoothing(G)
+    solver = LeastSquaresSolver(graph, cost_type="sparse", jit=False)
+    sol = solver.solve(D_goal, omega, use_limits=True, bounds=(lb, ub), method="trf")
+    G_sol = graph_from_pos(sol["x"], graph.node_ids)
+    q_sol = graph.joint_variables(G_sol, {f"p{graph.robot.n}": T_goal})
+    if len(graph.check_distance_limits(graph.realization(q_sol), tol=1e-6)) > 0:
+        return None
+    return q_sol
+
+
 def _measure(robot, T_goal, q_sol) -> dict:
     if q_sol is None:
         return {"solved": False, "trans_err": None, "rot_err": None, "q_sol": None}
@@ -56,6 +94,12 @@ def run_case(case: Case) -> dict:
     t0 = time.perf_counter()
     if case["solver"] == "riemannian":
         q_sol = _solve_riemannian(graph, T_goal)
+    elif case["solver"] == "nonlinear_bfgs":
+        q_sol = _solve_nonlinear(graph, T_goal, method="BFGS")
+    elif case["solver"] == "nonlinear_lbfgsb":
+        q_sol = _solve_nonlinear(graph, T_goal, method="L-BFGS-B")
+    elif case["solver"] == "least_squares":
+        q_sol = _solve_least_squares(graph, T_goal)
     else:
         raise ValueError(f"unknown solver: {case['solver']}")
     elapsed = time.perf_counter() - t0

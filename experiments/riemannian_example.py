@@ -1,3 +1,5 @@
+from time import perf_counter
+
 from graphik.utils.utils import table_environment
 from graphik.solvers.riemannian_solver import solve_with_riemannian
 
@@ -21,7 +23,9 @@ if __name__ == "__main__":
     T_goal = robot.pose(q_goal, f"p{robot.n}")  # Can be any desired pose, this is just a simple example
 
     # Run Riemannian solver without jit compiled cost function and gradient computations
+    t0 = perf_counter()
     q_sol, solution_points = solve_with_riemannian(graph, T_goal, use_jit=False)  # Returns None if infeasible or didn't solve
+    solve_time = perf_counter() - t0
 
     # Compare the solution's end effector pose to the goal.
     # Don't be surprised if the configurations are different, even for the UR10!
@@ -31,6 +35,7 @@ if __name__ == "__main__":
     print("Target configuration: ")
     print(q_goal)
     print("--------------------------------------------")
+    print(f"Solve time: {solve_time:.4f} s")
     if q_sol:
         print("Riemannian solution's pose: ")
         print(robot.pose(q_sol, f"p{robot.n}"))

@@ -1,9 +1,32 @@
+from typing import Any, Callable, TypeVar
+
 import numpy as np
 import scipy as sp
 import networkx as nx
 from numpy import pi
 
 dZ = 1
+
+T = TypeVar("T")
+R = TypeVar("R")
+
+
+def memoize_last(fn: Callable[[T], R]) -> Callable[[T], R]:
+    """Memoize a unary call keyed on its argument's identity.
+
+    Returns a wrapper that caches the most recent (arg, result) pair and
+    re-runs ``fn`` only when called with a different argument (by ``is``).
+    Used to share per-Y state across repeated calls at the same base
+    point, e.g. the inner CG of RTR.
+    """
+    cache: list[Any] = [None, None]
+
+    def wrapped(arg: T) -> R:
+        if cache[0] is not arg:
+            cache[:] = [arg, fn(arg)]
+        return cache[1]
+
+    return wrapped
 
 
 def perpendicular_vector(v):

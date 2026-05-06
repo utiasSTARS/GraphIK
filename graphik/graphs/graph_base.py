@@ -3,7 +3,7 @@ from abc import abstractmethod
 import networkx as nx
 import numpy as np
 import numpy.linalg as la
-from typing import Dict, List, Any, Union
+from typing import Dict, List, Any, Tuple, Union
 from numpy.typing import ArrayLike
 from graphik.robots.robot_base import Robot
 from graphik.utils.constants import *
@@ -260,7 +260,7 @@ class ProblemGraph(nx.DiGraph):
 
         return broken_limits
 
-    def distance_bound_matrices(self) -> ArrayLike:
+    def distance_bound_matrices(self) -> Tuple[ArrayLike, ArrayLike]:
         """
         Generates a matrices of distance bounds induced by joint variables.
         """
