@@ -12,7 +12,7 @@ class Case(TypedDict):
     name: str
     robot: Literal["schunk_lwa4d", "ur10"]
     obstacles: bool
-    solver: Literal["riemannian", "nonlinear_bfgs", "nonlinear_lbfgsb", "least_squares"]
+    solver: Literal["riemannian", "nonlinear_bfgs", "nonlinear_lbfgsb"]
     seed: int
 
 
@@ -23,5 +23,4 @@ CASES: list[Case] = [
     {"name": "riemann_ur10_obstacles",   "robot": "ur10",         "obstacles": True,  "solver": "riemannian",       "seed": 42},
     {"name": "nonlin_bfgs_schunk",       "robot": "schunk_lwa4d", "obstacles": False, "solver": "nonlinear_bfgs",   "seed": 42},
     {"name": "nonlin_lbfgsb_schunk",     "robot": "schunk_lwa4d", "obstacles": False, "solver": "nonlinear_lbfgsb", "seed": 42},
-    {"name": "leastsq_schunk",           "robot": "schunk_lwa4d", "obstacles": False, "solver": "least_squares",    "seed": 42},
 ]

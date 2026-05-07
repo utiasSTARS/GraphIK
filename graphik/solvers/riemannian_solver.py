@@ -1,48 +1,36 @@
 #!/usr/bin/env python3
 from graphik.utils.dgp import (
     adjacency_matrix_from_graph, bound_smoothing,
-    distance_matrix_from_graph, graph_from_pos, sample_matrix,
+    distance_matrix_from_graph, graph_from_pos,
 )
 
 import numpy as np
 from graphik.utils import (
-    distance_matrix_from_gram,
-    distance_matrix_from_pos,
     MDS,
     linear_projection,
     gram_from_distance_matrix,
-    memoize_last,
 )
 from graphik.utils.manifolds.fixed_rank_psd_sym import PSDFixedRank
 from graphik.graphs.graph import ProblemGraph
-from graphik.solvers import rtr
-
-
-def _import_costgrd():
-    """Lazy-import the AOT-compiled cost kernels. Only invoked when jit=True."""
-    try:
-        from graphik.solvers.costgrd import (
-            jcost, jgrad, jhess, lcost, lgrad, lhess,
-        )
-    except ModuleNotFoundError as e:
-        raise ModuleNotFoundError(
-            "jit=True requires the AOT-compiled costgrd module. "
-            "Build it via 'python -m graphik.solvers.costs'."
-        ) from e
-    return jcost, jgrad, jhess, lcost, lgrad, lhess
+from graphik.solvers import rtr, loss
 
 
 class RiemannianSolver:
     def __init__(
         self,
         graph: ProblemGraph,
-        cost_type="dense",
         jit=False,
         cache=True,
         init="bsmooth",
         *args,
         **kwargs,
     ):
+        if "cost_type" in kwargs:
+            raise TypeError(
+                "cost_type was removed in the loss-module consolidation. "
+                "The single dense backend is selected by default; pass "
+                "jit=True for the AOT-compiled kernels."
+            )
         self.params = {}
         for key in kwargs:
             setattr(self, key, kwargs[key])
@@ -54,11 +42,9 @@ class RiemannianSolver:
         # the solver's cost-state builder and the manifold's projection
         # operator. Both are perf-only — same algorithmic trajectory.
         self.cache = cache
-        self._memo = memoize_last if cache else (lambda f: f)
         if init not in ("spectral", "bsmooth"):
             raise ValueError("init must be 'spectral' or 'bsmooth'")
         self.init = init
-
 
     def generate_initialization(self, D_goal, omega, bounds=None):
         """Build a starting point for RTR. Dispatches on `self.init`:
@@ -97,119 +83,15 @@ class RiemannianSolver:
         return linear_projection(X_rand, omega, self.dim)
 
     def create_cost(self, D_goal, omega):
-        if self.jit:
-            inds = np.nonzero(np.triu(omega))
-            jcost, jgrad, jhess, _, _, _ = _import_costgrd()
-
-            def cost(Y):
-                return jcost(Y, D_goal, inds)
-
-            def egrad(Y):
-                return jgrad(Y, D_goal, inds)
-
-            def ehessp(Y, Z):
-                return jhess(Y, Z, D_goal, inds)
-
-            return cost, egrad, ehessp
-
-        # Per-Y state shared across cost / egrad / ehess at the same Y.
-        # ``_state(Y)`` is memoized when cache_cost=True; RTR's inner CG
-        # then pays the build once per outer iteration.
-        def _build_state(Y):
-            S = omega * (D_goal - distance_matrix_from_pos(Y))
-            S_diag = S.copy()
-            np.fill_diagonal(S_diag, S_diag.diagonal() - np.sum(S_diag, axis=1))
-            return S, S_diag
-
-        _state = self._memo(_build_state)
-
-        def cost(Y):
-            S, _ = _state(Y)
-            return np.linalg.norm(S) ** 2 / 2
-
-        def egrad(Y):
-            _, S_diag = _state(Y)
-            return 2 * S_diag.dot(Y)
-
-        def ehessp(Y, Z):
-            _, S_diag = _state(Y)
-            YZT = Y.dot(Z.T)
-            YZT += YZT.T
-            dSdZ = -omega * distance_matrix_from_gram(YZT)
-            np.fill_diagonal(dSdZ, dSdZ.diagonal() - np.sum(dSdZ, axis=1))
-            return 2 * (dSdZ.dot(Y) + S_diag.dot(Z))
-
-        return cost, egrad, ehessp
+        return loss.for_riemannian(
+            D_goal, omega, jit=self.jit, cache=self.cache,
+        )
 
     def create_cost_limits(self, D_goal, omega, psi_L, psi_U):
-        diff = psi_L != psi_U
-        inds = np.nonzero(np.triu(omega) + np.triu(diff * (psi_L > 0)) + np.triu(diff * (psi_U > 0)))
-        LL = diff*(psi_L>0)
-        UU = diff*(psi_U>0)
-
-        if self.jit:
-            _, _, _, lcost, lgrad, lhess = _import_costgrd()
-
-            def cost(Y):
-                return lcost(Y, D_goal, omega, psi_L, psi_U, inds)
-
-            def egrad(Y):
-                return lgrad(Y, D_goal, omega, psi_L, psi_U, inds)
-
-            def ehess(Y, v):
-                return lhess(Y, v, D_goal, omega, psi_L, psi_U, inds)
-
-            return cost, egrad, ehess
-
-        # Per-Y state shared across cost / egrad / ehess at the same Y.
-        # The three constraint slices (A0/A1/A2) enter the gradient and
-        # Hessian only through the linear adjoint operator, which commutes
-        # with summation — so we fold the (3, N, N) stack into single
-        # (N, N) arrays A_adj and m_total. Y_diff is the pairwise-difference
-        # tensor that lets ehess express
-        #   adjoint(M).dot(Y) == sum_k M[i,k] * (Y[k,:] - Y[i,:])
-        # as a batched matmul.
-        def _build_state(Y):
-            D = distance_matrix_from_pos(Y)
-            A0 = omega * (D_goal - D)
-            A1 = np.maximum(psi_L - LL * D, 0)
-            A2 = -np.maximum(-psi_U + UU * D, 0)
-            A_sum = A0 + A1 + A2
-            A_adj = A_sum.copy()
-            np.fill_diagonal(
-                A_adj, A_adj.diagonal() - np.sum(A_sum, axis=1),
-            )
-            m4 = -np.where(A1 > 0, 1, 0) * LL
-            m5 = -np.where(-A2 > 0, 1, 0) * UU
-            m_total = -omega + m4 + m5
-            Y_diff = Y[None, :, :] - Y[:, None, :]  # (N, N, d)
-            return {
-                "A0": A0, "A1": A1, "A2": A2,
-                "A_adj": A_adj, "m_total": m_total, "Y_diff": Y_diff,
-            }
-
-        _state = self._memo(_build_state)
-
-        def cost(Y):
-            s = _state(Y)
-            return (np.linalg.norm(s["A0"])**2
-                    + np.linalg.norm(s["A1"])**2
-                    + np.linalg.norm(s["A2"])**2) / 2
-
-        def egrad(Y):
-            s = _state(Y)
-            return 2 * s["A_adj"].dot(Y)
-
-        def ehess(Y, Z):
-            s = _state(Y)
-            d_yz = distance_matrix_from_gram(Y.dot(Z.T) + Z.dot(Y.T))
-            M = s["m_total"] * d_yz
-            # adjoint(M).dot(Y) reformulated as a batched matmul:
-            #   row i is M[i, :] @ Y_diff[i, :, :].
-            adj_M_Y = np.matmul(M[:, None, :], s["Y_diff"]).squeeze(1)
-            return 2 * (adj_M_Y + s["A_adj"].dot(Z))
-
-        return cost, egrad, ehess
+        return loss.for_riemannian(
+            D_goal, omega, psi_L=psi_L, psi_U=psi_U,
+            jit=self.jit, cache=self.cache,
+        )
 
     def solve(
         self,

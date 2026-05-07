@@ -32,7 +32,7 @@ def jgrad(Y, D_goal, inds):
             grad[jdx, kdx] += (
                 -4 * (D_goal[jdx, idx] - nrm) * (Y[jdx, kdx] - Y[idx, kdx])
             )
-    return 0.5 * grad
+    return grad
 
 
 @cc.export("jhess", "f8[:,:](f8[:,:],f8[:,:],f8[:,:],UniTuple(u8[:],2))")
@@ -55,7 +55,7 @@ def jhess(Y, w, D_goal, inds):
                 2 * sc * (Y[jdx, kdx] - Y[idx, kdx])
                 + (nrm - D_goal[jdx, idx]) * (w[jdx, kdx] - w[idx, kdx])
             )
-    return 0.5 * hess
+    return hess
 
 @cc.export("jcost_and_grad", "Tuple((f8, f8[:,:]))(f8[:,:],f8[:,:],UniTuple(u8[:],2))")
 def jcost_and_grad(Y, D_goal, inds):
@@ -74,7 +74,7 @@ def jcost_and_grad(Y, D_goal, inds):
                 -4 * (D_goal[jdx, idx] - nrm) * (Y[jdx, kdx] - Y[idx, kdx])
             )
         cost += 2 * (D_goal[idx, jdx] - nrm) ** 2
-    return 0.5*cost, 0.5* grad
+    return 0.5*cost, grad
 
 @cc.export("lcost", "f8(f8[:,:],f8[:,:],f8[:,:],f8[:,:],f8[:,:],UniTuple(u8[:],2))")
 def lcost(Y, D_goal, omega, psi_L, psi_U, inds):
@@ -120,7 +120,7 @@ def lgrad(Y, D_goal, omega, psi_L, psi_U, inds):
                     a = (nrm - psi_U[idx, jdx]) * (Y[idx, kdx] - Y[jdx, kdx])
                     grad[idx, kdx] += a
                     grad[jdx, kdx] += -a
-    return 2*grad
+    return 4*grad
 
 @cc.export("lcost_and_grad", "Tuple((f8, f8[:,:]))(f8[:,:],f8[:,:],f8[:,:],f8[:,:],f8[:,:],UniTuple(u8[:],2))")
 def lcost_and_grad(Y, D_goal, omega, psi_L, psi_U, inds):
@@ -159,14 +159,14 @@ def lcost_and_grad(Y, D_goal, omega, psi_L, psi_U, inds):
                     grad[idx, kdx] += (
                         4
                         * (nrm - psi_U[idx, jdx])
-                        * (Y[idx, kdx] - Y[jdx, kdx])  # might be wrong
+                        * (Y[idx, kdx] - Y[jdx, kdx])
                     )
                     grad[jdx, kdx] += (
                         4
                         * (nrm - psi_U[jdx, idx])
-                        * (Y[jdx, kdx] - Y[idx, kdx])  # might be wrong
+                        * (Y[jdx, kdx] - Y[idx, kdx])
                     )
-    return 0.5*cost, 0.5*grad
+    return 0.5*cost, grad
 
 @cc.export(
     "lhess",
@@ -204,6 +204,6 @@ def lhess(Y, w, D_goal, omega, psi_L, psi_U, inds):
                 hess[idx, kdx] += c
                 hess[jdx, kdx] += -c
 
-    return 2 * hess
+    return 4 * hess
 if __name__ == "__main__":
     cc.compile()

@@ -1,9 +1,8 @@
-"""Finite-difference checks for the analytical gradient and Hessian
-exposed by ``NonlinearSolver.create_cost``.
+"""Finite-difference checks for the analytical gradient and HVP exposed by
+``NonlinearSolver.create_cost``.
 
-Was previously a ``if __name__ == "__main__":`` block at the bottom of
-``graphik/solvers/nonlinear_solver.py``; lifted here so it runs under
-the regular test suite.
+After the loss-consolidation refactor there is a single dense backend; the
+prior ``loop`` / ``sparse`` / ``dense`` test variants collapse to one.
 """
 from __future__ import annotations
 
@@ -32,16 +31,8 @@ def _numerical_gradient(Y, f, eps=1e-6):
     return g
 
 
-def _numerical_hessian(Y, f, eps=1e-5):
-    H = np.zeros((Y.size, Y.size))
-    for i in range(Y.size):
-        Y[i] += eps
-        _, plus = f(Y)
-        Y[i] -= 2 * eps
-        _, minus = f(Y)
-        Y[i] += eps
-        H[:, i] = (plus - minus) / (2 * eps)
-    return H.ravel()
+def _numerical_hvp(Y, grad_fn, w, eps=1e-5):
+    return (grad_fn(Y + eps * w) - grad_fn(Y - eps * w)) / (2 * eps)
 
 
 class NonlinearSolverGradientTests(unittest.TestCase):
@@ -49,8 +40,6 @@ class NonlinearSolverGradientTests(unittest.TestCase):
     def setUpClass(cls):
         robot, graph = load_ur10()
         rng = np.random.default_rng(0)
-        # Realize a random configuration to get a fully-known position
-        # graph (every edge has a distance).
         joint_names = list(robot.random_configuration().keys())
         q = {name: float(rng.uniform(-np.pi, np.pi)) for name in joint_names}
         G = graph.realization(q)
@@ -61,46 +50,31 @@ class NonlinearSolverGradientTests(unittest.TestCase):
         cls.n_points = cls.omega.shape[0]
         cls.rng = np.random.default_rng(1)
 
-    def _check_gradient(self, cost_type, atol=1e-6):
-        solver = NonlinearSolver(self.graph, cost_type=cost_type)
-        cost_and_grad, _, _ = solver.create_cost(self.D_goal, self.omega)
-        f = lambda Y: cost_and_grad(Y.flatten())
+    def test_gradient_matches_fd(self):
+        solver = NonlinearSolver(self.graph)
+        cost_and_grad, _ = solver.create_cost(self.D_goal, self.omega)
         for trial in range(5):
-            Y = self.rng.standard_normal((self.n_points, self.dim))
-            _, g = f(Y)
-            g_fd = _numerical_gradient(Y.flatten(), f)
-            self.assertTrue(
-                np.allclose(g, g_fd, atol=atol),
-                f"{cost_type}: trial {trial} gradient mismatch",
+            Y = self.rng.standard_normal((self.n_points, self.dim)).ravel()
+            _, g = cost_and_grad(Y)
+            g_fd = _numerical_gradient(Y, cost_and_grad)
+            np.testing.assert_allclose(
+                g, g_fd, atol=1e-6,
+                err_msg=f"trial {trial}: analytical gradient != FD",
             )
 
-    def _check_hessian(self, cost_type, atol=1e-3):
-        solver = NonlinearSolver(self.graph, cost_type=cost_type)
-        cost_and_grad, _, hess = solver.create_cost(self.D_goal, self.omega)
-        f = lambda Y: cost_and_grad(Y.flatten())
+    def test_hvp_matches_fd_of_grad(self):
+        solver = NonlinearSolver(self.graph)
+        cost_and_grad, hessp = solver.create_cost(self.D_goal, self.omega)
+        grad_only = lambda Y: cost_and_grad(Y)[1]
         for trial in range(5):
-            Y = self.rng.standard_normal((self.n_points, self.dim))
-            H = hess(Y.flatten()).flatten()
-            H_fd = _numerical_hessian(Y.flatten(), f)
-            self.assertTrue(
-                np.allclose(H, H_fd, atol=atol),
-                f"{cost_type}: trial {trial} Hessian mismatch",
+            Y = self.rng.standard_normal((self.n_points, self.dim)).ravel()
+            w = self.rng.standard_normal(Y.size)
+            hv = hessp(Y, w)
+            hv_fd = _numerical_hvp(Y, grad_only, w)
+            np.testing.assert_allclose(
+                hv, hv_fd, atol=1e-3,
+                err_msg=f"trial {trial}: analytical HVP != FD",
             )
-
-    def test_gradient_loop(self):
-        self._check_gradient("loop")
-
-    def test_gradient_sparse(self):
-        self._check_gradient("sparse")
-
-    def test_gradient_dense(self):
-        self._check_gradient("dense")
-
-    def test_hessian_loop(self):
-        self._check_hessian("loop")
-
-    def test_hessian_sparse(self):
-        self._check_hessian("sparse")
 
 
 if __name__ == "__main__":

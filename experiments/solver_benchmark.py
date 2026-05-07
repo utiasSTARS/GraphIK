@@ -5,7 +5,6 @@ Compares wall time and pose-recovery accuracy across:
 - Riemannian (RTR) with the legacy bound-smoothing + MDS init
 - BFGS                   — scipy.optimize.minimize, method='BFGS'
 - L-BFGS-B               — scipy.optimize.minimize, method='L-BFGS-B' with anchor pinning
-- TRF                    — scipy.optimize.least_squares, method='trf'
 
 Wall time includes any per-pose initialization the solver performs (e.g.
 bound-smoothing for the legacy init or spectral eigendecomposition for the
@@ -39,7 +38,6 @@ from graphik.utils.roboturdf import (
 )
 from graphik.solvers.riemannian_solver import RiemannianSolver
 from graphik.solvers.nonlinear_solver import NonlinearSolver
-from graphik.solvers.least_squares_solver import LeastSquaresSolver
 
 
 ROBOTS = {
@@ -82,25 +80,21 @@ def run_rtr_bsmooth(graph, D_goal, omega, G_partial):
 
 def run_bfgs(graph, D_goal, omega, G_partial):
     lb, ub = bound_smoothing(G_partial)
-    solver = NonlinearSolver(graph, cost_type="sparse")
+    solver = NonlinearSolver(graph)
+    # gtol=1e-8 to match RTR's stopping tolerance. scipy's BFGS does not
+    # accept ftol, so we don't pass one.
     return solver.solve(
-        D_goal, omega, use_limits=True, bounds=(lb, ub), method="BFGS"
+        D_goal, omega, use_limits=True, bounds=(lb, ub), method="BFGS",
+        options={"gtol": 1e-8},
     )["x"]
 
 
 def run_lbfgsb(graph, D_goal, omega, G_partial):
     lb, ub = bound_smoothing(G_partial)
-    solver = NonlinearSolver(graph, cost_type="sparse")
+    solver = NonlinearSolver(graph)
     return solver.solve(
-        D_goal, omega, use_limits=True, bounds=(lb, ub), method="L-BFGS-B"
-    )["x"]
-
-
-def run_trf(graph, D_goal, omega, G_partial):
-    lb, ub = bound_smoothing(G_partial)
-    solver = LeastSquaresSolver(graph, cost_type="sparse")
-    return solver.solve(
-        D_goal, omega, use_limits=True, bounds=(lb, ub), method="trf"
+        D_goal, omega, use_limits=True, bounds=(lb, ub), method="L-BFGS-B",
+        options={"gtol": 1e-8, "ftol": 0},
     )["x"]
 
 
@@ -109,7 +103,6 @@ CONFIGS = [
     ("rtr-bsmooth",  run_rtr_bsmooth),
     ("bfgs",         run_bfgs),
     ("l-bfgs-b",     run_lbfgsb),
-    ("trf",          run_trf),
 ]
 
 
