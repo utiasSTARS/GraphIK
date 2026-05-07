@@ -14,8 +14,10 @@ from graphik.utils import (
     memoize_last,
 )
 from graphik.utils.manifolds.fixed_rank_psd_sym import PSDFixedRank
+from graphik.utils.chirality import chirality_reference
 from graphik.graphs.graph_base import ProblemGraph
 from graphik.solvers import rtr
+from graphik.solvers.chirality_cost import chirality_cost_grad
 
 
 def _import_costgrd():
@@ -40,6 +42,7 @@ class RiemannianSolver:
         jit=False,
         cache=True,
         init="bsmooth",
+        chirality=None,
         *args,
         **kwargs,
     ):
@@ -58,6 +61,12 @@ class RiemannianSolver:
         if init not in ("spectral", "bsmooth"):
             raise ValueError("init must be 'spectral' or 'bsmooth'")
         self.init = init
+        # Chirality side-information: a dict from ``chirality_reference`` or
+        # ``True`` to auto-build at zero config. ``None`` keeps the original
+        # distance-only cost.
+        if chirality is True:
+            chirality = chirality_reference(graph)
+        self.chirality = chirality
 
 
     def generate_initialization(self, D_goal, omega, bounds=None):
@@ -96,6 +105,33 @@ class RiemannianSolver:
         X_rand = MDS(gram_from_distance_matrix(D_rand), eps=1e-8)
         return linear_projection(X_rand, omega, self.dim)
 
+    def _add_chirality(self, cost, egrad, ehess):
+        """Augment a (cost, egrad, ehess) triple with the signed-volume
+        penalty. The penalty enters cost and gradient exactly; ``ehess`` is
+        passed through unchanged so the trust-region quadratic model
+        approximates the chirality contribution as zero curvature. RTR
+        adapts via the trust radius if needed.
+        """
+        if self.chirality is None:
+            return cost, egrad, ehess
+        chir = self.chirality
+        tuples = chir["tuples"]
+        signs = chir["signs"]
+        eps = np.asarray(chir["eps"], dtype=float)
+        if eps.ndim == 0:
+            eps = np.full(signs.shape, float(eps))
+        weight = float(chir.get("weight", 1.0))
+
+        def cost_c(Y):
+            c, _ = chirality_cost_grad(Y, tuples, signs, eps, weight)
+            return cost(Y) + c
+
+        def egrad_c(Y):
+            _, g = chirality_cost_grad(Y, tuples, signs, eps, weight)
+            return egrad(Y) + g
+
+        return cost_c, egrad_c, ehess
+
     def create_cost(self, D_goal, omega):
         if self.jit:
             inds = np.nonzero(np.triu(omega))
@@ -110,7 +146,7 @@ class RiemannianSolver:
             def ehessp(Y, Z):
                 return jhess(Y, Z, D_goal, inds)
 
-            return cost, egrad, ehessp
+            return self._add_chirality(cost, egrad, ehessp)
 
         # Per-Y state shared across cost / egrad / ehess at the same Y.
         # ``_state(Y)`` is memoized when cache_cost=True; RTR's inner CG
@@ -139,7 +175,7 @@ class RiemannianSolver:
             np.fill_diagonal(dSdZ, dSdZ.diagonal() - np.sum(dSdZ, axis=1))
             return 2 * (dSdZ.dot(Y) + S_diag.dot(Z))
 
-        return cost, egrad, ehessp
+        return self._add_chirality(cost, egrad, ehessp)
 
     def create_cost_limits(self, D_goal, omega, psi_L, psi_U):
         diff = psi_L != psi_U
@@ -159,7 +195,7 @@ class RiemannianSolver:
             def ehess(Y, v):
                 return lhess(Y, v, D_goal, omega, psi_L, psi_U, inds)
 
-            return cost, egrad, ehess
+            return self._add_chirality(cost, egrad, ehess)
 
         # Per-Y state shared across cost / egrad / ehess at the same Y.
         # The three constraint slices (A0/A1/A2) enter the gradient and
@@ -209,7 +245,7 @@ class RiemannianSolver:
             adj_M_Y = np.matmul(M[:, None, :], s["Y_diff"]).squeeze(1)
             return 2 * (adj_M_Y + s["A_adj"].dot(Z))
 
-        return cost, egrad, ehess
+        return self._add_chirality(cost, egrad, ehess)
 
     def solve(
         self,
