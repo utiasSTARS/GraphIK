@@ -179,6 +179,104 @@ class TestAdjacencyMatrices(unittest.TestCase):
 
         assert_array_equal(F, F_gt)
 
+    # ------------------------------------------------------------------
+    # 3D revolute chain — mirrors the planar chain tests above. n=3 gives
+    # a 10x10 matrix (4 anchors + 2 nodes per joint) and exercises both
+    # an intermediate joint pair (joint 0->2) and an end-effector joint
+    # pair (joint 1->3) in the level-2 set_limits machinery.
+    #
+    # Graph construction adds DIST to:
+    #   - base K4 on {p0, x, y, q0}: 6 edges
+    #   - intra-joint (p_i, q_i) for each joint: 3 new edges (p0-q0 dup'd by base)
+    #   - inter-joint complete-bipartite K_{2,2} between consecutive joints: 12 edges
+    # Construction also adds BOUNDED-only edges (no DIST) for:
+    #   - level-2 set_limits (joint 0->2 and joint 1->3): 8 edges
+    #   - root_angle_limits (x/y to p1/q1): 4 edges
+    # adjacency_matrix_from_graph filters by DIST, so BOUNDED-only edges
+    # do not appear unless goal-injection completion later assigns DIST.
+    # ------------------------------------------------------------------
+    def _revolute_chain_n3_params(self):
+        """DH params for a 3-joint 3D revolute chain used below."""
+        return {
+            "a": {"p1": 1.0, "p2": 1.0, "p3": 1.0},
+            "alpha": {"p1": pi / 2, "p2": 0.0, "p3": pi / 2},
+            "d": {"p1": 0.0, "p2": 0.0, "p3": 0.0},
+            "theta": {"p1": 0.0, "p2": 0.0, "p3": 0.0},
+            "modified_dh": False,
+            "parents": {"p0": ["p1"], "p1": ["p2"], "p2": ["p3"]},
+            "num_joints": 3,
+        }
+
+    def test_revolute_chain_construction_only(self):
+        # Construction-only adjacency (no goal injection). This isolates
+        # graph construction from goal-completion: only DIST set during
+        # _build_*_subgraph shows up. The 12 BOUNDED-only edges (8 from
+        # level-2 set_limits, 4 from root_angle_limits) do NOT appear
+        # here -- they have UPPER/LOWER but no DIST.
+        #
+        # Node order (insertion order from nx.compose(base, structure)):
+        #   0: p0   1: x   2: y   3: q0
+        #   4: p1   5: q1   6: p2   7: q2   8: p3   9: q3
+        #
+        # Expected entries (21 unique undirected edges with DIST):
+        #   - base K4 on {p0, x, y, q0}: 6
+        #   - intra-joint (p1,q1), (p2,q2), (p3,q3): 3 (plus (p0,q0) shared with base)
+        #   - inter-joint complete bipartite for each of 3 consecutive pairs: 12
+        F_gt = np.array([
+            [0, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+            [1, 0, 1, 1, 0, 0, 0, 0, 0, 0],
+            [1, 1, 0, 1, 0, 0, 0, 0, 0, 0],
+            [1, 1, 1, 0, 1, 1, 0, 0, 0, 0],
+            [1, 0, 0, 1, 0, 1, 1, 1, 0, 0],
+            [1, 0, 0, 1, 1, 0, 1, 1, 0, 0],
+            [0, 0, 0, 0, 1, 1, 0, 1, 1, 1],
+            [0, 0, 0, 0, 1, 1, 1, 0, 1, 1],
+            [0, 0, 0, 0, 0, 0, 1, 1, 0, 1],
+            [0, 0, 0, 0, 0, 0, 1, 1, 1, 0],
+        ])
+
+        params = self._revolute_chain_n3_params()
+        robot = Robot({**params, "dim": 3})
+        graph = ProblemGraph(robot)
+
+        F = adjacency_matrix_from_graph(graph).astype(int)
+        assert_array_equal(F, F_gt)
+
+    def test_revolute_chain_pose_goal(self):
+        # Same node order as the construction-only test.
+        #
+        # After from_pose(T_goal_p3), positions are set for {p0, x, y, q0,
+        # p3, q3} (4 anchors + EE p-node + EE q-node from _pose_goal). The
+        # completion step then adds DIST between every pair of positioned
+        # nodes (8 new edges total): (p0,p3), (p0,q3), (x,p3), (x,q3),
+        # (y,p3), (y,q3), (q0,p3), (q0,q3). All BOUNDED-only edges
+        # involving the unpositioned p1/q1/p2/q2 nodes (level-2 set_limits
+        # joint 0->2, level-2 set_limits joint 1->3, root_angle_limits)
+        # stay zero in the matrix.
+        F_gt = np.array([
+            [0, 1, 1, 1, 1, 1, 0, 0, 1, 1],
+            [1, 0, 1, 1, 0, 0, 0, 0, 1, 1],
+            [1, 1, 0, 1, 0, 0, 0, 0, 1, 1],
+            [1, 1, 1, 0, 1, 1, 0, 0, 1, 1],
+            [1, 0, 0, 1, 0, 1, 1, 1, 0, 0],
+            [1, 0, 0, 1, 1, 0, 1, 1, 0, 0],
+            [0, 0, 0, 0, 1, 1, 0, 1, 1, 1],
+            [0, 0, 0, 0, 1, 1, 1, 0, 1, 1],
+            [1, 1, 1, 1, 0, 0, 1, 1, 0, 1],
+            [1, 1, 1, 1, 0, 0, 1, 1, 1, 0],
+        ])
+
+        params = self._revolute_chain_n3_params()
+        robot = Robot({**params, "dim": 3})
+        graph = ProblemGraph(robot)
+
+        q_goal = robot.random_configuration()
+        T_goal = robot.pose(q_goal, "p3")
+        G = graph.from_pose(T_goal)
+
+        F = adjacency_matrix_from_graph(G).astype(int)
+        assert_array_equal(F, F_gt)
+
     def test_planar_tree_pose_goal(self):
         height = 3
         gen = nx.balanced_tree(2, height, create_using=nx.DiGraph)
