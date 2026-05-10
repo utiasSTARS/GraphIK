@@ -60,7 +60,7 @@ def distance_matrix_from_graph(G: nx.Graph, label=DIST, nonedge=0) -> NDArray:
         G = G.to_undirected(as_view=True)
 
     return (
-        nx.to_numpy_array(G, weight=DIST, nonedge=nonedge, dtype=np.dtype(float)) ** 2
+        nx.to_numpy_array(G, weight=label, nonedge=nonedge, dtype=np.dtype(float)) ** 2
     )
 
 
@@ -171,14 +171,12 @@ def factor(A: NDArray):
 
 ## perform classic Multidimensional scaling
 def MDS(B: NDArray, eps: float = 1e-5):
-    n = B.shape[0]
-    x = factor(B)
-    (evals, evecs) = np.linalg.eigh(x)
-    K = len(evals[evals > eps])
-    if K < n:
-        # only first K columns
-        x = x[:, 0:K]
-    return x
+    evals, evecs = np.linalg.eigh(B)            # ascending
+    evals = evals[::-1]
+    evecs = evecs[:, ::-1]
+    K = int((evals > eps).sum())
+    evals = np.maximum(evals[:K], 0.0)
+    return evecs[:, :K] * np.sqrt(evals)
 
 
 def linear_projection(P: NDArray, F: NDArray, dim):

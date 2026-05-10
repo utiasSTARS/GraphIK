@@ -189,7 +189,14 @@ class TestDistanceMatrix(unittest.TestCase):
             ).T
 
             Y = pos_from_graph(graph.realization(q))
-            R, t = best_fit_transform(X[[0, 1, 2, -1], :], Y[[0, 1, 2, -1], :])
+            # SVD reconstruction is chirality-ambiguous; resolve before aligning.
+            idx = [0, 1, 2, -1]
+            A_c = X[idx] - X[idx].mean(0)
+            B_c = Y[idx] - Y[idx].mean(0)
+            if np.linalg.det(A_c.T @ B_c) < 0:
+                X = X.copy()
+                X[:, -1] *= -1
+            R, t = best_fit_transform(X[idx, :], Y[idx, :])
             P_e = (R @ X.T + t.reshape(2, 1)).T
 
             self.assertIsNone(assert_allclose(P_e, Y, atol=1e-8))

@@ -50,7 +50,10 @@ def best_fit_transform(A: NDArray, B: NDArray) -> Tuple[NDArray, NDArray]:
 
     H = np.dot(AA.T, BB)
     U, S, Vt = np.linalg.svd(H)
-    R = np.dot(Vt.T, U.T)
+    d = np.sign(np.linalg.det(Vt.T @ U.T))
+    D = np.eye(A.shape[1])
+    D[-1, -1] = d
+    R = Vt.T @ D @ U.T
 
     t = centroid_B.T - np.dot(R, centroid_A.T)
     return R, t
