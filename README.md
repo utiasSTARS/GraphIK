@@ -60,7 +60,7 @@ In this example, we'll parse a [URDF file](https://industrial-training-master.re
 from graphik.utils.roboturdf import load_schunk_lwa4d
 robot, graph = load_schunk_lwa4d()
 ```
-GraphIK's interface between robot models and IK solvers is the abstract [`ProblemGraph`](https://github.com/utiasSTARS/GraphIK/blob/main/graphik/graphs/graph_base.py) class. For the LWA4P, we'll use `ProblemGraphRevolute`, a subclass of `ProblemGraph` that can represent 3D robots with revolute joints.
+GraphIK's interface between robot models and IK solvers is the [`ProblemGraph`](https://github.com/utiasSTARS/GraphIK/blob/main/graphik/graphs/graph.py) class, a single concrete `nx.DiGraph` subclass that handles both 2D and 3D revolute robots (the workspace dimension is read from the supplied `Robot`).
 
 ### 2. Instantiate a ProblemGraph Object with Obstacles
 If you are considering an environment with spherical obstacles, you can include constraints that prevent collisions. In this example, we will use a set of spheres that approximate a table: 
