@@ -647,29 +647,3 @@ class ProblemGraph(nx.DiGraph):
             T_trans = trans_axis(self.axis_length, "z")
             T = T @ T_trans
         return T
-
-    # ------------------------------------------------------------------
-    # 3D-only sampling helper (keep dim-agnostic — works for any dim)
-    # ------------------------------------------------------------------
-    def distance_bounds_from_sampling(self):
-        robot = self.robot
-        ids = self.node_ids
-        q_rand = robot.random_configuration()
-        D_min = self.distance_matrix_from_joints(q_rand)
-        D_max = self.distance_matrix_from_joints(q_rand)
-
-        for _ in range(2000):
-            q_rand = robot.random_configuration()
-            D_rand = self.distance_matrix_from_joints(q_rand)
-            D_max[D_rand > D_max] = D_rand[D_rand > D_max]
-            D_min[D_rand < D_min] = D_rand[D_rand < D_min]
-
-        for idx in range(len(D_max)):
-            for jdx in range(len(D_max)):
-                e1 = ids[idx]
-                e2 = ids[jdx]
-                self.add_edge(e1, e2)
-                self[e1][e2][LOWER] = sqrt(D_min[idx, jdx])
-                self[e1][e2][UPPER] = sqrt(D_max[idx, jdx])
-                if abs(D_max[idx, jdx] - D_min[idx, jdx]) < 1e-5:
-                    self[e1][e2][DIST] = abs(D_max[idx, jdx] - D_min[idx, jdx])

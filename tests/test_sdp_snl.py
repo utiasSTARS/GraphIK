@@ -5,7 +5,7 @@ from numpy.testing import assert_allclose
 from graphik.graphs import ProblemGraph
 
 from graphik.robots import Robot
-from graphik.solvers.constraints import get_full_revolute_nearest_point
+from graphik.solvers.sdp_snl import get_full_revolute_nearest_point
 from graphik.solvers.sdp_snl import (
     distance_constraints,
     distance_constraints_graph,

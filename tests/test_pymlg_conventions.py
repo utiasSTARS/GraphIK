@@ -113,15 +113,9 @@ def test_se3_left_jacobian_inv_at_origin_is_identity():
 
 
 def test_se2_left_jacobian_inv_exists():
-    """LocalSolver.gen_grad_ee uses SE2.left_jacobian_inv when dim==2.
-    If PyMLG doesn't expose it, Task 9 must use lambda x: np.eye(3) fallback
-    (matching gen_cost_and_grad_ee's existing pattern in the original code).
-    """
-    assert hasattr(SE2, "left_jacobian_inv"), (
-        "PyMLG SE2 has no left_jacobian_inv — joint_angle_solver Task 9 "
-        "must use lambda x: np.eye(3) fallback for the dim==2 branch of "
-        "gen_grad_ee"
-    )
+    """LocalSolver.gen_cost_and_grad_ee uses SE2.left_jacobian_inv when
+    dim==2; its 2D gradient is wrong without it."""
+    assert hasattr(SE2, "left_jacobian_inv")
     J = SE2.left_jacobian_inv(np.zeros(3))
     np.testing.assert_allclose(J, np.eye(3), atol=1e-12)
 

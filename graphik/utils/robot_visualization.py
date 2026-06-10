@@ -10,11 +10,12 @@ from mpl_toolkits.mplot3d import Axes3D
 
 # mpl.rcParams['legend.fontsize'] = 10
 
-# Use teX to render text
-rc("font", **{"family": "serif", "serif": ["Computer Modern"]})
-rc("text", usetex=True)
-# Change the sample figure directory to the local assets/ folder in this repo
-# rc('examples', directory='assets')
+# LaTeX text rendering is opt-in: enabling it at import time breaks the
+# module for users without a TeX install. Call this before plotting if
+# you want publication-style labels.
+def use_latex_text():
+    rc("font", **{"family": "serif", "serif": ["Computer Modern"]})
+    rc("text", usetex=True)
 
 
 def plot_heatmap(

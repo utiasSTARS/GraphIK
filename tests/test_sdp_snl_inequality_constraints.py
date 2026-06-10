@@ -9,9 +9,9 @@ import pytest
 from graphik.solvers.sdp_snl import (
     distance_constraints_graph,
     distance_range_constraints,
+    get_full_revolute_nearest_point,
     solve_nearest_point_sdp,
 )
-from graphik.solvers.constraints import get_full_revolute_nearest_point
 from graphik.utils.constants import POS
 from graphik.utils.roboturdf import load_ur10, load_truncated_ur10
 

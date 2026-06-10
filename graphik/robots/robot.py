@@ -36,7 +36,6 @@ class Robot(nx.DiGraph):
             raise ValueError(f"dim must be 2 or 3, got {self.dim}")
         self._SE = SE2 if self.dim == 2 else SE3
 
-        self.lambdified = False
         self.params = params
         self.n = params["num_joints"]
 
@@ -127,9 +126,6 @@ class Robot(nx.DiGraph):
     def lb(self, lb: dict):
         self._lb = lb if type(lb) is dict else list_to_variable_dict(flatten([lb]))
 
-    @property
-    def spherical(self) -> bool:
-        return False
 
     # ------------------------------------------------------------------
     # Configuration helpers
@@ -154,13 +150,6 @@ class Robot(nx.DiGraph):
             for node in self.kinematic_map[ROOT][ee][1:]:
                 T[node] = self.pose(joint_angles, node)
         return T
-
-    def end_effector_pos(self, q: Dict[str, float]) -> Dict[str, ArrayLike]:
-        goals = {}
-        for ee in self.end_effectors:
-            for node in ee:
-                goals[node] = self.pose(q, node)[:-1, -1]
-        return goals
 
     # ------------------------------------------------------------------
     # Dim-aware kinematics
@@ -264,38 +253,4 @@ class Robot(nx.DiGraph):
                     T = T @ self._SE.Exp(self.nodes[ppred]["S"] * joint_angles[pred])
                     Ad = self._SE.adjoint(T)
                     J[node][:, idx] = Ad @ self.nodes[pred]["S"]
-        return J
-
-    def jacobian_geometric(
-        self,
-        joint_angles: Dict[str, float],
-        nodes: Union[List[str], str],
-        Ts: Dict[str, np.ndarray] = None,
-    ) -> Dict[str, ArrayLike]:
-        """Geometric Jacobian (linear+angular) for end-effector p-nodes. 3D-only."""
-        assert self.dim == 3, "jacobian_geometric is 3D-only"
-        kmap = self.kinematic_map[ROOT]
-
-        if nodes is None:
-            nodes = []
-            for ee in self.end_effectors:
-                if ee[0][0] == MAIN_PREFIX:
-                    nodes += [ee[0]]
-                elif ee[1][0] == MAIN_PREFIX:
-                    nodes += [ee[1]]
-
-        if Ts is None:
-            Ts = self.get_all_poses(joint_angles)
-
-        J = {}
-        for node in nodes:
-            path = kmap[node][1:]
-            p_ee = Ts[node][:3, 3]
-            J[node] = np.zeros([6, self.n])
-            for idx, joint in enumerate(path):
-                T_0_i = Ts[list(self.parents.predecessors(joint))[0]]
-                z_hat_i = T_0_i[:3, 2]
-                p_i = T_0_i[:3, 3]
-                J[node][:3, idx] = np.cross(z_hat_i, p_ee - p_i)
-                J[node][3:, idx] = z_hat_i
         return J

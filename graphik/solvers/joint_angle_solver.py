@@ -1,17 +1,12 @@
-from graphik.utils.geometry import skew
-import graphik
 import numpy as np
 import networkx as nx
-from numpy.typing import ArrayLike
-from typing import Dict, List, Any, Union
+from typing import Dict, Any
 from scipy.optimize import minimize
 from pymlg.numpy import SE3, SO3, SE2, SO2
-from numpy import pi
-from graphik.utils.roboturdf import RobotURDF
 from graphik.utils.constants import *
 from graphik.graphs.graph import ProblemGraph
 from graphik.utils.utils import list_to_variable_dict
-from graphik.utils.roboturdf import load_kuka, load_ur10
+
 
 class LocalSolver:
     def __init__(self, robot_graph: ProblemGraph, params: Dict["str", Any]):
@@ -34,53 +29,6 @@ class LocalSolver:
             fun = self.gen_obstacle_constraints(pairs)
             jac = self.gen_obstacle_constraint_gradient(pairs)
             self.g = [{"type": "ineq", "fun": fun, "jac": jac}]
-
-    def gen_objective_ee(self, point: str, T_goal: np.ndarray):
-        joints = self.k_map[point][1:]
-        n = len(joints)
-
-        if self.dim == 3:
-            log = SE3.Log
-            inverse = SE3.inverse
-        else:
-            log = SE2.Log
-            inverse = SE2.inverse
-
-        def objective(q):
-            q_dict = {joints[idx]: q[idx] for idx in range(n)}
-            T = self.robot.pose(q_dict, point)
-            e = log(inverse(T) @ T_goal).ravel()  # body frame
-            return e.T @ e
-
-        return objective
-
-
-    def gen_grad_ee(self, point: str, T_goal: np.ndarray):
-        joints = self.k_map[point][1:]
-        n = len(joints)
-
-        if self.dim == 3:
-            log = SE3.Log
-            inverse = SE3.inverse
-            adjoint = SE3.adjoint
-            inv_left_jacobian = SE3.left_jacobian_inv
-        else:
-            log = SE2.Log
-            inverse = SE2.inverse
-            adjoint = SE2.adjoint
-            inv_left_jacobian = SE2.left_jacobian_inv
-
-        def gradient(q):
-            q_dict = {joints[idx]: q[idx] for idx in range(n)}
-            T = self.robot.pose(q_dict, point)
-            T_inv = inverse(T)
-            J = self.robot.jacobian(q_dict, [point])
-            e = log(T_inv @ T_goal).ravel()  # body frame
-            J_e = inv_left_jacobian(e)
-            J[point] = J_e @ adjoint(T_inv) @ J[point]
-            jac = -2 * J[point].T @ e
-            return jac
-        return gradient
 
     def gen_obstacle_constraints(self, pairs: list):
         def obstacle_constraint(q):
@@ -185,66 +133,3 @@ class LocalSolver:
             options={"ftol": 1e-7},
         )
         return res
-
-
-def main():
-    #
-    # Define the problem
-    #
-
-    # robot, graph = load_ur10()
-    # scale = 0.75
-    # radius = 0.4
-    # obstacles = [
-    #     (scale * np.asarray([1, 1, 0]), radius),
-    #     (scale * np.asarray([1, -1, 0]), radius),
-    #     (scale * np.asarray([-1, 1, 0]), radius),
-    #     (scale * np.asarray([-1, -1, 0]), radius),
-    #     (scale * np.asarray([0, 0, 1]), radius),
-    #     (scale * np.asarray([0, 0, -1]), radius),
-    # ]
-
-    # for idx, obs in enumerate(obstacles):
-    #     graph.add_spherical_obstacle(f"o{idx}", obs[0], obs[1])
-
-    # q_goal = robot.random_configuration()
-    # T_goal = robot.pose(q_goal, f"p{robot.n}")
-    # goals = {f"p{robot.n}": T_goal}
-
-    # x0 = [0,0,0,0,0,0]
-    # problem = LocalSolver(graph,{})
-    # sol = problem.solve(goals, robot.random_configuration())
-    # # sol = problem.solve(goals, list_to_variable_dict(x0))
-    # print(sol)
-
-    from graphik.robots import Robot
-    from graphik.graphs import ProblemGraph
-    n = 10
-
-    a = list_to_variable_dict(np.ones(n))
-    th = list_to_variable_dict(np.zeros(n))
-    lim_u = list_to_variable_dict(np.pi * np.ones(n))
-    lim_l = list_to_variable_dict(-np.pi * np.ones(n))
-    params = {
-        "link_lengths": a,
-        "theta": th,
-        "ub": lim_u,
-        "lb": lim_l,
-        "num_joints": n
-    }
-
-    robot = Robot({**params, "dim": 2})
-    graph = ProblemGraph(robot)
-    q_goal = robot.random_configuration()
-    T_goal = robot.pose(q_goal, f"p{robot.n}")
-    goals = {f"p{robot.n}": T_goal}
-    problem = LocalSolver(graph,{})
-    sol = problem.solve(goals, robot.random_configuration())
-    q_sol = list_to_variable_dict(sol.x)
-    print(T_goal)
-    print(robot.pose(q_sol, robot.end_effectors[0]))
-
-if __name__ == '__main__':
-
-    # np.random.seed(24)  # TODO: this seems to have a significant effect on performance
-    main()

@@ -5,13 +5,26 @@ import numpy as np
 import networkx as nx
 import cvxpy as cp
 
-from graphik.utils.roboturdf import load_ur10, load_truncated_ur10
 from graphik.utils.constants import *
-from graphik.utils.chordal import complete_to_chordal_graph
+from graphik.utils.dgp import pos_from_graph
 from graphik.robots import Robot
 from graphik.graphs import ProblemGraph
-from graphik.solvers.constraints import get_full_revolute_nearest_point
 from graphik.solvers.sdp_formulations import SdpSolverParams, solve_sdp
+
+
+def get_full_revolute_nearest_point(graph, q, full_points=None):
+    nearest_points = {}
+    if full_points is None:
+        # Assume only x, y, p0, q0, and the final p (p{n+1}) is constrained
+        full_points = [f"p{idx}" for idx in range(1, graph.robot.n)] + [
+            f"q{idx}" for idx in range(1, graph.robot.n + 1)
+        ]
+    G = graph.realization(q)
+    P = pos_from_graph(G)
+    for idx, key in enumerate(graph.node_ids):
+        if key in full_points:
+            nearest_points[key] = P[idx, :]
+    return nearest_points
 
 
 _INFEASIBLE_STATUSES = frozenset({cp.INFEASIBLE, cp.INFEASIBLE_INACCURATE})
@@ -287,8 +300,7 @@ def distance_constraints_graph(
     anchors = anchors if anchors is not None else {}
     G = G.copy()
     if angle_limits:
-        # Remove the edges that don't have a
-        typ = nx.get_edge_attributes(G, name=BOUNDED)
+        # Remove the edges with neither a distance nor an active bound
         edges = []
         for u, v, data in G.edges(data=True):
             bounds = data.get(BOUNDED, [])
@@ -307,7 +319,7 @@ def distance_constraints_graph(
 
     undirected = G.to_undirected()
     if not nx.is_chordal(undirected):
-        undirected, _ = complete_to_chordal_graph(undirected)
+        undirected, _ = nx.complete_to_chordal_graph(undirected)
     equality_cliques = nx.chordal_graph_cliques(
         undirected
     )  # Returns maximal cliques (in spite of name)
@@ -975,171 +987,3 @@ def solve_linear_cost_sdp(
         solution = extract_solution(constraint_clique_dict, sdp_variable_map, robot.dim)
 
     return solution, prob, sdp_variable_map, canonical_point_order
-
-
-def sym_vec(A: np.ndarray) -> np.ndarray:
-    vec = []
-    for idx in range(A.shape[0]):
-        vec_idx = A[idx, idx:]
-        vec_idx[1:] = 2.0 * vec_idx[1:]
-        vec.append(vec_idx)
-    return np.hstack(vec)
-
-
-def constraints_list_to_matrix(A_list: list):
-    a_list = [sym_vec(A) for A in A_list]
-    A_symmetrized = np.vstack(a_list)
-    # TODO: does this capture a meaningful rank of the linear operator? I believe so!
-    return A_symmetrized
-
-
-if __name__ == "__main__":
-    # Simple examples
-    sparse = False  # Whether to exploit chordal sparsity in the SDP formulation
-    ee_cost = False  # Whether to treat the end-effectors as variables with targets in the cost.
-    # If False, end-effectors are NOT variables (they are baked in to constraints as parameters)
-    conic_solver = "MOSEK"  # One of "MOSEK", "CVXOPT" for now
-    solver_params = (
-        SdpSolverParams()
-    )  # Use MOSEK settings that worked well for us before
-    # Truncated UR10 (only the first n joints)
-    n = 6
-    if n == 6:
-        robot, graph = load_ur10()
-    else:
-        robot, graph = load_truncated_ur10(n)
-
-    # Generate a random feasible target
-    q = robot.random_configuration()
-
-    # Extract the positions of the points
-    full_points = [f"p{idx}" for idx in range(0, graph.robot.n + 1)] + [
-        f"q{idx}" for idx in range(0, graph.robot.n + 1)
-    ]
-    input_vals = get_full_revolute_nearest_point(graph, q, full_points)
-
-    # End-effectors are 'generalized' to include the base pair ('p0', 'q0')
-    end_effectors = {
-        key: input_vals[key] for key in ["p0", "q0", f"p{robot.n}", f"q{robot.n}"]
-    }
-
-    # Form the constraints
-    constraint_clique_dict = distance_constraints(graph, end_effectors, sparse, ee_cost)
-    # A, b, mapping, _ = list(constraint_clique_dict.values())[0]
-
-    # Different cost function options here - cost function is controlled by a dictionary mapping some subset of the keys
-    # of input_vals (all the points' positions) to some nearest point.
-
-    # Nuclear norm - the nearest points are all zero
-    nearest_points_nuclear = {
-        key: np.zeros(robot.dim)
-        for key in input_vals
-        if key not in ["p0", "q0", f"p{robot.n}", f"q{robot.n}"]
-    }
-    (
-        sdp_variable_map_nuclear,
-        sdp_constraints_map_nuclear,
-        sdp_cost_map_nuclear,
-    ) = constraints_and_nearest_points_to_sdp_vars(
-        constraint_clique_dict, nearest_points_nuclear, robot.dim
-    )
-    prob_nuclear = form_sdp_problem(
-        constraint_clique_dict,
-        sdp_variable_map_nuclear,
-        sdp_constraints_map_nuclear,
-        sdp_cost_map_nuclear,
-        robot.dim,
-    )
-    prob_nuclear.solve(
-        verbose=True, solver=conic_solver, mosek_params=solver_params.mosek_params
-    )
-    # Analysis below assumes dense (sparse = False) case
-    Z_nuclear = list(sdp_variable_map_nuclear.values())[0].value
-    _, s_nuclear, _ = np.linalg.svd(Z_nuclear)
-    solution_rank_nuclear = np.linalg.matrix_rank(Z_nuclear, tol=1e-6, hermitian=True)
-    solution_nuclear = extract_solution(
-        constraint_clique_dict, sdp_variable_map_nuclear, robot.dim
-    )
-
-    # Feasibility (no nearest points means cost function is 0)
-    no_nearest_points = {}
-    (
-        sdp_variable_map,
-        sdp_constraints_map,
-        sdp_cost_map,
-    ) = constraints_and_nearest_points_to_sdp_vars(
-        constraint_clique_dict, no_nearest_points, robot.dim
-    )
-    prob_feas = form_sdp_problem(
-        constraint_clique_dict,
-        sdp_variable_map,
-        sdp_constraints_map,
-        sdp_cost_map,
-        robot.dim,
-    )
-    prob_feas.solve(
-        verbose=True, solver=conic_solver, mosek_params=solver_params.mosek_params
-    )
-    # Analysis below assumes dense (sparse = False) case
-    Z = list(sdp_variable_map.values())[0].value
-    _, s, _ = np.linalg.svd(Z)
-    solution_rank = np.linalg.matrix_rank(Z, tol=1e-6, hermitian=True)
-    solution = extract_solution(constraint_clique_dict, sdp_variable_map, robot.dim)
-
-    # Exact nearest point - use the true value from q (don't perturb)
-    exact_nearest_points = {
-        key: input_vals[key]
-        for key in input_vals
-        if key not in ["p0", "q0", f"p{robot.n}", f"q{robot.n}"]
-    }
-    (
-        sdp_variable_map_exact,
-        sdp_constraints_map_exact,
-        sdp_cost_map_exact,
-    ) = constraints_and_nearest_points_to_sdp_vars(
-        constraint_clique_dict, exact_nearest_points, robot.dim
-    )
-    prob_exact = form_sdp_problem(
-        constraint_clique_dict,
-        sdp_variable_map_exact,
-        sdp_constraints_map_exact,
-        sdp_cost_map_exact,
-        robot.dim,
-    )
-    prob_exact.solve(
-        verbose=True, solver=conic_solver, mosek_params=solver_params.mosek_params
-    )
-    Z_exact = list(sdp_variable_map_exact.values())[0].value
-    _, s_exact, _ = np.linalg.svd(Z_exact)
-    solution_rank_exact = np.linalg.matrix_rank(Z_exact, tol=1e-6, hermitian=True)
-    solution_exact = extract_solution(
-        constraint_clique_dict, sdp_variable_map_exact, robot.dim
-    )
-
-    total_error_exact = 0.0
-    total_error_nuclear = 0.0
-    total_error_feas = 0.0
-    for key in solution_exact:
-        print(f"{key}")
-        print(f"True value:          {input_vals[key]}")
-        print(f"Nearest point value: {solution_exact[key]}")
-        print(f"Nuclear norm value:  {solution_nuclear[key]}")
-        print(f"Feasibility value:   {solution[key]}")
-        print(
-            "------------------------------------------------------------------------"
-        )
-        total_error_exact += np.linalg.norm(input_vals[key] - solution_exact[key])
-        total_error_nuclear += np.linalg.norm(input_vals[key] - solution_nuclear[key])
-        total_error_feas += np.linalg.norm(input_vals[key] - solution[key])
-
-    # Compare the ranks
-    print(f"Feasibility formulation rank: {solution_rank}")
-    print(f"Nuclear norm rank:            {solution_rank_nuclear}")
-    print(f"Exact nearest point rank:     {solution_rank_exact}")
-
-    # Print the total L2 error
-    print(f"Total error feas:          {total_error_feas}")
-    print(f"Total error nuclear:       {total_error_nuclear}")
-    print(f"Total error exact nearest: {total_error_exact}")
-
-    # TODO: check constraint violations! See Filip's code (or just plug this in there)

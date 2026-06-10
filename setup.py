@@ -16,11 +16,9 @@ setup(
     install_requires=[
         "numpy >= 2",
         "scipy >= 1.17",
-        "sympy >= 1.14",
         "matplotlib >= 3.1",
         "cvxpy >= 1.8",
         "networkx >= 3.6",
-        "progress",
         "yourdfpy >= 0.0.60",
         "trimesh >= 4.6.1",
         "numba >= 0.65",
