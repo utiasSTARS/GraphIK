@@ -291,8 +291,8 @@ class TestAdjacencyMatrices(unittest.TestCase):
             "link_lengths": a,
             "theta": th,
             "parents": parents,
-            "ub": lim_u,
-            "lb": lim_l,
+            "joint_limits_upper": lim_u,
+            "joint_limits_lower": lim_l,
             "num_joints": n
         }
 

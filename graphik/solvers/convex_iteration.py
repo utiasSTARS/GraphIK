@@ -157,7 +157,7 @@ def get_sparsity_pattern(G, canonical_point_order: list) -> set:
 
 def convex_iterate_sdp_snl_graph(
     graph: ProblemGraph,
-    anchors: dict = {},
+    anchors: dict = None,
     ranges=False,
     max_iters=10,
     sparse=False,
@@ -181,6 +181,9 @@ def convex_iterate_sdp_snl_graph(
     d = robot.dim
     eig_value_sum_vs_iterations = []
 
+    # Copy: anchors gets extended below and must not leak into the
+    # caller's dict (or across calls via a shared default).
+    anchors = dict(anchors) if anchors else {}
     # If a position is pre-defined for a node, set to anchor
     for node, data in G.nodes(data=True):
         if data.get(POS, None) is not None:

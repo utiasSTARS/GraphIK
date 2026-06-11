@@ -1,6 +1,3 @@
-import pytest
-pytest.importorskip("mosek")  # SDP tests require commercial mosek; skip when unavailable
-
 import numpy as np
 import unittest
 import networkx as nx
@@ -15,6 +12,8 @@ from graphik.solvers.sdp_snl import (
     evaluate_linear_map,
     constraints_and_nearest_points_to_sdp_vars,
     evaluate_cost,
+    prepare_set_cover_problem,
+    status_is_infeasible,
 )
 from graphik.utils.constants import *
 from graphik.utils.roboturdf import load_ur10
@@ -139,6 +138,38 @@ def run_cost_test(test_case, robot, graph, sparse=False, ee_cost=False):
     test_case.assertAlmostEqual(cost_bad, cost_bad_explicit)
 
 
+class TestPrepareSetCover(unittest.TestCase):
+    def test_zero_nearest_point_is_dropped_from_targets(self):
+        """Zero nearest points need no cost augmentation (nuclear-norm case):
+        they must be dropped from the cover targets, not crash."""
+        clique = frozenset(("p1", "p2"))
+        constraint_clique_dict = {
+            clique: ([np.zeros((2, 2))], [0.0], {"p1": 0, "p2": 1}, False)
+        }
+        nearest_points = {"p1": np.zeros(3), "p2": np.ones(3)}
+
+        cliques_remaining, targets_to_cover = prepare_set_cover_problem(
+            constraint_clique_dict, nearest_points, d=3
+        )
+
+        self.assertEqual(targets_to_cover, ["p2"])
+        self.assertEqual(cliques_remaining, {clique})
+
+
+class TestStatusIsInfeasible(unittest.TestCase):
+    def test_detects_infeasible_by_equality_not_identity(self):
+        # cvxpy returns plain strings; detection must not rely on interning.
+        non_interned = "".join(["in", "feasible"])
+        self.assertTrue(status_is_infeasible(non_interned))
+
+    def test_detects_inaccurate_infeasible(self):
+        self.assertTrue(status_is_infeasible("infeasible_inaccurate"))
+
+    def test_optimal_is_not_infeasible(self):
+        self.assertFalse(status_is_infeasible("optimal"))
+        self.assertFalse(status_is_infeasible("optimal_inaccurate"))
+
+
 class TestUR10(unittest.TestCase):
     def setUp(self):
         self.robot, self.graph = load_ur10()
@@ -233,12 +264,14 @@ class TestTruncatedUR10(unittest.TestCase):
             "alpha": al[:n],
             "d": d[:n],
             "theta": th[:n],
-            "lb": lb[:n],
-            "ub": ub[:n],
+            "joint_limits_lower": lb[:n],
+            "joint_limits_upper": ub[:n],
             "modified_dh": modified_dh,
             "num_joints": n
         }
         self.robot = Robot({**params, "dim": 3})
+        self.assertEqual(self.robot.lb["p1"], lb[0])
+        self.assertEqual(self.robot.ub["p1"], ub[0])
         self.graph = ProblemGraph(self.robot)
 
     def test_cost(self):

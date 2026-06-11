@@ -106,7 +106,7 @@ class RobotURDF(object):
     def get_parents(self, joints):
         base_joint = self.find_first_joint()
         if not (base_joint in joints):
-            raise ("Base joint not in joints")
+            raise ValueError("Base joint not in joints")
 
         label_base = "p{0}"
         # parents = {'p0': [label_base.format(joints.index(base_joint))]}
@@ -127,7 +127,7 @@ class RobotURDF(object):
         try:
             return self.urdf.actuated_joints.index(joint)
         except ValueError:
-            raise ("joint not an actuated joint")
+            raise ValueError(f"{joint.name} is not an actuated joint") from None
 
     def find_link_by_name(self, name):
         for link in self._links:
@@ -276,15 +276,9 @@ class RobotURDF(object):
         params["T_zero"] = T_zero
         params["num_joints"] = self.n_q_joints
 
-        l = 0
-        for cl in self.parents.values():
-            l += len(cl)
-        if l == len(self.parents.keys()) - 1:
-            params["joint_limits_upper"] = ub
-            params["joint_limits_lower"] = lb
-            return Robot({**params, "dim": 3})
-        else:
-            return Robot({**params, "dim": 3})
+        params["joint_limits_upper"] = ub
+        params["joint_limits_lower"] = lb
+        return Robot({**params, "dim": 3})
 
 def get_T_from_joint_axis(axis: np.ndarray):
     """
@@ -392,7 +386,7 @@ def load_ur10(limits=None, randomized_links = False, randomize_percentage = 0.4)
     return robot, graph
 
 
-def load_truncated_ur10(n: int):
+def load_truncated_ur10(n: int, limits=None):
     """
     Produce a robot and graph representing the first n links of a UR10.
     """
@@ -404,16 +398,20 @@ def load_truncated_ur10(n: int):
     d = d_full[0:n]
     al = al_full[0:n]
     th = th_full[0:n]
-    ub = (np.pi) * np.ones(n)
-    lb = -ub
+    if limits is None:
+        ub = np.pi * np.ones(n)
+        lb = -ub
+    else:
+        lb = limits[0]
+        ub = limits[1]
     modified_dh = False
     params = {
         "a": a[:n],
         "alpha": al[:n],
         "d": d[:n],
         "theta": th[:n],
-        "lb": lb[:n],
-        "ub": ub[:n],
+        "joint_limits_lower": lb[:n],
+        "joint_limits_upper": ub[:n],
         "modified_dh": modified_dh,
         "num_joints": n,
     }

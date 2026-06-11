@@ -48,7 +48,7 @@ To enable the Mosek path:
 
 3. Place the license file (`mosek.lic`) at the path Mosek expects (typically `~/mosek/mosek.lic`).
 
-The SDP tests in `tests/test_sdp_snl*.py` are tuned to Mosek's tolerances and skip cleanly when it isn't installed.
+The SDP tests in `tests/test_sdp_snl*.py` run without Mosek: constraint-construction tests are solver-free, and the end-to-end solves use whichever free solver cvxpy picks, with tolerances loose enough for it.
 
 ## Usage
 Use of GraphIK can be summarized by four key steps, which we'll walk through below (see the scripts in [experiments/](https://github.com/utiasSTARS/GraphIK/tree/main/experiments) for more details).
@@ -176,7 +176,7 @@ arXiv: [Inverse Kinematics for Serial Kinematic Chains via Sum of Squares Optimi
 
 ```bibtex
 @misc{marić2022convex_arxiv,
-  author={Filip Marić and {Matthew Giamou and Soroush Khoubyarian and Ivan Petrović and Jonathan Kelly},
+  author={Filip Marić and Matthew Giamou and Soroush Khoubyarian and Ivan Petrović and Jonathan Kelly},
   title={Inverse Kinematics for Serial Kinematic Chains via Sum of Squares Optimization}, 
   year={2020},
   eprint={1909.09318},

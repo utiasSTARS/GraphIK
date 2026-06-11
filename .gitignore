@@ -137,5 +137,8 @@ dmypy.json
 # Local-only planning/design notes
 docs/superpowers/
 
+# Local Claude/Codex-adjacent session state
+.claude/
+
 # Per-environment solver baselines (regenerate with tests/baselines/generate.py)
 tests/baselines/*.json

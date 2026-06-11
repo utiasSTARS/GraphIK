@@ -13,6 +13,10 @@ from graphik.robots.robot import Robot
 from graphik.utils import *  # noqa: F401,F403  (existing convention; brings constants and helpers into scope: ROOT, POS, TYPE, BASE, ROBOT, END_EFFECTOR, OBSTACLE, BOUNDED, BELOW, ABOVE, LOWER, UPPER, DIST, MAIN_PREFIX, AUX_PREFIX, TRANSFORM, trans_axis, rot_axis, skew, normalize, wraptopi, R2, best_fit_transform, level2_descendants, max_min_distance_revolute, distance_matrix_from_graph, adjacency_matrix_from_graph, graph_complete_edges)
 
 
+def _bounded_tags(limit) -> List[str]:
+    return [limit] if limit in (BELOW, ABOVE) else []
+
+
 class ProblemGraph(nx.DiGraph):
     """
     Graph with positions and distance bounds describing an IK problem.
@@ -124,14 +128,15 @@ class ProblemGraph(nx.DiGraph):
     # ------------------------------------------------------------------
     def add_anchor_node(self, name: str, data: Dict[str, Any]):
         if POS not in data:
-            raise KeyError("Node needs to gave a position to be added.")
+            raise KeyError("Node needs to have a position to be added.")
         self.add_nodes_from([(name, data)])
         for nname, ndata in self.nodes(data=True):
             if POS in ndata and nname != name:
+                dist = la.norm(ndata[POS] - data[POS])
                 self.add_edge(nname, name)
-                self[nname][name][DIST] = la.norm(ndata[POS] - data[POS])
-                self[nname][name][LOWER] = la.norm(ndata[POS] - data[POS])
-                self[nname][name][UPPER] = la.norm(ndata[POS] - data[POS])
+                self[nname][name][DIST] = dist
+                self[nname][name][LOWER] = dist
+                self[nname][name][UPPER] = dist
                 self[nname][name][BOUNDED] = []
 
     def add_spherical_obstacle(self, name: str, position: ArrayLike, radius: float):
@@ -156,7 +161,8 @@ class ProblemGraph(nx.DiGraph):
         typ = nx.get_node_attributes(self, name=TYPE)
         broken_limits = []
         for u, v, data in self.edges(data=True):
-            if BELOW in data[BOUNDED] or ABOVE in data[BOUNDED]:
+            bounds = data.get(BOUNDED, [])
+            if BELOW in bounds or ABOVE in bounds:
                 if G[u][v][DIST] < data[LOWER] - tol:
                     bl = {}
                     if (ROBOT in typ[u] and OBSTACLE in typ[v]) or (
@@ -199,10 +205,11 @@ class ProblemGraph(nx.DiGraph):
             if BOUNDED in data:
                 udx = self.node_ids.index(e1)
                 vdx = self.node_ids.index(e2)
-                if BELOW in data[BOUNDED]:
+                bounds = data[BOUNDED]
+                if BELOW in bounds:
                     L[udx, vdx] = data[LOWER] ** 2
                     L[vdx, udx] = L[udx, vdx]
-                if ABOVE in data[BOUNDED]:
+                if ABOVE in bounds:
                     U[udx, vdx] = data[UPPER] ** 2
                     U[vdx, udx] = U[udx, vdx]
         return L, U
@@ -276,6 +283,12 @@ class ProblemGraph(nx.DiGraph):
                 (cur, T0[:3, 3]),
                 (aux_name, (T0 @ trans_z)[:3, 3]),
             ]
+
+    def structure_graph(self) -> nx.DiGraph:
+        """Standalone copy of the robot structure subgraph (exact-distance
+        edges only, no joint-limit bound edges). Public API used by the SDP
+        solvers; equivalent to the pre-unification ``structure_graph()``."""
+        return self._build_structure_subgraph()
 
     def _build_structure_subgraph(self) -> nx.DiGraph:
         structure = nx.empty_graph(create_using=nx.DiGraph)
@@ -364,7 +377,7 @@ class ProblemGraph(nx.DiGraph):
                 self[ax][node][LOWER] = sqrt(
                     l1 ** 2 + l2 ** 2 - 2 * l1 * l2 * cos(pi - lim)
                 )
-                self[ax][node][BOUNDED] = BELOW
+                self[ax][node][BOUNDED] = [BELOW]
 
     def _set_limits_2d(self):
         S = self.structure
@@ -384,7 +397,7 @@ class ProblemGraph(nx.DiGraph):
                 self[u][v][LOWER] = sqrt(
                     l1 ** 2 + l2 ** 2 - 2 * l1 * l2 * cos(pi - lim)
                 )
-                self[u][v][BOUNDED] = BELOW
+                self[u][v][BOUNDED] = [BELOW]
 
     # --- 3D bodies (verbatim from the old ProblemGraphRevolute) ---
     def _root_angle_limits_3d(self):
@@ -442,7 +455,7 @@ class ProblemGraph(nx.DiGraph):
                 self.add_edge(base_node, node)
                 if d_max == d_min:
                     self[base_node][node][DIST] = d_max
-                self[base_node][node][BOUNDED] = [limit]
+                self[base_node][node][BOUNDED] = _bounded_tags(limit)
                 self[base_node][node][UPPER] = d_max
                 self[base_node][node][LOWER] = d_min
 
@@ -506,7 +519,7 @@ class ProblemGraph(nx.DiGraph):
                     self.add_edge(ids[0], ids[1])
                     if d_max == d_min:
                         S[ids[0]][ids[1]][DIST] = d_max
-                    self[ids[0]][ids[1]][BOUNDED] = [limit]
+                    self[ids[0]][ids[1]][BOUNDED] = _bounded_tags(limit)
                     self[ids[0]][ids[1]][UPPER] = d_max
                     self[ids[0]][ids[1]][LOWER] = d_min
 

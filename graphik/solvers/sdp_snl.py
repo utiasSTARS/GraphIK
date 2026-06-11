@@ -14,6 +14,15 @@ from graphik.solvers.constraints import get_full_revolute_nearest_point
 from graphik.solvers.sdp_formulations import SdpSolverParams, solve_sdp
 
 
+_INFEASIBLE_STATUSES = frozenset({cp.INFEASIBLE, cp.INFEASIBLE_INACCURATE})
+
+
+def status_is_infeasible(status) -> bool:
+    """True when a cvxpy problem status reports (possibly inaccurate)
+    infeasibility. Compares by equality; cvxpy statuses are plain strings."""
+    return status in _INFEASIBLE_STATUSES
+
+
 def prepare_set_cover_problem(
     constraint_clique_dict: dict, nearest_points: dict, d: int
 ):
@@ -30,7 +39,7 @@ def prepare_set_cover_problem(
     # We also only need to augment non-zero nearest points (important for nuclear norm case)
     for target in nearest_points.keys():
         if target in targets_to_cover and np.all(nearest_points[target] == np.zeros(d)):
-            targets_to_cover.remove()
+            targets_to_cover.remove(target)
 
     return cliques_remaining, targets_to_cover
 
@@ -269,20 +278,22 @@ def distance_clique_linear_map(
 
 def distance_constraints_graph(
     G: nx.Graph,
-    anchors: dict = {},
+    anchors: dict = None,
     sparse: bool = False,
     ee_cost=None,
     angle_limits=False,
 ) -> dict:
 
+    anchors = anchors if anchors is not None else {}
     G = G.copy()
     if angle_limits:
         # Remove the edges that don't have a
         typ = nx.get_edge_attributes(G, name=BOUNDED)
         edges = []
         for u, v, data in G.edges(data=True):
+            bounds = data.get(BOUNDED, [])
             if (DIST not in list(data.keys())) and (
-                "below" not in data[BOUNDED] and "above" not in data[BOUNDED]
+                BELOW not in bounds and ABOVE not in bounds
             ):
                 edges += [(u, v)]
 
@@ -363,14 +374,13 @@ def distance_range_constraints(
         if (
             u not in anchors.keys() or v not in anchors.keys()
         ):  # If BOTH are anchors we can ignore
-            if data.get(BOUNDED, False):
-                if (
-                    "below" in data[BOUNDED]
-                ):  # TODO: All the bounds are only listed as below, ask Filip!
+            bounds = data.get(BOUNDED, [])
+            if bounds:
+                if BELOW in bounds:  # TODO: All the bounds are only listed as below, ask Filip!
                     pairs += [frozenset((u, v))]
                     dists += [data[LOWER]]
                     upper += [False]
-                if "above" in data[BOUNDED]:
+                if ABOVE in bounds:
                     pairs += [frozenset((u, v))]
                     dists += [data[UPPER]]
                     upper += [True]
@@ -959,7 +969,7 @@ def solve_linear_cost_sdp(
 
     if solver_error:
         solution = SOLVER_ERROR
-    elif prob.status is INFEASIBLE:
+    elif status_is_infeasible(prob.status):
         solution = INFEASIBLE
     else:
         solution = extract_solution(constraint_clique_dict, sdp_variable_map, robot.dim)

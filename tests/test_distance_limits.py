@@ -28,7 +28,7 @@ import graphik
 from graphik.graphs import ProblemGraph
 from graphik.robots import Robot
 from graphik.utils import list_to_variable_dict
-from graphik.utils.constants import DIST
+from graphik.utils.constants import ABOVE, BELOW, BOUNDED, DIST
 from graphik.utils.roboturdf import RobotURDF
 
 
@@ -68,6 +68,37 @@ class TestDistanceLimits(unittest.TestCase):
                         f"trial {trial}: edge ({u},{v}) DIST mismatch — "
                         f"expected {expected:.8f}, got {actual:.8f}"
                     )
+
+    def _check_bounded_tags(self, graph):
+        allowed = {BELOW, ABOVE}
+        for u, v, data in graph.edges(data=True):
+            self.assertIn(BOUNDED, data, msg=f"edge {(u, v)} missing {BOUNDED}")
+            self.assertIsInstance(
+                data[BOUNDED],
+                list,
+                msg=f"edge {(u, v)} stores non-list BOUNDED={data[BOUNDED]!r}",
+            )
+            self.assertTrue(
+                set(data[BOUNDED]).issubset(allowed),
+                msg=f"edge {(u, v)} stores invalid BOUNDED={data[BOUNDED]!r}",
+            )
+
+    def test_bounded_attributes_are_normalized(self):
+        fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
+        urdf_robot = RobotURDF(fname)
+        n = urdf_robot.n_q_joints
+        robot_3d = urdf_robot.make_Revolute3d(pi * np.ones(n), -pi * np.ones(n))
+        self._check_bounded_tags(ProblemGraph(robot_3d))
+
+        n = 6
+        params = {
+            "link_lengths": list_to_variable_dict(np.ones(n)),
+            "theta": list_to_variable_dict(np.zeros(n)),
+            "joint_limits_upper": list_to_variable_dict(0.8 * pi * np.ones(n)),
+            "joint_limits_lower": list_to_variable_dict(-0.8 * pi * np.ones(n)),
+            "num_joints": n,
+        }
+        self._check_bounded_tags(ProblemGraph(Robot({**params, "dim": 2})))
 
     def test_revolute_ur10(self):
         fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"

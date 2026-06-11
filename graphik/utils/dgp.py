@@ -101,7 +101,7 @@ def pos_from_graph(G: nx.DiGraph, node_ids=None) -> NDArray:
 
 
 def graph_from_pos(
-    P: NDArray, node_ids: Optional[List] = [], dist: bool = True
+    P: NDArray, node_ids: Optional[List] = None, dist: bool = True
 ) -> nx.DiGraph:
     """
     Generates an nx.DiGraph object of the subclass type given
@@ -242,10 +242,12 @@ def bound_smoothing(G: nx.DiGraph) -> tuple:
 def normalize_positions(Y: NDArray, scale=False):
     Y_c = Y - Y.mean(0)
     C = Y_c.T.dot(Y_c)
-    e, v = np.linalg.eig(C)
+    _, v = np.linalg.eigh(C)
     Y_cr = Y_c.dot(v)
     if scale:
-        Y_crs = Y_cr / (1 / abs(Y_cr).max())
-        return Y_crs
+        max_abs = np.abs(Y_cr).max()
+        if max_abs > 0:
+            return Y_cr / max_abs
+        return Y_cr
     else:
         return Y_cr

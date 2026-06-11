@@ -25,7 +25,7 @@ class LocalSolver:
         typ = nx.get_node_attributes(self.graph, name=TYPE)
         pairs = []
         for u, v, data in self.graph.edges(data=True):
-            if "below" in data[BOUNDED]:
+            if BELOW in data.get(BOUNDED, []):
                 if ROBOT in typ[u] and OBSTACLE in typ[v] and u != ROOT:
                     pairs += [(u, v)]
         self.m = len(pairs)
@@ -143,7 +143,7 @@ class LocalSolver:
             log = SE2.Log
             inverse = SE2.inverse
             adjoint = SE2.adjoint
-            inv_left_jacobian = lambda x: np.eye(3)
+            inv_left_jacobian = SE2.left_jacobian_inv
 
         def cost(q):
             q_dict = {joints[idx]: q[idx] for idx in range(n)}
@@ -159,16 +159,27 @@ class LocalSolver:
         return cost
 
     def solve(self, goals: dict, q0: dict):
-        for node, goal in goals.items():
-            cost_and_grad = self.gen_cost_and_grad_ee(node, goal)
+        # Each per-goal cost reads the leading entries of q along its
+        # root-to-goal chain (q0 must be ordered along the kinematic chain)
+        # and returns a full-width gradient (robot.jacobian pads with zero
+        # columns past the chain), so goals simply sum.
+        goal_costs = [
+            self.gen_cost_and_grad_ee(node, goal) for node, goal in goals.items()
+        ]
 
-        # solve
+        def cost_and_grad(q):
+            f = 0.0
+            grad = np.zeros(self.robot.n)
+            for cg in goal_costs:
+                f_i, g_i = cg(q)
+                f += f_i
+                grad += g_i
+            return f, grad
+
         res = minimize(
             cost_and_grad,
-            # cost,
             np.asarray(list(q0.values())),
             jac=True,
-            # jac=grad,
             constraints=self.g,
             method="SLSQP",
             options={"ftol": 1e-7},

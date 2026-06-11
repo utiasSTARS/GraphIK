@@ -76,24 +76,9 @@ class PSDFixedRank:
     @staticmethod
     def _build_lyap_matrix(X):
         # X = Y^T Y. Returns the (dim*dim) x (dim*dim) Lyapunov matrix
-        # whose linear system gives the quotient correction Omega.
+        # representing Omega -> X@Omega + Omega@X on row-major vec(Omega).
         dim = X.shape[0]
-        if dim == 3:
-            A = np.asarray([[X[0,0] + X[0,0], X[0,1] , X[0,2], X[1,0], 0, 0, X[2,0], 0, 0],
-                            [X[1,0], X[1,1] + X[0,0], X[1,2], 0, X[1,0], 0, 0, X[2,0], 0],
-                            [X[2,0], X[2,1], X[2,2] + X[0,0], 0, 0, X[1,0], 0, 0, X[2,0]],
-                            [X[0,1], 0, 0, X[0,0] + X[1,1], X[0,1] , X[0,2], X[2,1], 0, 0],
-                            [0, X[0,1], 0, X[1,0], X[1,1] + X[1,1], X[1,2], 0, X[2,1], 0],
-                            [0, 0, X[0,1], X[2,0], X[2,1], X[2,2] + X[1,1], 0, 0, X[2,1]],
-                            [X[0,2], 0, 0, X[1,2], 0, 0, X[0,0] + X[2,2], X[0,1] , X[0,2]],
-                            [0, X[0,2], 0, 0, X[1,2], 0, X[1,0], X[1,1] + X[2,2], X[1,2]],
-                            [0, 0, X[0,2], 0, 0, X[1,2], X[2,0], X[2,1], X[2,2] + X[2,2]]])
-        else:  # dim == 2
-            A = np.asarray([[X[0,0] + X[0,0], X[0,1], X[0,1], 0],
-                            [X[1,0], X[0,1] + X[0,0], 0, X[0,1]],
-                            [X[0,1], 0, X[0,0] + X[1,1], X[0,1]],
-                            [0, X[0,1], X[1,0], X[1,1]+ X[1,1]]])
-        return A
+        return np.kron(X, np.eye(dim)) + np.kron(np.eye(dim), X)
 
     @staticmethod
     def _kron_with_eye(A, d):
