@@ -1,4 +1,4 @@
-"""Single-source EDM loss kernels for the non-SDP IK solvers.
+"""Single-source cost kernels for the non-SDP IK solvers.
 
 NumPy dense backend: ``_dense_equality`` and ``_dense_limits`` build an S
 matrix once per Y and reuse it across cost/egrad/ehvp via ``memoize_last``.
@@ -17,12 +17,15 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+from pymlg.numpy import SE2, SE3, SO2, SO3
 
 from graphik.utils import (
     distance_matrix_from_gram,
     distance_matrix_from_pos,
     memoize_last,
 )
+from graphik.utils.constants import LOWER, POS, ROOT
+from graphik.utils.utils import list_to_variable_dict
 
 
 def _dense_equality(D_goal, omega, cache=True):
@@ -178,3 +181,90 @@ def for_minimize(
         return ehvp(Y, Z_flat.reshape(-1, dim)).ravel()
 
     return cost_and_grad, hessp
+
+
+def pose_cost(robot, point: str, T_goal):
+    """(cost, grad) closure for the squared SE(n) log pose error at ``point``.
+
+    q is read positionally along the root-to-``point`` kinematic chain; the
+    returned gradient is padded to the robot's full joint count by
+    ``robot.jacobian``, so per-goal gradients simply sum.
+    """
+    joints = robot.kinematic_map[ROOT][point][1:]
+    n = len(joints)
+    if robot.dim == 3:
+        log = SE3.Log
+        inverse = SE3.inverse
+        adjoint = SE3.adjoint
+        inv_left_jacobian = SE3.left_jacobian_inv
+    else:
+        log = SE2.Log
+        inverse = SE2.inverse
+        adjoint = SE2.adjoint
+        inv_left_jacobian = SE2.left_jacobian_inv
+
+    def cost(q):
+        q_dict = {joints[idx]: q[idx] for idx in range(n)}
+        T = robot.pose(q_dict, point)
+        T_inv = inverse(T)
+        J = robot.jacobian(q_dict, [point])
+        e = log(T_inv @ T_goal).ravel()
+        J_e = inv_left_jacobian(e)
+        J[point] = J_e @ adjoint(T_inv) @ J[point]
+        jac = -2 * J[point].T @ e
+        return e.T @ e, jac
+
+    return cost
+
+
+def obstacle_constraints(robot, graph, pairs: list):
+    """SLSQP inequality function: ||c_obs - p_node||^2 - r^2 >= 0 per pair."""
+    def obstacle_constraint(q):
+        q_dict = list_to_variable_dict(q)
+        T_all = robot.get_all_poses(q_dict)
+
+        constr = []
+        for robot_node, obs_node in pairs:
+            p = T_all[robot_node][:-1, -1]
+            r = graph[robot_node][obs_node][LOWER]
+            c = graph.nodes[obs_node][POS]
+            constr += [(c - p).T @ (c - p) - r ** 2]
+        return np.asarray(constr)
+
+    return obstacle_constraint
+
+
+def obstacle_constraint_gradient(robot, graph, pairs: list):
+    """Jacobian of ``obstacle_constraints`` w.r.t. q, one row per pair."""
+    if robot.dim == 3:
+        dim = 3
+        ZZ = np.zeros([6, 6])
+        ZZ[:3, 3:] = np.eye(3)
+        ZZ[3:, :3] = np.eye(3)
+        wedge = SO3.wedge
+        inverse_se = SE3.inverse
+    else:
+        dim = 2
+        ZZ = np.zeros([4, 4])
+        ZZ[:2, 2:] = np.eye(2)
+        ZZ[2:, :2] = np.eye(2)
+        wedge = SO2.wedge
+        inverse_se = SE2.inverse
+
+    def obstacle_gradient(q):
+        q_dict = list_to_variable_dict(q)
+        T_all = robot.get_all_poses(q_dict)
+        J_all = robot.jacobian(q_dict, list(q_dict.keys()))
+
+        jac = []
+        for robot_node, obs_node in pairs:
+            T_node = T_all[robot_node]
+            R = T_node[:dim, :dim]
+            t_inv = inverse_se(T_node)[:dim, -1]
+            ZZ[:dim, :dim] = R @ wedge(t_inv) @ R.T
+            p = T_node[:dim, -1]
+            c = graph.nodes[obs_node][POS]
+            jac += [-2 * (c - p).T @ (ZZ @ J_all[robot_node])[:dim, :]]
+        return np.vstack(jac)
+
+    return obstacle_gradient

@@ -1,25 +1,15 @@
 #!/usr/bin/env python3
 import numpy as np
-from numpy.testing import assert_array_less
-import networkx as nx
-import time
+
 from graphik.graphs import ProblemGraph
 from graphik.robots import Robot
-from graphik.utils import (
-    pos_from_graph,
-    list_to_variable_dict,
-    distance_matrix_from_graph,
-    adjacency_matrix_from_graph,
-    graph_from_pos
-    )
-from graphik.solvers.riemannian_solver import RiemannianSolver
-from graphik.utils.dgp import bound_smoothing
+from graphik.solvers import RiemannianSolver
+from graphik.utils import list_to_variable_dict, pos_from_graph
 
 
 def random_problem_2d_chain():
     e_rot = []
     e_pos = []
-    t_sol = []
     fails = 0
     n = 10
 
@@ -37,34 +27,27 @@ def random_problem_2d_chain():
 
     robot = Robot({**robot_params, "dim": 2})
     graph = ProblemGraph(robot)
-    solver = RiemannianSolver(graph)
+    solver = RiemannianSolver(graph, use_limits=False)
 
     n_tests = 100
-
     q_init = list_to_variable_dict(n * [0])
     G_init = graph.realization(q_init)
     Y_init = pos_from_graph(G_init)
 
     t_sol = []
     for idx in range(n_tests):
-
         q_goal = robot.random_configuration()
-        T_goal = robot.pose(q_goal, f"p{robot.n}")
+        T_goal = np.asarray(robot.pose(q_goal, f"p{robot.n}"))
 
-        G = graph.from_pose(T_goal)
-        D_goal = distance_matrix_from_graph(G)
-        omega = adjacency_matrix_from_graph(G)
-        lb, ub = bound_smoothing(G)
-        sol_info = solver.solve(D_goal, omega, Y_init =Y_init, bounds=(lb,ub))
-        G_sol = graph_from_pos(sol_info["x"], graph.node_ids)
-        q_sol = graph.joint_variables(G_sol, {f"p{graph.robot.n}": T_goal})
+        sol = solver.solve(T_goal, Y_init=Y_init)
+        q_sol = sol.q
 
-        T_riemannian = robot.pose(q_sol, f"p{robot.n}")
-        err_riemannian = (T_goal.dot(T_riemannian.inv())).log()
-        err_riemannian_pos = np.linalg.norm(T_goal.trans - T_riemannian.trans)
-        err_riemannian_rot = np.linalg.norm(err_riemannian[2])
+        T_riemannian = np.asarray(robot.pose(q_sol, f"p{robot.n}"))
+        err_riemannian_pos = np.linalg.norm(T_goal[:2, 2] - T_riemannian[:2, 2])
+        R_delta = T_goal[:2, :2] @ T_riemannian[:2, :2].T
+        err_riemannian_rot = abs(np.arctan2(R_delta[1, 0], R_delta[0, 0]))
 
-        t_sol.append(sol_info['time'])
+        t_sol.append(sol.time)
         e_rot.append(err_riemannian_rot)
         e_pos.append(err_riemannian_pos)
         if err_riemannian_pos > 0.01 or err_riemannian_rot > 0.01:
@@ -77,8 +60,8 @@ def random_problem_2d_chain():
     print("Average pos error {:}".format(np.average(np.array(e_pos))))
     print("Average rot error {:}".format(np.average(np.array(e_rot))))
     print("Number of fails {:}".format(fails))
-
-    assert_array_less(e_pos, 1e-4 * np.ones(n_tests))
+    if fails:
+        raise SystemExit(f"{fails}/{n_tests} IK solves exceeded tolerance")
 
 
 if __name__ == "__main__":

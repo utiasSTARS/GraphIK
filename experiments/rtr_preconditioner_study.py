@@ -1,41 +1,21 @@
-"""Preconditioner study for the Riemannian solver's truncated CG.
-
-Compares no preconditioner vs block-Jacobi vs the full Gauss-Newton
-Laplacian on UR10 with joint limits (the production configuration).
-Counts HVPs (the profile's hottest operation), outer iterations, wall
-time, and solution quality (final pose error after angle decoding).
-"""
+"""Preconditioner study for the Riemannian solver's truncated CG."""
 import time
 
 import numpy as np
 
-from graphik.solvers import rtr
-from graphik.solvers.riemannian_solver import RiemannianSolver
-from graphik.utils.dgp import (
-    adjacency_matrix_from_graph,
-    bound_smoothing,
-    distance_matrix_from_graph,
-    graph_from_pos,
-)
+from graphik.solvers import RiemannianSolver
+import graphik.solvers.costs as costs_mod
 from graphik.utils.roboturdf import load_ur10
 
 
 def run_case(graph, T_goal, precon):
-    solver = RiemannianSolver(graph)
-    G = graph.from_pose(T_goal)
-    D_goal = distance_matrix_from_graph(G)
-    omega = adjacency_matrix_from_graph(G)
-    lb, ub = bound_smoothing(G)
+    solver = RiemannianSolver(graph, precon=precon)
 
     n_hvp = [0]
-    orig_for_riemannian = __import__(
-        "graphik.solvers.loss", fromlist=["for_riemannian"]
-    ).for_riemannian
-
-    import graphik.solvers.loss as loss_mod
+    saved = costs_mod.for_riemannian
 
     def counting_for_riemannian(*args, **kwargs):
-        cost, egrad, ehvp = orig_for_riemannian(*args, **kwargs)
+        cost, egrad, ehvp = saved(*args, **kwargs)
 
         def counted_ehvp(Y, Z):
             n_hvp[0] += 1
@@ -43,31 +23,24 @@ def run_case(graph, T_goal, precon):
 
         return cost, egrad, counted_ehvp
 
-    loss_mod.for_riemannian, saved = counting_for_riemannian, loss_mod.for_riemannian
+    costs_mod.for_riemannian = counting_for_riemannian
     try:
         t0 = time.perf_counter()
-        out = solver.solve(
-            D_goal, omega, use_limits=True, bounds=(lb, ub), precon=precon
-        )
+        res = solver.solve(T_goal)
         wall = time.perf_counter() - t0
     finally:
-        loss_mod.for_riemannian = saved
+        costs_mod.for_riemannian = saved
 
-    G_sol = graph_from_pos(out["x"], graph.node_ids)
-    q_sol = graph.joint_variables(G_sol, {f"p{graph.robot.n}": T_goal})
-    T_sol = graph.robot.pose(q_sol, f"p{graph.robot.n}")
+    T_sol = graph.robot.pose(res.q, f"p{graph.robot.n}")
     trans_err = np.linalg.norm(T_sol[:3, 3] - T_goal[:3, 3])
     rot_err = np.linalg.norm(T_sol[:3, :3] - T_goal[:3, :3])
-    limits_ok = (
-        len(graph.check_distance_limits(graph.realization(q_sol), tol=1e-6)) == 0
-    )
     return {
-        "iters": out["iterations"],
+        "iters": res.iterations,
         "hvps": n_hvp[0],
         "time": wall,
         "trans_err": trans_err,
         "rot_err": rot_err,
-        "success": trans_err < 1e-2 and rot_err < 1e-2 and limits_ok,
+        "success": trans_err < 1e-2 and rot_err < 1e-2 and res.feasible,
     }
 
 

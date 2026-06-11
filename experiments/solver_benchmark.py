@@ -3,12 +3,12 @@
 Compares wall time and pose-recovery accuracy across:
 - Riemannian (RTR) with spectral init from the partial-Gram block
 - Riemannian (RTR) with the legacy bound-smoothing + MDS init
+- Riemannian (RTR) with zero-configuration init
 - BFGS                   — scipy.optimize.minimize, method='BFGS'
 - L-BFGS-B               — scipy.optimize.minimize, method='L-BFGS-B' with anchor pinning
 
-Wall time includes any per-pose initialization the solver performs (e.g.
-bound-smoothing for the legacy init or spectral eigendecomposition for the
-new one).
+Wall time is measured around each solve() call, which internally includes
+goal-graph construction, per-pose initialization, optimization, and decoding.
 
 Usage:
     python experiments/solver_benchmark.py [--robots ur10,kuka,...] [--n-poses N]
@@ -22,13 +22,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from graphik.solvers import RiemannianSolver, ScipySolver
 from graphik.utils.utils import table_environment
-from graphik.utils import (
-    distance_matrix_from_graph,
-    adjacency_matrix_from_graph,
-    bound_smoothing,
-    graph_from_pos,
-)
 from graphik.utils.roboturdf import (
     load_ur10,
     load_kuka,
@@ -36,8 +31,6 @@ from graphik.utils.roboturdf import (
     load_schunk_lwa4d,
     load_schunk_lwa4p,
 )
-from graphik.solvers.riemannian_solver import RiemannianSolver
-from graphik.solvers.nonlinear_solver import NonlinearSolver
 
 
 ROBOTS = {
@@ -64,66 +57,32 @@ def pose_error(T_goal: np.ndarray, T_got: np.ndarray) -> tuple[float, float]:
     return pos, float(np.arccos(cos_theta))
 
 
-# Each runner takes the problem and returns the recovered Y (n_nodes × dim).
-# Wall time is measured around each runner so pre-processing (init) is included.
-
-def run_rtr_spectral(graph, D_goal, omega, G_partial):
-    solver = RiemannianSolver(graph, jit=False, init="spectral")
-    return solver.solve(D_goal, omega, use_limits=True)["x"]
-
-
-def run_rtr_bsmooth(graph, D_goal, omega, G_partial):
-    lb, ub = bound_smoothing(G_partial)
-    solver = RiemannianSolver(graph, jit=False, init="bsmooth")
-    return solver.solve(D_goal, omega, use_limits=True, bounds=(lb, ub))["x"]
-
-
-def run_bfgs(graph, D_goal, omega, G_partial):
-    lb, ub = bound_smoothing(G_partial)
-    solver = NonlinearSolver(graph)
-    # gtol=1e-8 to match RTR's stopping tolerance. scipy's BFGS does not
-    # accept ftol, so we don't pass one.
-    return solver.solve(
-        D_goal, omega, use_limits=True, bounds=(lb, ub), method="BFGS",
-        options={"gtol": 1e-8},
-    )["x"]
-
-
-def run_lbfgsb(graph, D_goal, omega, G_partial):
-    lb, ub = bound_smoothing(G_partial)
-    solver = NonlinearSolver(graph)
-    return solver.solve(
-        D_goal, omega, use_limits=True, bounds=(lb, ub), method="L-BFGS-B",
-        options={"gtol": 1e-8, "ftol": 0},
-    )["x"]
-
-
+# Each config maps a label to a solver factory. Solvers are constructed once
+# per robot and reused across poses.
 CONFIGS = [
-    ("rtr-spectral", run_rtr_spectral),
-    ("rtr-bsmooth",  run_rtr_bsmooth),
-    ("bfgs",         run_bfgs),
-    ("l-bfgs-b",     run_lbfgsb),
+    ("rtr-spectral", lambda g: RiemannianSolver(g, init="spectral", precon="gn")),
+    ("rtr-bsmooth", lambda g: RiemannianSolver(g, init="bsmooth", precon="gn")),
+    ("rtr-zero", lambda g: RiemannianSolver(g, init="zero", precon="gn")),
+    ("bfgs", lambda g: ScipySolver(g, method="BFGS", options={"gtol": 1e-8})),
+    (
+        "l-bfgs-b",
+        lambda g: ScipySolver(
+            g, method="L-BFGS-B", options={"gtol": 1e-8, "ftol": 0}
+        ),
+    ),
 ]
 
 
-def _eval(robot, graph, T_goal, ee, runner) -> Result:
-    G_partial = graph.from_pose(T_goal)
-    D_goal = distance_matrix_from_graph(G_partial)
-    omega = adjacency_matrix_from_graph(G_partial)
+def _eval(robot, solver, T_goal, ee) -> Result:
     t0 = time.perf_counter()
     try:
-        Y_sol = runner(graph, D_goal, omega, G_partial)
+        res = solver.solve(T_goal)
     except Exception:
         return Result(time.perf_counter() - t0, np.nan, np.nan, feasible=False)
     wall = time.perf_counter() - t0
-    G_sol = graph_from_pos(Y_sol, graph.node_ids)
-    try:
-        q_sol = graph.joint_variables(G_sol, {ee: T_goal})
-    except Exception:
-        return Result(wall, np.nan, np.nan, feasible=False)
-    T_got = robot.pose(q_sol, ee)
+    T_got = robot.pose(res.q, ee)
     pos_err, rot_err = pose_error(T_goal, np.asarray(T_got))
-    feasible = pos_err < 1e-2 and rot_err < 1e-2
+    feasible = res.feasible and pos_err < 1e-2 and rot_err < 1e-2
     return Result(wall, pos_err, rot_err, feasible)
 
 
@@ -137,10 +96,11 @@ def run_robot(robot_name, n_poses, obstacles, seed):
 
     poses = [np.asarray(robot.pose(robot.random_configuration(), ee)) for _ in range(n_poses)]
 
+    solvers = {label: factory(graph) for label, factory in CONFIGS}
     results: dict[str, list[Result]] = {label: [] for label, _ in CONFIGS}
     for T_goal in poses:
-        for label, runner in CONFIGS:
-            results[label].append(_eval(robot, graph, T_goal, ee, runner))
+        for label, _ in CONFIGS:
+            results[label].append(_eval(robot, solvers[label], T_goal, ee))
     return results
 
 

@@ -74,11 +74,14 @@ T_goal = robot.pose(q_goal, f"p{robot.n}")
 ```
 
 ### 4. Solve the IK Problem
-The main purpose of our graphical interpretation of robot kinematics is to develop distance-geometric IK solvers. One example is the [Riemannian optimization-based solver](https://arxiv.org/abs/2011.04850) implemented in [`RiemannianSolver`](https://github.com/utiasSTARS/GraphIK/blob/main/graphik/solvers/riemannian_solver.py). 
+The main purpose of our graphical interpretation of robot kinematics is to develop distance-geometric IK solvers. One example is the [Riemannian optimization-based solver](https://arxiv.org/abs/2011.04850) implemented in [`RiemannianSolver`](https://github.com/utiasSTARS/GraphIK/blob/main/graphik/solvers/riemannian.py). 
 
 ```python
-from graphik.solvers.riemannian_solver import solve_with_riemannian
-q_sol, solution_points = solve_with_riemannian(graph, T_goal)  # Returns None if infeasible or didn't solve
+from graphik.solvers import RiemannianSolver
+
+solver = RiemannianSolver(graph)
+result = solver.solve(T_goal)
+q_sol = result.q if result.feasible else None  # feasible == within joint limits
 ```
 
 For a similar example using [`CIDGIK`](https://arxiv.org/abs/2109.03374), a convex optimization-based approach, please see [experiments/cidgik_example.py](https://github.com/utiasSTARS/GraphIK/blob/main/experiments/cidgik_example.py).
