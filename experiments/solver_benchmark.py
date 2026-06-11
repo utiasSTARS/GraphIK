@@ -23,7 +23,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from graphik.solvers import RiemannianSolver, ScipySolver
-from graphik.utils.utils import table_environment
+from graphik.utils.environments import table_environment
 from graphik.utils.roboturdf import (
     load_ur10,
     load_kuka,

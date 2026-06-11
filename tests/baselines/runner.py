@@ -12,7 +12,7 @@ import numpy as np
 
 from graphik.solvers import RiemannianSolver, ScipySolver
 from graphik.utils.roboturdf import load_schunk_lwa4d, load_ur10
-from graphik.utils.utils import table_environment
+from graphik.utils.environments import table_environment
 from tests.baselines.cases import Case
 
 ROBOT_LOADERS = {

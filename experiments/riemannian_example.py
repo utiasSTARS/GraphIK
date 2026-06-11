@@ -1,6 +1,6 @@
 from time import perf_counter
 
-from graphik.utils.utils import table_environment
+from graphik.utils.environments import table_environment
 from graphik.solvers import RiemannianSolver
 
 # Multiple robot models to try out, or you can implement your own

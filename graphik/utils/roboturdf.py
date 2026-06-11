@@ -35,29 +35,14 @@ class RobotURDF(object):
         self._joints = list(self.urdf.robot.joints)
         self._links = list(self.urdf.robot.links)
 
-        self.urdf_ind_to_q, self.q_to_urdf_ind = self.joint_map()
+        self.q_to_urdf_ind = {
+            f"p{q_ind}": self._joints.index(joint)
+            for q_ind, joint in enumerate(self.urdf.actuated_joints, start=1)
+        }
         self.n_q_joints = len(self.q_to_urdf_ind)
-        self.n_urdf_joints = len(self.urdf_ind_to_q)
 
         self.ee_joints = self.find_end_effector_joints()
         self.T_zero = self.extract_T_zero_from_URDF(frame="joint")
-        self.scene = None
-
-        self.parents = None
-
-    def joint_map(self):
-        urdf_ind_to_q = {}
-        q_to_urdf_ind = {}
-        q_ind = 1
-        label = "p{0}"
-
-        for joint in self.urdf.actuated_joints:
-            j = self._joints.index(joint)
-            urdf_ind_to_q[j] = label.format(q_ind)
-            q_to_urdf_ind[label.format(q_ind)] = j
-            q_ind += 1
-
-        return urdf_ind_to_q, q_to_urdf_ind
 
     def find_first_joint(self):
         """
@@ -81,14 +66,6 @@ class RobotURDF(object):
 
         return parent_joints
 
-    def find_joints_with_parent_link(self, link):
-        parent_joints = []
-        for joint in self._joints:
-            if joint.parent == link.name:
-                parent_joints.append(joint)
-
-        return parent_joints
-
     def find_joints_actuated_child_joints(self, joint):
         child_link = self.find_link_by_name(joint.child)
         children_joints = self.find_actuated_joints_with_parent_link(child_link)
@@ -104,24 +81,18 @@ class RobotURDF(object):
         return children_joints
 
     def get_parents(self, joints):
+        """Map each joint's graphik label to the labels of its child joints."""
         base_joint = self.find_first_joint()
-        if not (base_joint in joints):
+        if base_joint not in joints:
             raise ValueError("Base joint not in joints")
 
-        label_base = "p{0}"
-        # parents = {'p0': [label_base.format(joints.index(base_joint))]}
         parents = {}
-
         for joint in joints:
             children = self.find_joints_child_joints_from_list(joint, joints)
-            if children == []:
-                child_labels = []
-            else:
-                child_labels = [label_base.format(joints.index(cj)) for cj in children]
-            parent_label = label_base.format(joints.index(joint))
-            parents[parent_label] = child_labels
-
-        self.parents = parents
+            parents[f"p{joints.index(joint)}"] = [
+                f"p{joints.index(cj)}" for cj in children
+            ]
+        return parents
 
     def actuated_joint_index(self, joint):
         try:
@@ -133,12 +104,6 @@ class RobotURDF(object):
         for link in self._links:
             if link.name == name:
                 return link
-        return None
-
-    def find_joint_by_name(self, name):
-        for joint in self._joints:
-            if joint.name == name:
-                return joint
         return None
 
     def extract_T_zero_from_URDF(self, q=None, frame="joint"):
@@ -192,8 +157,6 @@ class RobotURDF(object):
             if child_joints == []:
                 ee_joints.append(joint)
 
-        self.ee_joints = ee_joints
-
         return ee_joints
 
     def map_to_urdf_ind(self, q):
@@ -210,48 +173,13 @@ class RobotURDF(object):
 
         return urdf_q
 
-    def joint_limits(self):
-        ub = {}
-        lb = {}
-
-        for joint in self.urdf.actuated_joints:
-            ubi = np.clip(joint.limit.upper, -np.pi, np.pi)
-            lbi = np.clip(joint.limit.lower, -np.pi, np.pi)
-            label = "p{0}"
-            joint_label = label.format(self.actuated_joint_index(joint))
-            ub[joint_label] = ubi
-            lb[joint_label] = lbi
-
-        return ub, lb
-
-    def get_graphik_labels(self, joints):
-        """
-        Assigned joint labels according to the p{i}, where i is the joint
-        index. The first joint has label p0
-        Parameters
-        ----------
-        joints : list
-            list of URDF Joint objects
-
-        Returns
-        -------
-        labels : list
-            list of the labels
-        """
-        n = len(joints)
-
-        label = "p{0}"
-        labels = [label.format(i) for i in range(n)]
-        return labels
-
     def make_Revolute3d(self, ub, lb, randomized_links = False, randomize_percentage = 0.4):
         # if all the child lists have len 1, then chain, otherwise tree
         params = {}
 
         # assign parents
         joints = list(self.T_zero.keys())
-        self.get_parents(joints)
-        params["parents"] = self.parents
+        params["parents"] = self.get_parents(joints)
 
         T_list = list(self.T_zero.values())
         if randomized_links:
@@ -267,8 +195,8 @@ class RobotURDF(object):
                 T_mod[idx + 1] = T_mod[idx] @ T_delta
             T_list = T_mod
 
-        # Assign Transforms
-        T_labels = self.get_graphik_labels(joints)
+        # Assign Transforms, labelled p0..p{n} in joint order
+        T_labels = [f"p{idx}" for idx in range(len(joints))]
         T_zero = dict(zip(T_labels, T_list))
         T0 = T_zero["p0"]
         for key, val in T_zero.items():
@@ -311,79 +239,54 @@ def get_T_from_joint_axis(axis: np.ndarray):
 
     return T
 
-def load_schunk_lwa4p(limits=None, randomized_links = False, randomize_percentage = 0.4):
-    fname = graphik.__path__[0] + "/robots/urdfs/lwa4p.urdf"
+# Bundled URDFs, keyed by the short names accepted by load_urdf_robot.
+URDF_FILES = {
+    "lwa4p": "lwa4p.urdf",
+    "lwa4d": "lwa4d.urdf",
+    "kuka": "kuka_iiwr.urdf",
+    "panda": "panda_arm.urdf",
+    "ur10": "ur10_mod.urdf",
+}
+
+
+def load_urdf_robot(name, limits=None, randomized_links=False, randomize_percentage=0.4):
+    """Load a bundled URDF by short name (see ``URDF_FILES``) or an explicit
+    path, returning the ``(Robot, ProblemGraph)`` pair.
+
+    ``limits`` is an optional ``(lb, ub)`` pair of per-joint arrays; the
+    default is symmetric +/-pi limits on every joint.
+    """
+    fname = name
+    if name in URDF_FILES:
+        fname = graphik.__path__[0] + "/robots/urdfs/" + URDF_FILES[name]
     urdf_robot = RobotURDF(fname)
-    n = urdf_robot.n_q_joints
     if limits is None:
-        ub = np.ones(n) * np.pi
+        ub = np.ones(urdf_robot.n_q_joints) * np.pi
         lb = -ub
     else:
-        lb = limits[0]
-        ub = limits[1]
-    robot = urdf_robot.make_Revolute3d(ub, lb, randomized_links, randomize_percentage)  # make the Revolute class from a URDF
-    graph = ProblemGraph(robot)
-    return robot, graph
+        lb, ub = limits
+    robot = urdf_robot.make_Revolute3d(ub, lb, randomized_links, randomize_percentage)
+    return robot, ProblemGraph(robot)
 
 
-def load_schunk_lwa4d(limits=None, randomized_links = False, randomize_percentage = 0.4):
-    fname = graphik.__path__[0] + "/robots/urdfs/lwa4d.urdf"
-    urdf_robot = RobotURDF(fname)
-    n = urdf_robot.n_q_joints
-    if limits is None:
-        ub = np.ones(n) * np.pi
-        lb = -ub
-    else:
-        lb = limits[0]
-        ub = limits[1]
-    robot = urdf_robot.make_Revolute3d(ub, lb, randomized_links, randomize_percentage)  # make the Revolute class from a URDF
-    graph = ProblemGraph(robot)
-    return robot, graph
+def load_schunk_lwa4p(limits=None, randomized_links=False, randomize_percentage=0.4):
+    return load_urdf_robot("lwa4p", limits, randomized_links, randomize_percentage)
 
 
-def load_kuka(limits=None, randomized_links = False, randomize_percentage = 0.4):
-    fname = graphik.__path__[0] + "/robots/urdfs/kuka_iiwr.urdf"
-    urdf_robot = RobotURDF(fname)
-    n = urdf_robot.n_q_joints
-    if limits is None:
-        ub = np.ones(n) * np.pi
-        lb = -ub
-    else:
-        lb = limits[0]
-        ub = limits[1]
-    robot = urdf_robot.make_Revolute3d(ub, lb, randomized_links, randomize_percentage)  # make the Revolute class from a URDF
-    graph = ProblemGraph(robot)
-    return robot, graph
+def load_schunk_lwa4d(limits=None, randomized_links=False, randomize_percentage=0.4):
+    return load_urdf_robot("lwa4d", limits, randomized_links, randomize_percentage)
 
-def load_panda(limits=None, randomized_links = False, randomize_percentage = 0.4):
-    fname = graphik.__path__[0] + "/robots/urdfs/panda_arm.urdf"
-    urdf_robot = RobotURDF(fname)
-    n = urdf_robot.n_q_joints
-    if limits is None:
-        ub = np.ones(n) * np.pi
-        lb = -ub
-    else:
-        lb = limits[0]
-        ub = limits[1]
-    robot = urdf_robot.make_Revolute3d(ub, lb, randomized_links, randomize_percentage)  # make the Revolute class from a URDF
-    # print(robot.structure.nodes())
-    graph = ProblemGraph(robot)
-    return robot, graph
 
-def load_ur10(limits=None, randomized_links = False, randomize_percentage = 0.4):
-    fname = graphik.__path__[0] + "/robots/urdfs/ur10_mod.urdf"
-    urdf_robot = RobotURDF(fname)
-    n = urdf_robot.n_q_joints
-    if limits is None:
-        ub = np.ones(n) * np.pi
-        lb = -ub
-    else:
-        lb = limits[0]
-        ub = limits[1]
-    robot = urdf_robot.make_Revolute3d(ub, lb, randomized_links, randomize_percentage)  # make the Revolute class from a URDF
-    # print(robot.structure.nodes())
-    graph = ProblemGraph(robot)
-    return robot, graph
+def load_kuka(limits=None, randomized_links=False, randomize_percentage=0.4):
+    return load_urdf_robot("kuka", limits, randomized_links, randomize_percentage)
+
+
+def load_panda(limits=None, randomized_links=False, randomize_percentage=0.4):
+    return load_urdf_robot("panda", limits, randomized_links, randomize_percentage)
+
+
+def load_ur10(limits=None, randomized_links=False, randomize_percentage=0.4):
+    return load_urdf_robot("ur10", limits, randomized_links, randomize_percentage)
 
 
 def load_truncated_ur10(n: int, limits=None):

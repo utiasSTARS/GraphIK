@@ -58,7 +58,7 @@ GraphIK's interface between robot models and IK solvers is the [`ProblemGraph`](
 If you are considering an environment with spherical obstacles, you can include constraints that prevent collisions. In this example, we will use a set of spheres that approximate a table: 
 
 ```python
-from graphik.utils.utils import table_environment
+from graphik.utils.environments import table_environment
 obstacles = table_environment()
 # This loop is not needed if you are not using obstacle avoidance constraints 
 for idx, obs in enumerate(obstacles):

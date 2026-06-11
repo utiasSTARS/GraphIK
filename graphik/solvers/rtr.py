@@ -23,20 +23,6 @@ class StopReason(IntEnum):
     MODEL_INCREASED = 5
 
 
-_TCG_LABEL = {
-    StopReason.NEGATIVE_CURVATURE: "negative curvature",
-    StopReason.EXCEEDED_TR: "exceeded trust region",
-    StopReason.REACHED_TARGET_LINEAR: "reached target residual-kappa (linear)",
-    StopReason.REACHED_TARGET_SUPERLINEAR: "reached target residual-theta (superlinear)",
-    StopReason.MAX_INNER_ITER: "maximum inner iterations",
-    StopReason.MODEL_INCREASED: "model increased",
-}
-
-
-def stopping_criterion_label(reason: StopReason) -> str:
-    return _TCG_LABEL[reason]
-
-
 @dataclass
 class RTRResult:
     point: np.ndarray

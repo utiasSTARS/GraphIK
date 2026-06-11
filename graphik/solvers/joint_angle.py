@@ -65,10 +65,7 @@ class JointAngleSolver(IKSolver):
             method="SLSQP",
             options={"ftol": 1e-7},
         )
-        q = {
-            joint: value
-            for joint, value in zip(self.joint_order, res.x)
-        }
+        q = dict(zip(self.joint_order, res.x))
         return IKResult(
             q=q,
             cost=float(res.fun),

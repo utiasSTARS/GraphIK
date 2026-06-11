@@ -3,7 +3,7 @@ from typing import List, Optional
 import numpy as np
 import networkx as nx
 from numpy.typing import NDArray
-from graphik.utils.constants import *
+from graphik.utils.constants import DIST, LOWER, POS, UPPER
 
 
 def gram_from_distance_matrix(D: NDArray) -> NDArray:

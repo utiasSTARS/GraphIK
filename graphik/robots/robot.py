@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Unified Robot class parameterized by dim in {2, 3}."""
+from functools import cached_property
 from math import pi
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Union
 
 import networkx as nx
 import numpy as np
@@ -72,43 +73,17 @@ class Robot(nx.DiGraph):
     # ------------------------------------------------------------------
     # Properties (unchanged behaviour from the previous Robot base class)
     # ------------------------------------------------------------------
-    @property
-    def kinematic_map(self) -> dict:
-        return self._kinematic_map
-
-    @kinematic_map.setter
-    def kinematic_map(self, kinematic_map: dict):
-        self._kinematic_map = kinematic_map
-
-    @property
+    @cached_property
     def joint_ids(self) -> List[str]:
-        try:
-            return self._joint_ids
-        except AttributeError:
-            self._joint_ids = list(self.kinematic_map.keys())
-            return self._joint_ids
+        return list(self.kinematic_map.keys())
 
-    @property
+    @cached_property
     def end_effectors(self) -> List:
-        if not hasattr(self, "_end_effectors"):
-            self._end_effectors = [x for x in self.nodes() if self.out_degree(x) == 0]
-        return self._end_effectors
+        return [x for x in self.nodes() if self.out_degree(x) == 0]
 
-    @property
+    @cached_property
     def T_base(self) -> np.ndarray:
-        try:
-            return self._T_base
-        except AttributeError:
-            self._T_base = self.nodes[ROOT]["T0"]
-        return self._T_base
-
-    @property
-    def limited_joints(self) -> List[str]:
-        return self._limited_joints
-
-    @limited_joints.setter
-    def limited_joints(self, lim: List[str]):
-        self._limited_joints = lim
+        return self.nodes[ROOT]["T0"]
 
     @property
     def ub(self) -> Dict[str, Any]:
@@ -155,28 +130,31 @@ class Robot(nx.DiGraph):
     # Dim-aware kinematics
     # ------------------------------------------------------------------
     def _screw_axis_from_T0(self, T0: np.ndarray) -> np.ndarray:
-        """Return the screw axis (twist coords) for a revolute joint with frame T0."""
+        """Return the screw axis (twist coords) for a revolute joint with frame T0.
+
+        The twist is ``[omega, v]`` with ``v = -omega × q``. A planar joint
+        always rotates about +z, so the SE(2) twist ``[omega_z, v_x, v_y]``
+        reduces to the closed form ``[1, q_y, -q_x]``.
+        """
         if self.dim == 2:
-            omega = np.array([0, 0, 1])
-            q = np.hstack((T0[:2, 2], 0))
-            return np.hstack((np.cross(-omega, q), omega))[[5, 0, 1]]
+            qx, qy = T0[0, 2], T0[1, 2]
+            return np.array([1.0, qy, -qx])
         else:
             omega = T0[:3, 2]
             q = T0[:3, 3]
             return np.hstack((omega, np.cross(-omega, q)))
 
     def set_geometric_attributes(self):
-        for ee in self.end_effectors:
-            k_map = self.kinematic_map[ROOT][ee]
-            for idx in range(len(k_map)):
-                cur = k_map[idx]
-                self.nodes[cur]["S"] = self._screw_axis_from_T0(self.nodes[cur]["T0"])
-                if idx != 0:
-                    pred = k_map[idx - 1]
-                    self[pred][cur][TRANSFORM] = (
-                        self._SE.inverse(self.nodes[pred]["T0"])
-                        @ self.nodes[cur]["T0"]
-                    )
+        # The screw axis S is a per-node property and the relative TRANSFORM is
+        # a per-edge property; neither depends on which end-effector path
+        # reaches it, so iterate over nodes/edges directly rather than walking
+        # (and recomputing along) every kinematic path.
+        for node in self.nodes:
+            self.nodes[node]["S"] = self._screw_axis_from_T0(self.nodes[node]["T0"])
+        for pred, cur in self.edges:
+            self[pred][cur][TRANSFORM] = (
+                self._SE.inverse(self.nodes[pred]["T0"]) @ self.nodes[cur]["T0"]
+            )
 
     def from_params(self) -> Dict[str, np.ndarray]:
         """Construct T_zero from link lengths. 2D-only today (no fk_tree_3d helper)."""
