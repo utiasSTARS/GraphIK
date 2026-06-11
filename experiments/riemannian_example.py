@@ -22,9 +22,9 @@ if __name__ == "__main__":
     q_goal = robot.random_configuration()
     T_goal = robot.pose(q_goal, f"p{robot.n}")  # Can be any desired pose, this is just a simple example
 
-    # Run Riemannian solver without jit compiled cost function and gradient computations
+    # Run the Riemannian solver
     t0 = perf_counter()
-    q_sol, solution_points = solve_with_riemannian(graph, T_goal, use_jit=False)  # Returns None if infeasible or didn't solve
+    q_sol, solution_points = solve_with_riemannian(graph, T_goal)  # Returns None if infeasible or didn't solve
     solve_time = perf_counter() - t0
 
     # Compare the solution's end effector pose to the goal.

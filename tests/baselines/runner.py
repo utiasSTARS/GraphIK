@@ -39,7 +39,7 @@ def _setup(case: Case):
 
 
 def _solve_riemannian(graph, T_goal):
-    q_sol, _ = solve_with_riemannian(graph, T_goal, use_jit=False)
+    q_sol, _ = solve_with_riemannian(graph, T_goal)
     return q_sol
 
 
@@ -48,7 +48,7 @@ def _solve_nonlinear(graph, T_goal, method: str):
     D_goal = distance_matrix_from_graph(G)
     omega = adjacency_matrix_from_graph(G)
     lb, ub = bound_smoothing(G)
-    solver = NonlinearSolver(graph, jit=False)
+    solver = NonlinearSolver(graph)
     sol = solver.solve(D_goal, omega, use_limits=True, bounds=(lb, ub), method=method)
     G_sol = graph_from_pos(sol["x"], graph.node_ids)
     q_sol = graph.joint_variables(G_sol, {f"p{graph.robot.n}": T_goal})

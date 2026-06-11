@@ -7,7 +7,6 @@ whole run sorted by cumulative time.
 Usage:
     python experiments/rtr_profile.py [--n-poses 20] [--init spectral|bsmooth|zero]
                                        [--robot ur10] [--seed 0] [--top 20]
-                                       [--jit]
 """
 from __future__ import annotations
 
@@ -47,14 +46,14 @@ ROBOTS = {
 }
 
 
-def _run_one(graph, T_goal, init: str, jit: bool, params: dict) -> dict:
+def _run_one(graph, T_goal, init: str, params: dict) -> dict:
     G_partial = graph.from_pose(T_goal)
     D_goal = distance_matrix_from_graph(G_partial)
     omega = adjacency_matrix_from_graph(G_partial)
     bounds = bound_smoothing(G_partial) if init == "bsmooth" else None
 
     t0 = time.perf_counter()
-    solver = RiemannianSolver(graph, jit=jit, init=init)
+    solver = RiemannianSolver(graph, init=init)
     solver.params.update(params)
     sol = solver.solve(D_goal, omega, use_limits=True, bounds=bounds)
     wall = time.perf_counter() - t0
@@ -91,7 +90,6 @@ def _print_summary(results: list[dict], total_wall: float, args) -> None:
 
     print(f"=== RTR profile on {args.robot} ===")
     print(f"  init:                    {args.init}")
-    print(f"  jit:                     {args.jit}")
     print(f"  n_poses:                 {args.n_poses}")
     print(f"  seed:                    {args.seed}")
     print(f"  total wall (incl prof):  {total_wall*1000:.0f}ms")
@@ -124,7 +122,6 @@ def main() -> None:
     p.add_argument("--init", choices=RIEMANNIAN_INIT_STRATEGIES, default="spectral")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--top", type=int, default=20, help="cProfile rows to print (default: 20)")
-    p.add_argument("--jit", action="store_true", help="use AOT-compiled costgrd kernels")
     # Solver hyperparameter overrides (forwarded to RiemannianSolver.params).
     p.add_argument("--mingradnorm", type=float, default=None)
     p.add_argument("--maxiter", type=int, default=None)
@@ -164,7 +161,7 @@ def main() -> None:
     profiler.enable()
     try:
         for T_goal in poses:
-            results.append(_run_one(graph, T_goal, args.init, args.jit, params))
+            results.append(_run_one(graph, T_goal, args.init, params))
     finally:
         profiler.disable()
     total_wall = time.perf_counter() - t0

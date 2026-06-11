@@ -112,25 +112,23 @@ class RiemannianSolver:
     def __init__(
         self,
         graph: ProblemGraph,
-        jit=False,
         cache=True,
         init="bsmooth",
         *args,
         **kwargs,
     ):
-        if "cost_type" in kwargs:
-            raise TypeError(
-                "cost_type was removed in the loss-module consolidation. "
-                "The single dense backend is selected by default; pass "
-                "jit=True for the AOT-compiled kernels."
-            )
+        for removed in ("cost_type", "jit"):
+            if removed in kwargs:
+                raise TypeError(
+                    f"{removed} was removed: the numba/AOT backend is gone "
+                    "and the dense NumPy loss backend is the only backend."
+                )
         self.params = {}
         for key in kwargs:
             setattr(self, key, kwargs[key])
         self.graph = graph
         self.dim = graph.dim
         self.N = graph.number_of_nodes()
-        self.jit = jit
         # Single switch that enables both per-Y memoization caches:
         # the solver's cost-state builder and the manifold's projection
         # operator. Both are perf-only — same algorithmic trajectory.
@@ -193,14 +191,11 @@ class RiemannianSolver:
         return linear_projection(X_rand, omega, self.dim)
 
     def create_cost(self, D_goal, omega):
-        return loss.for_riemannian(
-            D_goal, omega, jit=self.jit, cache=self.cache,
-        )
+        return loss.for_riemannian(D_goal, omega, cache=self.cache)
 
     def create_cost_limits(self, D_goal, omega, psi_L, psi_U):
         return loss.for_riemannian(
-            D_goal, omega, psi_L=psi_L, psi_U=psi_U,
-            jit=self.jit, cache=self.cache,
+            D_goal, omega, psi_L=psi_L, psi_U=psi_U, cache=self.cache,
         )
 
     def solve(
@@ -216,7 +211,6 @@ class RiemannianSolver:
     ):
         manifold = PSDFixedRank(
             self.N, self.dim,
-            jit=self.jit,
             cache_projection=self.cache,
         )
 
@@ -280,7 +274,6 @@ class RiemannianSolver:
 def solve_with_riemannian(
     graph,
     T_goal,
-    use_jit=False,
     cache=True,
     precon=None,
     init="bsmooth",
@@ -290,10 +283,6 @@ def solve_with_riemannian(
 
     Parameters
     ----------
-    use_jit : bool, default False
-        Use the AOT-compiled cost kernels when True. False keeps the pure
-        numpy path; build the kernels first via ``python -m graphik.solvers.costs``
-        before enabling this.
     cache : bool, default True
         Memoize per-Y cost state and projection ops across cost/grad/HVP
         calls within a single iteration. Pure perf, identical trajectory.
@@ -311,7 +300,7 @@ def solve_with_riemannian(
     and forwarded as the ``bounds`` argument to ``solve`` when needed.
     """
     G = graph.from_pose(T_goal)
-    solver = RiemannianSolver(graph, jit=use_jit, cache=cache, init=init)
+    solver = RiemannianSolver(graph, cache=cache, init=init)
     D_goal = distance_matrix_from_graph(G)
     omega = adjacency_matrix_from_graph(G)
     bounds = None

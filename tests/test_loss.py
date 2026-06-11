@@ -1,9 +1,9 @@
 """Finite-difference parity tests for graphik.solvers.loss.
 
-Each backend (dense, numba_aot) is checked against an FD approximation
-of its own gradient and HVP. egrad equals the analytical gradient of
-cost; ehvp equals the analytical Hessian-vector product of cost (verified
-by FD on egrad).
+The dense backend is checked against an FD approximation of its own
+gradient and HVP. egrad equals the analytical gradient of cost; ehvp
+equals the analytical Hessian-vector product of cost (verified by FD
+on egrad).
 """
 from __future__ import annotations
 
@@ -132,122 +132,16 @@ class TestDenseLimits(unittest.TestCase):
         self.assertTrue(a2_seen, "no trial activated upper-bound branch (A2 < 0)")
 
 
-class TestNumbaEquality(unittest.TestCase):
-    def setUp(self):
-        self.D_goal, self.omega, self.n, self.d, self.rng = _make_problem(seed=2)
-        self.dense = loss._dense_equality(self.D_goal, self.omega, cache=False)
-        self.numba = loss._numba_equality(self.D_goal, self.omega)
-
-    def test_cost_matches_dense(self):
-        for trial in range(3):
-            Y = self.rng.standard_normal((self.n, self.d))
-            np.testing.assert_allclose(
-                self.numba[0](Y), self.dense[0](Y), atol=1e-12, rtol=0,
-                err_msg=f"trial {trial}: numba cost != dense cost",
-            )
-
-    def test_egrad_matches_dense(self):
-        for trial in range(3):
-            Y = self.rng.standard_normal((self.n, self.d))
-            np.testing.assert_allclose(
-                self.numba[1](Y), self.dense[1](Y), atol=1e-12, rtol=0,
-                err_msg=f"trial {trial}: numba egrad != dense egrad",
-            )
-
-    def test_ehvp_matches_dense(self):
-        for trial in range(3):
-            Y = self.rng.standard_normal((self.n, self.d))
-            w = self.rng.standard_normal((self.n, self.d))
-            np.testing.assert_allclose(
-                self.numba[2](Y, w), self.dense[2](Y, w), atol=1e-12, rtol=0,
-                err_msg=f"trial {trial}: numba ehvp != dense ehvp",
-            )
-
-
-class TestNumbaLimits(unittest.TestCase):
-    def setUp(self):
-        self.D_goal, self.omega, self.n, self.d, self.rng = _make_problem(seed=3)
-        # Two distinct pairs to exercise both active-set branches (mirrors
-        # TestDenseLimits.setUp's structure after the Task 3 fix).
-        psi_L = np.zeros_like(self.D_goal)
-        psi_U = np.zeros_like(self.D_goal)
-        pair_L = (0, self.n - 1)
-        pair_U = (1, self.n - 2)
-        psi_L[pair_L] = psi_L[pair_L[::-1]] = 5.0 * self.D_goal[pair_L]
-        psi_U[pair_U] = psi_U[pair_U[::-1]] = 0.2 * self.D_goal[pair_U]
-        self.psi_L, self.psi_U = psi_L, psi_U
-        self.dense = loss._dense_limits(
-            self.D_goal, self.omega, self.psi_L, self.psi_U, cache=False
-        )
-        self.numba = loss._numba_limits(
-            self.D_goal, self.omega, self.psi_L, self.psi_U
-        )
-
-    def test_cost_matches_dense(self):
-        for trial in range(3):
-            Y = self.rng.standard_normal((self.n, self.d))
-            np.testing.assert_allclose(
-                self.numba[0](Y), self.dense[0](Y), atol=1e-10, rtol=0,
-                err_msg=f"trial {trial}: numba cost != dense cost",
-            )
-
-    def test_egrad_matches_dense(self):
-        for trial in range(3):
-            Y = self.rng.standard_normal((self.n, self.d))
-            np.testing.assert_allclose(
-                self.numba[1](Y), self.dense[1](Y), atol=1e-10, rtol=0,
-                err_msg=f"trial {trial}: numba egrad != dense egrad",
-            )
-
-    def test_ehvp_matches_dense(self):
-        for trial in range(3):
-            Y = self.rng.standard_normal((self.n, self.d))
-            w = self.rng.standard_normal((self.n, self.d))
-            np.testing.assert_allclose(
-                self.numba[2](Y, w), self.dense[2](Y, w), atol=1e-10, rtol=0,
-                err_msg=f"trial {trial}: numba ehvp != dense ehvp",
-            )
-
-    def test_active_set_exercises_both_branches(self):
-        """Sanity check: across 3 trials, both A1 (lower-bound) and A2
-        (upper-bound) branches are active at least once. If this regresses,
-        the cost/egrad/ehvp parity tests above stop covering the m4 / m5
-        paths and a sign bug in either AOT branch becomes invisible.
-        """
-        from graphik.utils.dgp import distance_matrix_from_pos
-        rng = np.random.default_rng(99)  # independent rng so test ordering doesn't matter
-        a1_seen = a2_seen = False
-        LL = (self.psi_L != self.psi_U) * (self.psi_L > 0)
-        UU = (self.psi_L != self.psi_U) * (self.psi_U > 0)
-        for _ in range(3):
-            Y = rng.standard_normal((self.n, self.d))
-            D = distance_matrix_from_pos(Y)
-            A1 = np.maximum(self.psi_L - LL * D, 0)
-            A2 = -np.maximum(-self.psi_U + UU * D, 0)
-            if (A1 > 0).any():
-                a1_seen = True
-            if (A2 < 0).any():
-                a2_seen = True
-        self.assertTrue(a1_seen, "no trial activated lower-bound branch (A1 > 0)")
-        self.assertTrue(a2_seen, "no trial activated upper-bound branch (A2 < 0)")
-
-
 class TestForRiemannian(unittest.TestCase):
     def setUp(self):
         self.D_goal, self.omega, self.n, self.d, self.rng = _make_problem(seed=4)
 
     def test_dense_dispatch_equality(self):
-        cost, egrad, _ = loss.for_riemannian(self.D_goal, self.omega, jit=False)
+        cost, egrad, _ = loss.for_riemannian(self.D_goal, self.omega)
         ref_cost, ref_egrad, _ = loss._dense_equality(self.D_goal, self.omega, cache=True)
         Y = self.rng.standard_normal((self.n, self.d))
         np.testing.assert_allclose(cost(Y), ref_cost(Y), atol=1e-12, rtol=0)
         np.testing.assert_allclose(egrad(Y), ref_egrad(Y), atol=1e-12, rtol=0)
-
-    def test_numba_dispatch_equality(self):
-        cost, _, _ = loss.for_riemannian(self.D_goal, self.omega, jit=True)
-        ref_cost, _, _ = loss._numba_equality(self.D_goal, self.omega)
-        Y = self.rng.standard_normal((self.n, self.d))
-        np.testing.assert_allclose(cost(Y), ref_cost(Y), atol=1e-12, rtol=0)
 
     def test_dense_dispatch_limits(self):
         psi_L = np.zeros_like(self.D_goal)
@@ -257,26 +151,10 @@ class TestForRiemannian(unittest.TestCase):
         psi_L[pair_L] = psi_L[pair_L[::-1]] = 5.0 * self.D_goal[pair_L]
         psi_U[pair_U] = psi_U[pair_U[::-1]] = 0.2 * self.D_goal[pair_U]
         cost, _, _ = loss.for_riemannian(
-            self.D_goal, self.omega, psi_L=psi_L, psi_U=psi_U, jit=False
+            self.D_goal, self.omega, psi_L=psi_L, psi_U=psi_U
         )
         ref_cost, _, _ = loss._dense_limits(
             self.D_goal, self.omega, psi_L, psi_U, cache=True
-        )
-        Y = self.rng.standard_normal((self.n, self.d))
-        np.testing.assert_allclose(cost(Y), ref_cost(Y), atol=1e-12, rtol=0)
-
-    def test_numba_dispatch_limits(self):
-        psi_L = np.zeros_like(self.D_goal)
-        psi_U = np.zeros_like(self.D_goal)
-        pair_L = (0, self.n - 1)
-        pair_U = (1, self.n - 2)
-        psi_L[pair_L] = psi_L[pair_L[::-1]] = 5.0 * self.D_goal[pair_L]
-        psi_U[pair_U] = psi_U[pair_U[::-1]] = 0.2 * self.D_goal[pair_U]
-        cost, _, _ = loss.for_riemannian(
-            self.D_goal, self.omega, psi_L=psi_L, psi_U=psi_U, jit=True
-        )
-        ref_cost, _, _ = loss._numba_limits(
-            self.D_goal, self.omega, psi_L, psi_U
         )
         Y = self.rng.standard_normal((self.n, self.d))
         np.testing.assert_allclose(cost(Y), ref_cost(Y), atol=1e-12, rtol=0)
@@ -288,7 +166,7 @@ class TestForMinimize(unittest.TestCase):
 
     def test_cost_and_grad_shapes(self):
         cost_and_grad, hessp = loss.for_minimize(
-            self.D_goal, self.omega, dim=self.d, jit=False
+            self.D_goal, self.omega, dim=self.d
         )
         Y_flat = self.rng.standard_normal(self.n * self.d)
         f, g = cost_and_grad(Y_flat)
@@ -300,9 +178,9 @@ class TestForMinimize(unittest.TestCase):
 
     def test_cost_and_grad_matches_riemannian(self):
         # for_minimize must return the same numbers as for_riemannian, just flattened.
-        cost, egrad, _ = loss.for_riemannian(self.D_goal, self.omega, jit=False)
+        cost, egrad, _ = loss.for_riemannian(self.D_goal, self.omega)
         cost_and_grad, _ = loss.for_minimize(
-            self.D_goal, self.omega, dim=self.d, jit=False
+            self.D_goal, self.omega, dim=self.d
         )
         Y = self.rng.standard_normal((self.n, self.d))
         f_ref = cost(Y)
@@ -320,7 +198,7 @@ class TestForMinimize(unittest.TestCase):
         psi_U[pair_U] = psi_U[pair_U[::-1]] = 0.2 * self.D_goal[pair_U]
         cost_and_grad, hessp = loss.for_minimize(
             self.D_goal, self.omega, dim=self.d,
-            psi_L=psi_L, psi_U=psi_U, jit=False,
+            psi_L=psi_L, psi_U=psi_U,
         )
         Y_flat = self.rng.standard_normal(self.n * self.d)
         f, g = cost_and_grad(Y_flat)

@@ -23,14 +23,6 @@ pip install -r requirements-macos-arm64.txt
 pip install -e . --no-deps
 ```
 
-**Optional: numba AOT compilation.** GraphIK's Riemannian solver has an AOT-compiled cost-gradient kernel for speed. The default solver path runs without it (`use_jit=False`); for the JIT path, build the extension once after install:
-
-```bash
-cd graphik/solvers && python costs.py
-```
-
-This produces a per-platform `.so` that's gitignored and env-local — regenerate it after each environment recreation.
-
 ## SDP solvers (Mosek recommended)
 
 GraphIK's SDP-relaxation solvers (`solve_with_cidgik` in `graphik/solvers/convex_iteration.py`, the SDP formulations in `graphik/solvers/sdp_*.py`) run out of the box on a free solver (Clarabel by default, falling back to SCS or CVXOPT) bundled with `cvxpy`. `experiments/cidgik_example.py` works without any extra setup.
@@ -86,7 +78,7 @@ The main purpose of our graphical interpretation of robot kinematics is to devel
 
 ```python
 from graphik.solvers.riemannian_solver import solve_with_riemannian
-q_sol, solution_points = solve_with_riemannian(graph, T_goal, use_jit=False)  # Returns None if infeasible or didn't solve
+q_sol, solution_points = solve_with_riemannian(graph, T_goal)  # Returns None if infeasible or didn't solve
 ```
 
 For a similar example using [`CIDGIK`](https://arxiv.org/abs/2109.03374), a convex optimization-based approach, please see [experiments/cidgik_example.py](https://github.com/utiasSTARS/GraphIK/blob/main/experiments/cidgik_example.py).

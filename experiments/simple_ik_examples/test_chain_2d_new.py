@@ -55,7 +55,7 @@ def random_problem_2d_chain():
         D_goal = distance_matrix_from_graph(G)
         omega = adjacency_matrix_from_graph(G)
         lb, ub = bound_smoothing(G)
-        sol_info = solver.solve(D_goal, omega, Y_init =Y_init, bounds=(lb,ub), jit=False)
+        sol_info = solver.solve(D_goal, omega, Y_init =Y_init, bounds=(lb,ub))
         G_sol = graph_from_pos(sol_info["x"], graph.node_ids)
         q_sol = graph.joint_variables(G_sol, {f"p{graph.robot.n}": T_goal})
 

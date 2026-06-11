@@ -21,7 +21,6 @@ setup(
         "networkx >= 3.6",
         "yourdfpy >= 0.0.60",
         "trimesh >= 4.6.1",
-        "numba >= 0.65",
         "pymlg @ git+https://github.com/decargroup/pymlg@8e6dc5ea61327ddfc2c8c1d16f276ae829f22db8#egg=pymlg",
     ],
     extras_require={

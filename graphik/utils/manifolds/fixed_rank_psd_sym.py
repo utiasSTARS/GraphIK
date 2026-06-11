@@ -42,7 +42,7 @@ class PSDFixedRank:
     "Low-Rank Optimization on the Cone of Positive Semidefinite Matrices".
     """
 
-    def __init__(self, n, k, jit=False, cache_projection=False):
+    def __init__(self, n, k, cache_projection=False):
         self._n = n
         self._k = k
         self.name = f"YY' quotient manifold of {n}x{n} psd matrices of rank {k}"
@@ -60,13 +60,8 @@ class PSDFixedRank:
         else:
             self._projection_op = self._build_projection_op
 
-        if jit:
-            from numba import njit
-            self.inner_product = njit(cache=True)(_inner_product_np)
-            self.norm = njit(cache=True)(_norm_np)
-        else:
-            self.inner_product = _inner_product_np
-            self.norm = _norm_np
+        self.inner_product = _inner_product_np
+        self.norm = _norm_np
 
     @property
     def typical_dist(self):

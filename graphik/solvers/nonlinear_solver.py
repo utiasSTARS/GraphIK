@@ -20,25 +20,23 @@ _HESSP_METHODS = frozenset({
 
 
 class NonlinearSolver:
-    def __init__(self, graph: ProblemGraph, jit=False, *args, **kwargs):
+    def __init__(self, graph: ProblemGraph, *args, **kwargs):
         """Distance-based IK solver wrapping ``scipy.optimize.minimize``.
 
-        Cost / gradient / HVP come from ``graphik.solvers.loss.for_minimize``,
-        which dispatches between a NumPy-dense backend and the AOT-compiled
-        ``costgrd`` kernels based on ``jit``.
+        Cost / gradient / HVP come from ``graphik.solvers.loss.for_minimize``
+        (dense NumPy backend).
         """
-        if "cost_type" in kwargs:
-            raise TypeError(
-                "cost_type was removed in the loss-module consolidation. "
-                "The single dense backend is selected by default; pass "
-                "jit=True for the AOT-compiled kernels."
-            )
+        for removed in ("cost_type", "jit"):
+            if removed in kwargs:
+                raise TypeError(
+                    f"{removed} was removed: the numba/AOT backend is gone "
+                    "and the dense NumPy loss backend is the only backend."
+                )
         for key in kwargs:
             setattr(self, key, kwargs[key])
         self.graph = graph
         self.dim = graph.dim
         self.N = graph.number_of_nodes()
-        self.jit = jit
 
     def generate_initialization(self, bounds, dim, omega):
         """Sample an EDM within the supplied (lb, ub) bounds, then MDS + project."""
@@ -49,14 +47,11 @@ class NonlinearSolver:
         return linear_projection(X_rand, omega, dim)
 
     def create_cost(self, D_goal, omega):
-        return loss.for_minimize(
-            D_goal, omega, dim=self.dim, jit=self.jit,
-        )
+        return loss.for_minimize(D_goal, omega, dim=self.dim)
 
     def create_cost_limits(self, D_goal, omega, psi_L, psi_U):
         return loss.for_minimize(
-            D_goal, omega, psi_L=psi_L, psi_U=psi_U,
-            dim=self.dim, jit=self.jit,
+            D_goal, omega, psi_L=psi_L, psi_U=psi_U, dim=self.dim,
         )
 
     def position_constraints(self):
