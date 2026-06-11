@@ -5,7 +5,7 @@ pose wall-clock and convergence stats, and dumps a cProfile of the
 whole run sorted by cumulative time.
 
 Usage:
-    python experiments/rtr_profile.py [--n-poses 20] [--init spectral|bsmooth]
+    python experiments/rtr_profile.py [--n-poses 20] [--init spectral|bsmooth|zero]
                                        [--robot ur10] [--seed 0] [--top 20]
                                        [--jit]
 """
@@ -32,7 +32,10 @@ from graphik.utils.roboturdf import (
     load_schunk_lwa4p,
     load_ur10,
 )
-from graphik.solvers.riemannian_solver import RiemannianSolver
+from graphik.solvers.riemannian_solver import (
+    RIEMANNIAN_INIT_STRATEGIES,
+    RiemannianSolver,
+)
 
 
 ROBOTS = {
@@ -48,7 +51,7 @@ def _run_one(graph, T_goal, init: str, jit: bool, params: dict) -> dict:
     G_partial = graph.from_pose(T_goal)
     D_goal = distance_matrix_from_graph(G_partial)
     omega = adjacency_matrix_from_graph(G_partial)
-    bounds = bound_smoothing(G_partial) if init in ("bsmooth", "bspectral") else None
+    bounds = bound_smoothing(G_partial) if init == "bsmooth" else None
 
     t0 = time.perf_counter()
     solver = RiemannianSolver(graph, jit=jit, init=init)
@@ -118,7 +121,7 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--n-poses", type=int, default=20, help="number of IK problems (default: 20)")
     p.add_argument("--robot", choices=tuple(ROBOTS), default="ur10")
-    p.add_argument("--init", choices=("spectral", "bsmooth"), default="spectral")
+    p.add_argument("--init", choices=RIEMANNIAN_INIT_STRATEGIES, default="spectral")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--top", type=int, default=20, help="cProfile rows to print (default: 20)")
     p.add_argument("--jit", action="store_true", help="use AOT-compiled costgrd kernels")

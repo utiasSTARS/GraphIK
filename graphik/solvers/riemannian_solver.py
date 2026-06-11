@@ -11,10 +11,14 @@ from graphik.utils import (
     gram_from_distance_matrix,
     distance_matrix_from_pos,
     memoize_last,
+    POS,
 )
 from graphik.utils.manifolds.fixed_rank_psd_sym import PSDFixedRank
 from graphik.graphs.graph import ProblemGraph
 from graphik.solvers import rtr, loss
+
+
+RIEMANNIAN_INIT_STRATEGIES = ("spectral", "bsmooth", "zero")
 
 
 def _gn_weights(omega, psi_L, psi_U):
@@ -131,21 +135,36 @@ class RiemannianSolver:
         # the solver's cost-state builder and the manifold's projection
         # operator. Both are perf-only — same algorithmic trajectory.
         self.cache = cache
-        if init not in ("spectral", "bsmooth"):
-            raise ValueError("init must be 'spectral' or 'bsmooth'")
+        if init not in RIEMANNIAN_INIT_STRATEGIES:
+            raise ValueError(
+                "init must be one of "
+                + ", ".join(repr(strategy) for strategy in RIEMANNIAN_INIT_STRATEGIES)
+            )
         self.init = init
+
+    def zero_configuration_initialization(self):
+        """Return an RTR point-cloud factor from the robot zero configuration."""
+        G_zero = self.graph.realization(self.graph.robot.zero_configuration())
+        return np.stack(
+            [
+                np.asarray(G_zero.nodes[node][POS], dtype=float)
+                for node in self.graph.node_ids
+            ]
+        )
 
     def generate_initialization(self, D_goal, omega, bounds=None):
         """Build a starting point for RTR. Dispatches on `self.init`:
 
-        - 'spectral' (default): Smith–Cai–Tasissa style. Center the partially-
+        - 'spectral': Smith–Cai–Tasissa style. Center the partially-
           observed distance matrix (zeros for unknowns), eigendecompose, take
           the top-d eigenvectors weighted by sqrt(eigvals). One N×N symmetric
           eigendecomposition.
-        - 'bsmooth': legacy. Triangle-inequality smoothing of distance bounds
+        - 'bsmooth' (default): legacy. Triangle-inequality smoothing of distance bounds
           (networkx all-pairs Bellman-Ford), sample an EDM at 0.9 of (lb, ub),
           classical MDS, then project to dim along the known-edge structure.
           Requires a ``bounds=(lb, ub)`` tuple (e.g. from ``bound_smoothing``).
+        - 'zero': realize the graph at ``robot.zero_configuration()`` and use
+          the resulting node positions directly, ordered by ``graph.node_ids``.
         """
         if self.init == "spectral":
             n = D_goal.shape[0]
@@ -161,7 +180,9 @@ class RiemannianSolver:
             lam = np.maximum(eigvals[top], 1e-12)
             return eigvecs[:, top] * np.sqrt(lam)
 
-        # bsmooth
+        if self.init == "zero":
+            return self.zero_configuration_initialization()
+
         if bounds is None:
             raise ValueError("init='bsmooth' requires bounds=(lb, ub)")
         lb, ub = bounds
@@ -256,7 +277,14 @@ class RiemannianSolver:
             }
         return res.point
 
-def solve_with_riemannian(graph, T_goal, use_jit=False, cache=True, precon=None):
+def solve_with_riemannian(
+    graph,
+    T_goal,
+    use_jit=False,
+    cache=True,
+    precon=None,
+    init="bsmooth",
+):
     """One-shot wrapper: build the IK problem from ``T_goal``, solve via
     ``RiemannianSolver``, decode joint angles from the recovered point cloud.
 
@@ -275,18 +303,23 @@ def solve_with_riemannian(graph, T_goal, use_jit=False, cache=True, precon=None)
         at equal-or-better success rate on the UR10 benchmark — see
         experiments/rtr_preconditioner_study.py. Off by default because it
         changes the optimization trajectory (baselines would shift).
+    init : {"spectral", "bsmooth", "zero"}, default "bsmooth"
+        Initialization strategy forwarded to ``RiemannianSolver``.
 
     Uses the bsmooth initialization (the ``RiemannianSolver`` default), so the
     triangle-inequality bounds from ``bound_smoothing(G)`` are computed here
-    and forwarded as the ``bounds`` argument to ``solve``.
+    and forwarded as the ``bounds`` argument to ``solve`` when needed.
     """
     G = graph.from_pose(T_goal)
-    solver = RiemannianSolver(graph, jit=use_jit, cache=cache)
+    solver = RiemannianSolver(graph, jit=use_jit, cache=cache, init=init)
     D_goal = distance_matrix_from_graph(G)
     omega = adjacency_matrix_from_graph(G)
-    lb, ub = bound_smoothing(G)
+    bounds = None
+    if init == "bsmooth":
+        lb, ub = bound_smoothing(G)
+        bounds = (lb, ub)
     sol_info = solver.solve(
-        D_goal, omega, use_limits=True, bounds=(lb, ub), precon=precon
+        D_goal, omega, use_limits=True, bounds=bounds, precon=precon
     )
     G_sol = graph_from_pos(sol_info["x"], graph.node_ids)
     q_sol = graph.joint_variables(G_sol, {f"p{graph.robot.n}": T_goal})
