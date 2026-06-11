@@ -22,15 +22,34 @@ def test_bfgs_reaches_reachable_goal():
     assert result.Y.shape == (graph.number_of_nodes(), d)
 
 
-def test_position_constraints_pin_exactly_the_pos_tagged_nodes():
+def test_position_constraints_pin_goal_nodes():
+    np.random.seed(42)
     robot, graph = planar_chain(4)
     solver = ScipySolver(graph, method="L-BFGS-B")
-    bnds = solver.position_constraints(graph)
+    T_goal = np.asarray(robot.pose(robot.random_configuration(), f"p{robot.n}"))
+    G = graph.from_pose(T_goal)
+    bnds = solver.position_constraints(G)
     lb = bnds.lb.reshape(-1, graph.dim)
-    ub = bnds.ub.reshape(-1, graph.dim)
-    for idx, (node, data) in enumerate(graph.nodes(data=True)):
-        if POS in data:
-            np.testing.assert_array_equal(lb[idx], data[POS])
-            np.testing.assert_array_equal(ub[idx], data[POS])
-        else:
-            assert np.all(lb[idx] == -np.inf) and np.all(ub[idx] == np.inf)
+
+    pinned = {
+        node: idx for idx, (node, data) in enumerate(G.nodes(data=True)) if POS in data
+    }
+    assert f"p{robot.n}" in pinned
+    ee_row = lb[pinned[f"p{robot.n}"]]
+    np.testing.assert_allclose(ee_row, T_goal[:2, 2], atol=1e-12)
+    for idx in range(lb.shape[0]):
+        if idx not in pinned.values():
+            assert np.all(lb[idx] == -np.inf)
+
+
+def test_lbfgsb_solution_has_pinned_ee():
+    np.random.seed(42)
+    robot, graph = planar_chain(6)
+    solver = ScipySolver(graph, method="L-BFGS-B")
+    q_goal = robot.random_configuration()
+    T_goal = np.asarray(robot.pose(q_goal, f"p{robot.n}"))
+
+    result = solver.solve(T_goal)
+
+    node_index = list(graph.node_ids).index(f"p{robot.n}")
+    np.testing.assert_allclose(result.Y[node_index], T_goal[:2, 2], atol=1e-12)

@@ -41,9 +41,8 @@ class ScipySolver(DistanceSolver):
     def position_constraints(self, G) -> Bounds:
         """Pin POS-tagged nodes of ``G`` to their stored positions.
 
-        For refactor parity this is called with the construction graph, where
-        only base anchors carry POS. The follow-up fix switches to the
-        per-solve goal graph.
+        Called with the per-solve goal graph, so the end-effector goal nodes
+        (POS-tagged there) are pinned alongside the base anchors.
         """
         N = G.number_of_nodes()
         ub = np.full((N, self.dim), np.inf)
@@ -66,7 +65,7 @@ class ScipySolver(DistanceSolver):
 
         bounds = None
         if self.method == "L-BFGS-B":
-            bounds = self.position_constraints(self.graph)
+            bounds = self.position_constraints(problem.G)
         options = {**_METHOD_DEFAULTS.get(self.method, {}), **self.options}
 
         minimize_kwargs = dict(
