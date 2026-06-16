@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "graphIK"
+version = "0.2.0"
+description = "Graph-based kinematics library"
+authors = [
+    { name = "Filip Maric", email = "filip.maric@robotics.utias.utoronto.ca" },
+    { name = "Matthew Giamou", email = "matthew.giamou@robotics.utias.utoronto.ca" },
+]
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = [
+    "numpy >= 2",
+    "scipy >= 1.17",
+    "matplotlib >= 3.1",
+    "cvxpy >= 1.8",
+    "networkx >= 3.6",
+    "yourdfpy >= 0.0.60",
+    "trimesh >= 4.6.1",
+    "pymlg @ git+https://github.com/decargroup/pymlg@8e6dc5ea61327ddfc2c8c1d16f276ae829f22db8#egg=pymlg",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.urls]
+Homepage = "https://github.com/utiasSTARS/GraphIK"
+
+[tool.setuptools.packages.find]
+include = ["graphik", "graphik.*"]
+exclude = ["tests*", "experiments*"]
+
+[tool.setuptools.package-data]
+graphik = ["robots/urdfs/*", "robots/urdfs/meshes/**/*"]

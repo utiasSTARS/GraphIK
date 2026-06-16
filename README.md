@@ -23,14 +23,6 @@ pip install -r requirements-macos-arm64.txt
 pip install -e . --no-deps
 ```
 
-**Optional: numba AOT compilation.** GraphIK's Riemannian solver has an AOT-compiled cost-gradient kernel for speed. The default solver path runs without it (`use_jit=False`); for the JIT path, build the extension once after install:
-
-```bash
-cd graphik/solvers && python costs.py
-```
-
-This produces a per-platform `.so` that's gitignored and env-local — regenerate it after each environment recreation.
-
 ## SDP solvers (Mosek recommended)
 
 GraphIK's SDP-relaxation solvers (`solve_with_cidgik` in `graphik/solvers/convex_iteration.py`, the SDP formulations in `graphik/solvers/sdp_*.py`) run out of the box on a free solver (Clarabel by default, falling back to SCS or CVXOPT) bundled with `cvxpy`. `experiments/cidgik_example.py` works without any extra setup.
@@ -48,7 +40,7 @@ To enable the Mosek path:
 
 3. Place the license file (`mosek.lic`) at the path Mosek expects (typically `~/mosek/mosek.lic`).
 
-The SDP tests in `tests/test_sdp_snl*.py` are tuned to Mosek's tolerances and skip cleanly when it isn't installed.
+The SDP tests in `tests/test_sdp_snl*.py` run without Mosek: constraint-construction tests are solver-free, and the end-to-end solves use whichever free solver cvxpy picks, with tolerances loose enough for it.
 
 ## Usage
 Use of GraphIK can be summarized by four key steps, which we'll walk through below (see the scripts in [experiments/](https://github.com/utiasSTARS/GraphIK/tree/main/experiments) for more details).
@@ -66,7 +58,7 @@ GraphIK's interface between robot models and IK solvers is the [`ProblemGraph`](
 If you are considering an environment with spherical obstacles, you can include constraints that prevent collisions. In this example, we will use a set of spheres that approximate a table: 
 
 ```python
-from graphik.utils.utils import table_environment
+from graphik.utils.environments import table_environment
 obstacles = table_environment()
 # This loop is not needed if you are not using obstacle avoidance constraints 
 for idx, obs in enumerate(obstacles):
@@ -82,11 +74,14 @@ T_goal = robot.pose(q_goal, f"p{robot.n}")
 ```
 
 ### 4. Solve the IK Problem
-The main purpose of our graphical interpretation of robot kinematics is to develop distance-geometric IK solvers. One example is the [Riemannian optimization-based solver](https://arxiv.org/abs/2011.04850) implemented in [`RiemannianSolver`](https://github.com/utiasSTARS/GraphIK/blob/main/graphik/solvers/riemannian_solver.py). 
+The main purpose of our graphical interpretation of robot kinematics is to develop distance-geometric IK solvers. One example is the [Riemannian optimization-based solver](https://arxiv.org/abs/2011.04850) implemented in [`RiemannianSolver`](https://github.com/utiasSTARS/GraphIK/blob/main/graphik/solvers/riemannian.py). 
 
 ```python
-from graphik.solvers.riemannian_solver import solve_with_riemannian
-q_sol, solution_points = solve_with_riemannian(graph, T_goal, use_jit=False)  # Returns None if infeasible or didn't solve
+from graphik.solvers import RiemannianSolver
+
+solver = RiemannianSolver(graph)
+result = solver.solve(T_goal)
+q_sol = result.q if result.feasible else None  # feasible == within joint limits
 ```
 
 For a similar example using [`CIDGIK`](https://arxiv.org/abs/2109.03374), a convex optimization-based approach, please see [experiments/cidgik_example.py](https://github.com/utiasSTARS/GraphIK/blob/main/experiments/cidgik_example.py).
@@ -176,7 +171,7 @@ arXiv: [Inverse Kinematics for Serial Kinematic Chains via Sum of Squares Optimi
 
 ```bibtex
 @misc{marić2022convex_arxiv,
-  author={Filip Marić and {Matthew Giamou and Soroush Khoubyarian and Ivan Petrović and Jonathan Kelly},
+  author={Filip Marić and Matthew Giamou and Soroush Khoubyarian and Ivan Petrović and Jonathan Kelly},
   title={Inverse Kinematics for Serial Kinematic Chains via Sum of Squares Optimization}, 
   year={2020},
   eprint={1909.09318},

@@ -42,7 +42,7 @@ class PSDFixedRank:
     "Low-Rank Optimization on the Cone of Positive Semidefinite Matrices".
     """
 
-    def __init__(self, n, k, jit=False, cache_projection=False):
+    def __init__(self, n, k, cache_projection=False):
         self._n = n
         self._k = k
         self.name = f"YY' quotient manifold of {n}x{n} psd matrices of rank {k}"
@@ -60,13 +60,8 @@ class PSDFixedRank:
         else:
             self._projection_op = self._build_projection_op
 
-        if jit:
-            from numba import njit
-            self.inner_product = njit(cache=True)(_inner_product_np)
-            self.norm = njit(cache=True)(_norm_np)
-        else:
-            self.inner_product = _inner_product_np
-            self.norm = _norm_np
+        self.inner_product = _inner_product_np
+        self.norm = _norm_np
 
     @property
     def typical_dist(self):
@@ -76,24 +71,9 @@ class PSDFixedRank:
     @staticmethod
     def _build_lyap_matrix(X):
         # X = Y^T Y. Returns the (dim*dim) x (dim*dim) Lyapunov matrix
-        # whose linear system gives the quotient correction Omega.
+        # representing Omega -> X@Omega + Omega@X on row-major vec(Omega).
         dim = X.shape[0]
-        if dim == 3:
-            A = np.asarray([[X[0,0] + X[0,0], X[0,1] , X[0,2], X[1,0], 0, 0, X[2,0], 0, 0],
-                            [X[1,0], X[1,1] + X[0,0], X[1,2], 0, X[1,0], 0, 0, X[2,0], 0],
-                            [X[2,0], X[2,1], X[2,2] + X[0,0], 0, 0, X[1,0], 0, 0, X[2,0]],
-                            [X[0,1], 0, 0, X[0,0] + X[1,1], X[0,1] , X[0,2], X[2,1], 0, 0],
-                            [0, X[0,1], 0, X[1,0], X[1,1] + X[1,1], X[1,2], 0, X[2,1], 0],
-                            [0, 0, X[0,1], X[2,0], X[2,1], X[2,2] + X[1,1], 0, 0, X[2,1]],
-                            [X[0,2], 0, 0, X[1,2], 0, 0, X[0,0] + X[2,2], X[0,1] , X[0,2]],
-                            [0, X[0,2], 0, 0, X[1,2], 0, X[1,0], X[1,1] + X[2,2], X[1,2]],
-                            [0, 0, X[0,2], 0, 0, X[1,2], X[2,0], X[2,1], X[2,2] + X[2,2]]])
-        else:  # dim == 2
-            A = np.asarray([[X[0,0] + X[0,0], X[0,1], X[0,1], 0],
-                            [X[1,0], X[0,1] + X[0,0], 0, X[0,1]],
-                            [X[0,1], 0, X[0,0] + X[1,1], X[0,1]],
-                            [0, X[0,1], X[1,0], X[1,1]+ X[1,1]]])
-        return A
+        return np.kron(X, np.eye(dim)) + np.kron(np.eye(dim), X)
 
     @staticmethod
     def _kron_with_eye(A, d):

@@ -38,13 +38,6 @@ def dh_to_se2(a: float, theta: float) -> np.ndarray:
     return T
 
 
-def fk_2d(a: list, theta: list, q: list) -> np.ndarray:
-    """Forward kinematics from arrays of link lengths and angles. Returns 3x3 SE(2)."""
-    if len(a) > 1:
-        return dh_to_se2(a[0], theta[0] + q[0]) @ fk_2d(a[1:], theta[1:], q[1:])
-    return dh_to_se2(a[0], theta[0] + q[0])
-
-
 def fk_tree_2d(a: list, theta: list, q: list, path_indices: list) -> np.ndarray:
     """Forward kinematics along a path through a tree. Returns 3x3 SE(2)."""
     idx = path_indices[0]

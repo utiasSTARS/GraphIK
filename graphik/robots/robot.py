@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Unified Robot class parameterized by dim in {2, 3}."""
+from functools import cached_property
 from math import pi
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Union
 
 import networkx as nx
 import numpy as np
@@ -36,7 +37,6 @@ class Robot(nx.DiGraph):
             raise ValueError(f"dim must be 2 or 3, got {self.dim}")
         self._SE = SE2 if self.dim == 2 else SE3
 
-        self.lambdified = False
         self.params = params
         self.n = params["num_joints"]
 
@@ -73,43 +73,17 @@ class Robot(nx.DiGraph):
     # ------------------------------------------------------------------
     # Properties (unchanged behaviour from the previous Robot base class)
     # ------------------------------------------------------------------
-    @property
-    def kinematic_map(self) -> dict:
-        return self._kinematic_map
-
-    @kinematic_map.setter
-    def kinematic_map(self, kinematic_map: dict):
-        self._kinematic_map = kinematic_map
-
-    @property
+    @cached_property
     def joint_ids(self) -> List[str]:
-        try:
-            return self._joint_ids
-        except AttributeError:
-            self._joint_ids = list(self.kinematic_map.keys())
-            return self._joint_ids
+        return list(self.kinematic_map.keys())
 
-    @property
+    @cached_property
     def end_effectors(self) -> List:
-        if not hasattr(self, "_end_effectors"):
-            self._end_effectors = [x for x in self.nodes() if self.out_degree(x) == 0]
-        return self._end_effectors
+        return [x for x in self.nodes() if self.out_degree(x) == 0]
 
-    @property
+    @cached_property
     def T_base(self) -> np.ndarray:
-        try:
-            return self._T_base
-        except AttributeError:
-            self._T_base = self.nodes[ROOT]["T0"]
-        return self._T_base
-
-    @property
-    def limited_joints(self) -> List[str]:
-        return self._limited_joints
-
-    @limited_joints.setter
-    def limited_joints(self, lim: List[str]):
-        self._limited_joints = lim
+        return self.nodes[ROOT]["T0"]
 
     @property
     def ub(self) -> Dict[str, Any]:
@@ -127,9 +101,6 @@ class Robot(nx.DiGraph):
     def lb(self, lb: dict):
         self._lb = lb if type(lb) is dict else list_to_variable_dict(flatten([lb]))
 
-    @property
-    def spherical(self) -> bool:
-        return False
 
     # ------------------------------------------------------------------
     # Configuration helpers
@@ -155,39 +126,35 @@ class Robot(nx.DiGraph):
                 T[node] = self.pose(joint_angles, node)
         return T
 
-    def end_effector_pos(self, q: Dict[str, float]) -> Dict[str, ArrayLike]:
-        goals = {}
-        for ee in self.end_effectors:
-            for node in ee:
-                goals[node] = self.pose(q, node)[:-1, -1]
-        return goals
-
     # ------------------------------------------------------------------
     # Dim-aware kinematics
     # ------------------------------------------------------------------
     def _screw_axis_from_T0(self, T0: np.ndarray) -> np.ndarray:
-        """Return the screw axis (twist coords) for a revolute joint with frame T0."""
+        """Return the screw axis (twist coords) for a revolute joint with frame T0.
+
+        The twist is ``[omega, v]`` with ``v = -omega × q``. A planar joint
+        always rotates about +z, so the SE(2) twist ``[omega_z, v_x, v_y]``
+        reduces to the closed form ``[1, q_y, -q_x]``.
+        """
         if self.dim == 2:
-            omega = np.array([0, 0, 1])
-            q = np.hstack((T0[:2, 2], 0))
-            return np.hstack((np.cross(-omega, q), omega))[[5, 0, 1]]
+            qx, qy = T0[0, 2], T0[1, 2]
+            return np.array([1.0, qy, -qx])
         else:
             omega = T0[:3, 2]
             q = T0[:3, 3]
             return np.hstack((omega, np.cross(-omega, q)))
 
     def set_geometric_attributes(self):
-        for ee in self.end_effectors:
-            k_map = self.kinematic_map[ROOT][ee]
-            for idx in range(len(k_map)):
-                cur = k_map[idx]
-                self.nodes[cur]["S"] = self._screw_axis_from_T0(self.nodes[cur]["T0"])
-                if idx != 0:
-                    pred = k_map[idx - 1]
-                    self[pred][cur][TRANSFORM] = (
-                        self._SE.inverse(self.nodes[pred]["T0"])
-                        @ self.nodes[cur]["T0"]
-                    )
+        # The screw axis S is a per-node property and the relative TRANSFORM is
+        # a per-edge property; neither depends on which end-effector path
+        # reaches it, so iterate over nodes/edges directly rather than walking
+        # (and recomputing along) every kinematic path.
+        for node in self.nodes:
+            self.nodes[node]["S"] = self._screw_axis_from_T0(self.nodes[node]["T0"])
+        for pred, cur in self.edges:
+            self[pred][cur][TRANSFORM] = (
+                self._SE.inverse(self.nodes[pred]["T0"]) @ self.nodes[cur]["T0"]
+            )
 
     def from_params(self) -> Dict[str, np.ndarray]:
         """Construct T_zero from link lengths. 2D-only today (no fk_tree_3d helper)."""
@@ -264,38 +231,4 @@ class Robot(nx.DiGraph):
                     T = T @ self._SE.Exp(self.nodes[ppred]["S"] * joint_angles[pred])
                     Ad = self._SE.adjoint(T)
                     J[node][:, idx] = Ad @ self.nodes[pred]["S"]
-        return J
-
-    def jacobian_geometric(
-        self,
-        joint_angles: Dict[str, float],
-        nodes: Union[List[str], str],
-        Ts: Dict[str, np.ndarray] = None,
-    ) -> Dict[str, ArrayLike]:
-        """Geometric Jacobian (linear+angular) for end-effector p-nodes. 3D-only."""
-        assert self.dim == 3, "jacobian_geometric is 3D-only"
-        kmap = self.kinematic_map[ROOT]
-
-        if nodes is None:
-            nodes = []
-            for ee in self.end_effectors:
-                if ee[0][0] == MAIN_PREFIX:
-                    nodes += [ee[0]]
-                elif ee[1][0] == MAIN_PREFIX:
-                    nodes += [ee[1]]
-
-        if Ts is None:
-            Ts = self.get_all_poses(joint_angles)
-
-        J = {}
-        for node in nodes:
-            path = kmap[node][1:]
-            p_ee = Ts[node][:3, 3]
-            J[node] = np.zeros([6, self.n])
-            for idx, joint in enumerate(path):
-                T_0_i = Ts[list(self.parents.predecessors(joint))[0]]
-                z_hat_i = T_0_i[:3, 2]
-                p_i = T_0_i[:3, 3]
-                J[node][:3, idx] = np.cross(z_hat_i, p_ee - p_i)
-                J[node][3:, idx] = z_hat_i
         return J

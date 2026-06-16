@@ -6,9 +6,36 @@ from numpy import pi
 from graphik.graphs import ProblemGraph
 
 from graphik.robots import Robot
-from graphik.utils import best_fit_transform, list_to_variable_dict, MDS, gram_from_distance_matrix, pos_from_graph
+from graphik.utils import (
+    best_fit_transform,
+    list_to_variable_dict,
+    MDS,
+    gram_from_distance_matrix,
+    normalize_positions,
+    pos_from_graph,
+)
 
 class TestDistanceMatrix(unittest.TestCase):
+    def test_normalize_positions_scale_uses_unit_max_abs(self):
+        Y = np.array([
+            [2.0, 0.0],
+            [0.0, 4.0],
+            [-2.0, -2.0],
+        ])
+
+        P = normalize_positions(Y, scale=True)
+
+        self.assertTrue(np.isrealobj(P))
+        assert_allclose(P.mean(axis=0), np.zeros(2), atol=1e-12)
+        assert_allclose(np.abs(P).max(), 1.0)
+
+    def test_normalize_positions_scale_handles_degenerate_input(self):
+        Y = np.ones((4, 3))
+
+        P = normalize_positions(Y, scale=True)
+
+        assert_allclose(P, np.zeros_like(Y), atol=1e-12)
+
     def test_special_case_3d_tree(self):
         print("\n Testing cases with zeroed out parameters ...")
         modified_dh = False
@@ -200,4 +227,3 @@ class TestDistanceMatrix(unittest.TestCase):
             P_e = (R @ X.T + t.reshape(2, 1)).T
 
             self.assertIsNone(assert_allclose(P_e, Y, atol=1e-8))
-

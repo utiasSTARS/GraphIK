@@ -3,25 +3,7 @@ from typing import List, Optional
 import numpy as np
 import networkx as nx
 from numpy.typing import NDArray
-from graphik.utils.constants import *
-from graphik.utils.geometry import best_fit_transform
-
-
-def orthogonal_procrustes(G1: nx.DiGraph, G2: nx.DiGraph) -> nx.DiGraph:
-    """
-    Aligns two point clouds represented by graphs by aligning nodes with
-    matching labels and returns a graph representing the aligned points.
-
-    Keyword Arguments:
-    G1: nx.DiGraph -- Graph representing the point set to align with.
-    G2: nx.DiGraph -- Graph representing the point set to be aligned.
-    """
-    Y = pos_from_graph(G1, node_ids=list(G1))
-    X = pos_from_graph(G2, node_ids=list(G1))
-    R, t = best_fit_transform(X, Y)
-    X = pos_from_graph(G2)
-    P_e = (R @ X.T + t.reshape(len(t), 1)).T
-    return graph_from_pos(P_e, list(G2))  # not really order-dependent
+from graphik.utils.constants import DIST, LOWER, POS, UPPER
 
 
 def gram_from_distance_matrix(D: NDArray) -> NDArray:
@@ -78,15 +60,6 @@ def adjacency_matrix_from_graph(
         G.edge_subgraph(selected_edges), weight="", nodelist=nodelist
     )
 
-def incidence_matrix_from_adjacency(A):
-    edges = np.nonzero(np.triu(A, 1))  # Get indices of upper triangle non-zeros
-    num_edges = len(edges[0])
-    B = np.zeros((num_edges, A.shape[0]))
-    rows = np.arange(num_edges)
-    B[rows, edges[0]] = 1
-    B[rows, edges[1]] = -1
-    return B
-
 def pos_from_graph(G: nx.DiGraph, node_ids=None) -> NDArray:
     """
     Returns an n x m matrix of node positions from a given graph,
@@ -101,7 +74,7 @@ def pos_from_graph(G: nx.DiGraph, node_ids=None) -> NDArray:
 
 
 def graph_from_pos(
-    P: NDArray, node_ids: Optional[List] = [], dist: bool = True
+    P: NDArray, node_ids: Optional[List] = None, dist: bool = True
 ) -> nx.DiGraph:
     """
     Generates an nx.DiGraph object of the subclass type given
@@ -162,14 +135,6 @@ def graph_complete_edges(
     return G
 
 
-def factor(A: NDArray):
-    (evals, evecs) = np.linalg.eigh(A)
-    evals[evals < 0] = 0  # closest SDP matrix
-    X = evecs * np.sqrt(evals)
-    return np.fliplr(X)
-
-
-## perform classic Multidimensional scaling
 def MDS(B: NDArray, eps: float = 1e-5):
     evals, evecs = np.linalg.eigh(B)            # ascending
     evals = evals[::-1]
@@ -190,10 +155,6 @@ def linear_projection(P: NDArray, F: NDArray, dim):
     eigval, eigvec = np.linalg.eigh(S)
     return P @ np.fliplr(eigvec)[:, :dim]
 
-
-def sample_matrix(lower_limit, upper_limit):
-    m, n = lower_limit.shape
-    return lower_limit + np.random.rand(m, n) * (upper_limit - lower_limit)
 
 def bound_smoothing(G: nx.DiGraph) -> tuple:
     """
@@ -242,10 +203,12 @@ def bound_smoothing(G: nx.DiGraph) -> tuple:
 def normalize_positions(Y: NDArray, scale=False):
     Y_c = Y - Y.mean(0)
     C = Y_c.T.dot(Y_c)
-    e, v = np.linalg.eig(C)
+    _, v = np.linalg.eigh(C)
     Y_cr = Y_c.dot(v)
     if scale:
-        Y_crs = Y_cr / (1 / abs(Y_cr).max())
-        return Y_crs
+        max_abs = np.abs(Y_cr).max()
+        if max_abs > 0:
+            return Y_cr / max_abs
+        return Y_cr
     else:
         return Y_cr

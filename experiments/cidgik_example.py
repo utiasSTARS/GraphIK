@@ -1,4 +1,4 @@
-from graphik.utils.utils import table_environment
+from graphik.utils.environments import table_environment
 from graphik.solvers.convex_iteration import solve_with_cidgik
 
 # Multiple robot models to try out, or you can implement your own

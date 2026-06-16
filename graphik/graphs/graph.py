@@ -1,4 +1,5 @@
 """Unified ProblemGraph class parameterized by dim in {2, 3}."""
+from functools import cached_property
 from math import sqrt, atan2
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -10,7 +11,39 @@ from numpy.typing import ArrayLike
 from pymlg.numpy import SE3
 
 from graphik.robots.robot import Robot
-from graphik.utils import *  # noqa: F401,F403  (existing convention; brings constants and helpers into scope: ROOT, POS, TYPE, BASE, ROBOT, END_EFFECTOR, OBSTACLE, BOUNDED, BELOW, ABOVE, LOWER, UPPER, DIST, MAIN_PREFIX, AUX_PREFIX, TRANSFORM, trans_axis, rot_axis, skew, normalize, wraptopi, R2, best_fit_transform, level2_descendants, max_min_distance_revolute, distance_matrix_from_graph, adjacency_matrix_from_graph, graph_complete_edges)
+from graphik.utils.constants import (
+    ABOVE,
+    AUX_PREFIX,
+    BASE,
+    BELOW,
+    BOUNDED,
+    DIST,
+    END_EFFECTOR,
+    LOWER,
+    MAIN_PREFIX,
+    OBSTACLE,
+    POS,
+    ROBOT,
+    ROOT,
+    TYPE,
+    UPPER,
+)
+from graphik.utils.dgp import (
+    adjacency_matrix_from_graph,
+    distance_matrix_from_graph,
+    graph_complete_edges,
+)
+from graphik.utils.geometry import (
+    best_fit_transform,
+    max_min_distance_revolute,
+    skew,
+)
+from graphik.utils.kinematics import R2, rot_axis, trans_axis
+from graphik.utils.utils import level2_descendants, normalize, wraptopi
+
+
+def _bounded_tags(limit) -> List[str]:
+    return [limit] if limit in (BELOW, ABOVE) else []
 
 
 class ProblemGraph(nx.DiGraph):
@@ -41,29 +74,17 @@ class ProblemGraph(nx.DiGraph):
     # ------------------------------------------------------------------
     # Properties (unchanged from the previous ProblemGraph base class)
     # ------------------------------------------------------------------
-    @property
+    @cached_property
     def base_nodes(self) -> List[str]:
-        try:
-            return self._base_nodes
-        except AttributeError:
-            self._base_nodes = [n for n, d in self.nodes(data=TYPE) if BASE in d]
-            return self._base_nodes
+        return [n for n, d in self.nodes(data=TYPE) if BASE in d]
 
-    @property
+    @cached_property
     def structure_nodes(self) -> List[str]:
-        try:
-            return self._structure_nodes
-        except AttributeError:
-            self._structure_nodes = [n for n, d in self.nodes(data=TYPE) if ROBOT in d]
-            return self._structure_nodes
+        return [n for n, d in self.nodes(data=TYPE) if ROBOT in d]
 
-    @property
+    @cached_property
     def end_effector_nodes(self) -> List[str]:
-        try:
-            return self._end_effector_nodes
-        except AttributeError:
-            self._end_effector_nodes = [n for n, d in self.nodes(data=TYPE) if END_EFFECTOR in d]
-            return self._end_effector_nodes
+        return [n for n, d in self.nodes(data=TYPE) if END_EFFECTOR in d]
 
     @property
     def base(self) -> nx.DiGraph:
@@ -124,14 +145,15 @@ class ProblemGraph(nx.DiGraph):
     # ------------------------------------------------------------------
     def add_anchor_node(self, name: str, data: Dict[str, Any]):
         if POS not in data:
-            raise KeyError("Node needs to gave a position to be added.")
+            raise KeyError("Node needs to have a position to be added.")
         self.add_nodes_from([(name, data)])
         for nname, ndata in self.nodes(data=True):
             if POS in ndata and nname != name:
+                dist = la.norm(ndata[POS] - data[POS])
                 self.add_edge(nname, name)
-                self[nname][name][DIST] = la.norm(ndata[POS] - data[POS])
-                self[nname][name][LOWER] = la.norm(ndata[POS] - data[POS])
-                self[nname][name][UPPER] = la.norm(ndata[POS] - data[POS])
+                self[nname][name][DIST] = dist
+                self[nname][name][LOWER] = dist
+                self[nname][name][UPPER] = dist
                 self[nname][name][BOUNDED] = []
 
     def add_spherical_obstacle(self, name: str, position: ArrayLike, radius: float):
@@ -152,57 +174,50 @@ class ProblemGraph(nx.DiGraph):
         obstacles = [n for n, t in node_types.items() if t == [OBSTACLE]]
         self.remove_nodes_from(obstacles)
 
-    def check_distance_limits(self, G: nx.DiGraph, tol=1e-10) -> List[Dict[str, List[Any]]]:
+    def check_distance_limits(self, G: nx.DiGraph, tol=1e-10) -> List[Dict[str, Any]]:
         typ = nx.get_node_attributes(self, name=TYPE)
         broken_limits = []
         for u, v, data in self.edges(data=True):
-            if BELOW in data[BOUNDED] or ABOVE in data[BOUNDED]:
-                if G[u][v][DIST] < data[LOWER] - tol:
-                    bl = {}
-                    if (ROBOT in typ[u] and OBSTACLE in typ[v]) or (
-                        OBSTACLE in typ[u] and ROBOT in typ[v]
-                    ):
-                        bl["edge"] = (u, v)
-                        bl["value"] = G[u][v][DIST] - data[LOWER]
-                        bl["type"] = OBSTACLE
-                        bl["side"] = LOWER
-                        broken_limits += [bl]
-                    if ROBOT in typ[u] and ROBOT in typ[v]:
-                        bl["edge"] = (u, v)
-                        bl["value"] = G[u][v][DIST] - data[LOWER]
-                        bl["type"] = "joint"
-                        bl["side"] = LOWER
-                        broken_limits += [bl]
-                if G[u][v][DIST] > data[UPPER] + tol:
-                    bl = {}
-                    if (ROBOT in typ[u] and OBSTACLE in typ[v]) or (
-                        OBSTACLE in typ[u] and ROBOT in typ[v]
-                    ):
-                        bl["edge"] = (u, v)
-                        bl["value"] = G[u][v][DIST] - data[UPPER]
-                        bl["type"] = OBSTACLE
-                        bl["side"] = UPPER
-                        broken_limits += [bl]
-                    if ROBOT in typ[u] and ROBOT in typ[v]:
-                        bl["edge"] = (u, v)
-                        bl["value"] = G[u][v][DIST] - data[UPPER]
-                        bl["type"] = "joint"
-                        bl["side"] = UPPER
-                        broken_limits += [bl]
+            bounds = data.get(BOUNDED, [])
+            if BELOW not in bounds and ABOVE not in bounds:
+                continue
+            if (ROBOT in typ[u] and OBSTACLE in typ[v]) or (
+                OBSTACLE in typ[u] and ROBOT in typ[v]
+            ):
+                kind = OBSTACLE
+            elif ROBOT in typ[u] and ROBOT in typ[v]:
+                kind = "joint"
+            else:
+                continue
+            dist = G[u][v][DIST]
+            for side, violated in (
+                (LOWER, dist < data[LOWER] - tol),
+                (UPPER, dist > data[UPPER] + tol),
+            ):
+                if violated:
+                    broken_limits.append(
+                        {
+                            "edge": (u, v),
+                            "value": dist - data[side],
+                            "type": kind,
+                            "side": side,
+                        }
+                    )
         return broken_limits
 
     def distance_bound_matrices(self) -> Tuple[ArrayLike, ArrayLike]:
         n_nodes = self.number_of_nodes()
         L = np.zeros([n_nodes, n_nodes])
         U = np.zeros([n_nodes, n_nodes])
+        index = {node: idx for idx, node in enumerate(self.nodes())}
         for e1, e2, data in self.edges(data=True):
             if BOUNDED in data:
-                udx = self.node_ids.index(e1)
-                vdx = self.node_ids.index(e2)
-                if BELOW in data[BOUNDED]:
+                udx, vdx = index[e1], index[e2]
+                bounds = data[BOUNDED]
+                if BELOW in bounds:
                     L[udx, vdx] = data[LOWER] ** 2
                     L[vdx, udx] = L[udx, vdx]
-                if ABOVE in data[BOUNDED]:
+                if ABOVE in bounds:
                     U[udx, vdx] = data[UPPER] ** 2
                     U[vdx, udx] = U[udx, vdx]
         return L, U
@@ -277,6 +292,12 @@ class ProblemGraph(nx.DiGraph):
                 (aux_name, (T0 @ trans_z)[:3, 3]),
             ]
 
+    def structure_graph(self) -> nx.DiGraph:
+        """Standalone copy of the robot structure subgraph (exact-distance
+        edges only, no joint-limit bound edges). Public API used by the SDP
+        solvers; equivalent to the pre-unification ``structure_graph()``."""
+        return self._build_structure_subgraph()
+
     def _build_structure_subgraph(self) -> nx.DiGraph:
         structure = nx.empty_graph(create_using=nx.DiGraph)
         end_effectors = self.robot.end_effectors
@@ -349,6 +370,16 @@ class ProblemGraph(nx.DiGraph):
             self._set_limits_3d()
 
     # --- 2D bodies (verbatim from the old ProblemGraphPlanar) ---
+    @staticmethod
+    def _two_link_bounds(l1: float, l2: float, angle_limit: float) -> Tuple[float, float]:
+        """Max/min reach of a 2-link planar chain whose hinge ranges over
+        ``[-angle_limit, angle_limit]``. The upper bound is full extension
+        ``l1 + l2``; the lower bound is the law of cosines at the extreme
+        angle (interior angle ``pi - angle_limit``)."""
+        upper = l1 + l2
+        lower = sqrt(l1 ** 2 + l2 ** 2 - 2 * l1 * l2 * cos(pi - angle_limit))
+        return upper, lower
+
     def _root_angle_limits_2d(self):
         ax = "x"
         S = self.structure
@@ -359,12 +390,11 @@ class ProblemGraph(nx.DiGraph):
                 lb = self.robot.lb[node]
                 ub = self.robot.ub[node]
                 lim = max(abs(ub), abs(lb))
+                upper, lower = self._two_link_bounds(l1, l2, lim)
                 self.add_edge(ax, node)
-                self[ax][node][UPPER] = l1 + l2
-                self[ax][node][LOWER] = sqrt(
-                    l1 ** 2 + l2 ** 2 - 2 * l1 * l2 * cos(pi - lim)
-                )
-                self[ax][node][BOUNDED] = BELOW
+                self[ax][node][UPPER] = upper
+                self[ax][node][LOWER] = lower
+                self[ax][node][BOUNDED] = [BELOW]
 
     def _set_limits_2d(self):
         S = self.structure
@@ -379,70 +409,75 @@ class ProblemGraph(nx.DiGraph):
                 lb = self.robot.lb[ids[2]]
                 ub = self.robot.ub[ids[2]]
                 lim = max(abs(ub), abs(lb))
+                upper, lower = self._two_link_bounds(l1, l2, lim)
                 self.add_edge(u, v)
-                self[u][v][UPPER] = l1 + l2
-                self[u][v][LOWER] = sqrt(
-                    l1 ** 2 + l2 ** 2 - 2 * l1 * l2 * cos(pi - lim)
-                )
-                self[u][v][BOUNDED] = BELOW
+                self[u][v][UPPER] = upper
+                self[u][v][LOWER] = lower
+                self[u][v][BOUNDED] = [BELOW]
 
     # --- 3D bodies (verbatim from the old ProblemGraphRevolute) ---
+    @staticmethod
+    def _revolute_edge_bounds(T0, T1, T2, upper_limit):
+        """Distance bounds between the fixed point at ``T0`` and the point at
+        ``T2`` as it revolves around the z-axis of joint frame ``T1``.
+
+        Returns ``(d_max, d_min, limit)`` where ``limit`` tags which bound is
+        attained at the zero configuration (``BELOW``/``ABOVE``), ``False``
+        when the circle degenerates, and ``None`` when neither bound is
+        attained. When a bound is attained, it is tightened to the distance at
+        the joint's ``upper_limit`` angle (joint limits are symmetric here).
+        """
+        N = T1[:3, 2]
+        C = T1[:3, 3] + (N.dot(T2[:3, 3] - T1[:3, 3])) * N
+        r = la.norm(T2[:3, 3] - C)
+        P = T0[:3, 3]
+        d_max, d_min = max_min_distance_revolute(r, P, C, N)
+        d = la.norm(T2[:3, 3] - T0[:3, 3])
+
+        if d_max == d_min:
+            limit = False
+        elif d == d_max:
+            limit = BELOW
+        elif d == d_min:
+            limit = ABOVE
+        else:
+            limit = None
+
+        if limit:
+            T_rel = SE3.inverse(T1) @ T2
+            d_limit = la.norm(
+                (T1 @ rot_axis(upper_limit, "z") @ T_rel)[:3, 3] - T0[:3, 3]
+            )
+            if limit == ABOVE:
+                d_max = d_limit
+            else:
+                d_min = d_limit
+        return d_max, d_min, limit
+
     def _root_angle_limits_3d(self):
-        axis_length = self.axis_length
         robot = self.robot
-        upper_limits = self.robot.ub
         limited_joints = self.limited_joints
         T1 = robot.nodes[ROOT]["T0"]
-        base_names = ["x", "y"]
-        names = ["p1", "q1"]
-        T_axis = trans_axis(axis_length, "z")
+        T_axis = trans_axis(self.axis_length, "z")
 
-        for base_node in base_names:
-            for node in names:
+        for base_node in ["x", "y"]:
+            for node in ["p1", "q1"]:
                 T0 = np.eye(4)
                 T0[:3, 3] = self.nodes[base_node][POS]
-                if node[0] == "p":
-                    T2 = robot.nodes["p1"]["T0"]
-                else:
-                    T2 = robot.nodes["p1"]["T0"] @ T_axis
+                T2 = robot.nodes["p1"]["T0"]
+                if node[0] == AUX_PREFIX:
+                    T2 = T2 @ T_axis
 
-                N = T1[:3, 2]
-                C = T1[:3, 3] + (N.dot(T2[:3, 3] - T1[:3, 3])) * N
-                r = np.linalg.norm(T2[:3, 3] - C)
-                P = T0[:3, 3]
-                d_max, d_min = max_min_distance_revolute(r, P, C, N)
-                d = np.linalg.norm(T2[:3, 3] - T0[:3, 3])
-
-                if d_max == d_min:
-                    limit = False
-                elif d == d_max:
-                    limit = BELOW
-                elif d == d_min:
-                    limit = ABOVE
-                else:
-                    limit = None
-
+                d_max, d_min, limit = self._revolute_edge_bounds(
+                    T0, T1, T2, robot.ub["p1"]
+                )
                 if limit:
-                    if node[0] == "p":
-                        T_rel = SE3.inverse(T1) @ robot.nodes["p1"]["T0"]
-                    else:
-                        T_rel = SE3.inverse(T1) @ (robot.nodes["p1"]["T0"] @ T_axis)
-
-                    d_limit = la.norm(
-                        (T1 @ rot_axis(upper_limits["p1"], "z") @ T_rel)[:3, 3]
-                        - T0[:3, 3]
-                    )
-
-                    if limit == ABOVE:
-                        d_max = d_limit
-                    else:
-                        d_min = d_limit
                     limited_joints += ["p1"]
 
                 self.add_edge(base_node, node)
                 if d_max == d_min:
                     self[base_node][node][DIST] = d_max
-                self[base_node][node][BOUNDED] = [limit]
+                self[base_node][node][BOUNDED] = _bounded_tags(limit)
                 self[base_node][node][UPPER] = d_max
                 self[base_node][node][LOWER] = d_min
 
@@ -451,62 +486,37 @@ class ProblemGraph(nx.DiGraph):
         robot = self.robot
         kinematic_map = self.robot.kinematic_map
         T_axis = trans_axis(self.axis_length, "z")
-        end_effectors = self.robot.end_effectors
-        upper_limits = self.robot.ub
 
         limited_joints = []
-        for ee in end_effectors:
+        for ee in self.robot.end_effectors:
             k_map = kinematic_map[ROOT][ee]
             for idx in range(2, len(k_map)):
                 cur, prev = k_map[idx], k_map[idx - 2]
                 names = [
-                    (MAIN_PREFIX + str(prev[1:]), MAIN_PREFIX + str(cur[1:])),
-                    (MAIN_PREFIX + str(prev[1:]), AUX_PREFIX + str(cur[1:])),
-                    (AUX_PREFIX + str(prev[1:]), MAIN_PREFIX + str(cur[1:])),
-                    (AUX_PREFIX + str(prev[1:]), AUX_PREFIX + str(cur[1:])),
+                    (prefix_u + str(prev[1:]), prefix_v + str(cur[1:]))
+                    for prefix_u in (MAIN_PREFIX, AUX_PREFIX)
+                    for prefix_v in (MAIN_PREFIX, AUX_PREFIX)
                 ]
                 for ids in names:
                     path = kinematic_map[prev][cur]
-                    T0, T1, T2 = [
-                        robot.nodes[path[0]]["T0"],
-                        robot.nodes[path[1]]["T0"],
-                        robot.nodes[path[2]]["T0"],
-                    ]
+                    T0 = robot.nodes[path[0]]["T0"]
+                    T1 = robot.nodes[path[1]]["T0"]
+                    T2 = robot.nodes[path[2]]["T0"]
                     if AUX_PREFIX in ids[0]:
                         T0 = T0 @ T_axis
                     if AUX_PREFIX in ids[1]:
                         T2 = T2 @ T_axis
 
-                    N = T1[:3, 2]
-                    C = T1[:3, 3] + (N.dot(T2[:3, 3] - T1[:3, 3])) * N
-                    r = la.norm(T2[:3, 3] - C)
-                    P = T0[:3, 3]
-                    d_max, d_min = max_min_distance_revolute(r, P, C, N)
-
-                    d = la.norm(T2[:3, 3] - T0[:3, 3])
-                    if d_max == d_min:
-                        limit = False
-                    elif d == d_max:
-                        limit = BELOW
-                    elif d == d_min:
-                        limit = ABOVE
-                    else:
-                        limit = None
-
+                    d_max, d_min, limit = self._revolute_edge_bounds(
+                        T0, T1, T2, robot.ub[cur]
+                    )
                     if limit:
-                        rot_limit = rot_axis(upper_limits[cur], "z")
-                        T_rel = SE3.inverse(T1) @ T2
-                        d_limit = la.norm((T1 @ rot_limit @ T_rel)[:3, 3] - T0[:3, 3])
-                        if limit == ABOVE:
-                            d_max = d_limit
-                        else:
-                            d_min = d_limit
                         limited_joints += [cur]
 
                     self.add_edge(ids[0], ids[1])
                     if d_max == d_min:
                         S[ids[0]][ids[1]][DIST] = d_max
-                    self[ids[0]][ids[1]][BOUNDED] = [limit]
+                    self[ids[0]][ids[1]][BOUNDED] = _bounded_tags(limit)
                     self[ids[0]][ids[1]][UPPER] = d_max
                     self[ids[0]][ids[1]][LOWER] = d_min
 
@@ -587,24 +597,23 @@ class ProblemGraph(nx.DiGraph):
                 k_map = kinematic_map[ROOT][ee]
                 for idx in range(1, len(k_map)):
                     cur, aux_cur = k_map[idx], f"q{k_map[idx][1:]}"
-                    pred, aux_pred = (k_map[idx - 1], f"q{k_map[idx-1][1:]}")
+                    pred = k_map[idx - 1]
 
                     T_prev = T[pred]
                     T_prev_0 = self.robot.nodes[pred]["T0"]
                     T_0 = self.robot.nodes[cur]["T0"]
-                    T_0_q = self.robot.nodes[cur]["T0"] @ trans_axis(axis_length, "z")
                     T_rel = SE3.inverse(T_prev_0) @ T_0
-                    ps_0 = (SE3.inverse(T_prev_0) @ T_0)[:3, 3]
-                    qs_0 = (SE3.inverse(T_prev_0) @ T_0_q)[:3, 3]
+                    # Rest-pose direction of the auxiliary (q) node in the
+                    # predecessor frame. T_0_q = T_0 @ trans_axis, so the
+                    # inverse is already captured in T_rel.
+                    qs_0 = (T_rel @ trans_axis(axis_length, "z"))[:3, 3]
 
-                    p = B_inv[:3, :3] @ G.nodes[cur][POS] + B_inv[:3, 3]
                     qnorm = G.nodes[cur][POS] + (
                         G.nodes[aux_cur][POS] - G.nodes[cur][POS]
                     ) / la.norm(G.nodes[aux_cur][POS] - G.nodes[cur][POS])
                     q = B_inv[:3, :3] @ qnorm + B_inv[:3, 3]
 
                     T_prev_inv = SE3.inverse(T_prev)
-                    ps = T_prev_inv[:3, :3] @ (p - T_prev[:3, 3])
                     qs = T_prev_inv[:3, :3] @ (q - T_prev[:3, 3])
 
                     theta[cur] = arctan2(
@@ -634,29 +643,3 @@ class ProblemGraph(nx.DiGraph):
             T_trans = trans_axis(self.axis_length, "z")
             T = T @ T_trans
         return T
-
-    # ------------------------------------------------------------------
-    # 3D-only sampling helper (keep dim-agnostic — works for any dim)
-    # ------------------------------------------------------------------
-    def distance_bounds_from_sampling(self):
-        robot = self.robot
-        ids = self.node_ids
-        q_rand = robot.random_configuration()
-        D_min = self.distance_matrix_from_joints(q_rand)
-        D_max = self.distance_matrix_from_joints(q_rand)
-
-        for _ in range(2000):
-            q_rand = robot.random_configuration()
-            D_rand = self.distance_matrix_from_joints(q_rand)
-            D_max[D_rand > D_max] = D_rand[D_rand > D_max]
-            D_min[D_rand < D_min] = D_rand[D_rand < D_min]
-
-        for idx in range(len(D_max)):
-            for jdx in range(len(D_max)):
-                e1 = ids[idx]
-                e2 = ids[jdx]
-                self.add_edge(e1, e2)
-                self[e1][e2][LOWER] = sqrt(D_min[idx, jdx])
-                self[e1][e2][UPPER] = sqrt(D_max[idx, jdx])
-                if abs(D_max[idx, jdx] - D_min[idx, jdx]) < 1e-5:
-                    self[e1][e2][DIST] = abs(D_max[idx, jdx] - D_min[idx, jdx])
